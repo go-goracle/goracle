@@ -23,3 +23,9 @@ func TestMakeDSN(t *testing.T) {
 func TestClientVersion(t *testing.T) {
 	t.Logf("%+v", ClientVersion())
 }
+
+func TestIsConnected(t *testing.T) {
+	if (Connection{}).IsConnected() {
+		t.Fail()
+	}
+}
