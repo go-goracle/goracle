@@ -36,7 +36,6 @@ const (
 
 // Create a new environment object, using the environment handle
 func NewEnvironment(handle *C.OCIEnv) (*Environment, error) {
-	var status C.sword
 	var err *Error
 
 	// create a new object for the Oracle environment
@@ -46,14 +45,23 @@ func NewEnvironment(handle *C.OCIEnv) (*Environment, error) {
 	env.maxStringBytes = MAX_STRING_CHARS
 
 	// create the error handle
-	status = C.OCIHandleAlloc(unsafe.Pointer(handle),
-		(*unsafe.Pointer)(unsafe.Pointer(&env.errorHandle)),
-		C.OCI_HTYPE_ERROR, C.size_t(0), nil)
-	if err = CheckStatus(status); err != nil {
+	if err = ociHandleAlloc(unsafe.Pointer(handle),
+		C.OCI_HTYPE_ERROR, (*unsafe.Pointer)(unsafe.Pointer(&env.errorHandle))); err != nil {
 		err.At = "NewEnvironment"
 		return nil, err
 	}
 	return env, nil
+}
+
+func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer) *Error {
+	var vsize C.ub4
+	return CheckStatus(C.OCIHandleAlloc(parent, dst, typ,
+		C.size_t(0), (*unsafe.Pointer)(unsafe.Pointer(&vsize))))
+}
+
+func (env *Environment) AttrSet(parent unsafe.Pointer, parentTyp C.ub4,
+	key C.ub4, value unsafe.Pointer) *Error {
+	return CheckStatus(C.OCIAttrSet(parent, parentTyp, value, 0, key, env.errorHandle))
 }
 
 // Retrieve and store the IANA character set name for the attribute.

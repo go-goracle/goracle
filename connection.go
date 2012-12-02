@@ -21,6 +21,7 @@ import "C"
 import (
 	"fmt"
 	"sync"
+	"unsafe"
 )
 
 // MakeDSN makea a data source name given the host port and SID.
@@ -60,7 +61,7 @@ type Connection struct {
 	// sessionPool *SessionPool //sessionpool
 	username, password, dsn, version string
 	commitMode                       int64
-	autocommit, release, attached    int32
+	autocommit, release, attached    bool
 	srvMtx                           sync.Mutex
 }
 
@@ -70,17 +71,38 @@ func (conn Connection) IsConnected() bool {
 	return conn.handle != nil
 }
 
+func (conn *Connection) AttrSet(key C.ub4, value unsafe.Pointer) *Error {
+	return conn.environment.AttrSet(
+		unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX,
+		key, value)
+}
+
+func (conn *Connection) ServerAttrSet(key C.ub4, value unsafe.Pointer) *Error {
+	return conn.environment.AttrSet(
+		unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER,
+		key, value)
+}
+
+func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer) *Error {
+	return conn.environment.AttrSet(
+		unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION,
+		key, value)
+}
+
 //   Create a new connection object by connecting to the database.
-func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string*/) (err error) {
+func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string*/) error {
 	credentialType := C.OCI_CRED_EXT
-	var status int32
+	var (
+		status C.sword
+		err    *Error
+	)
 
 	// allocate the server handle
-	status = C.OCIHandleAlloc(conn.environment.handle,
-		(**C.dvoid)(&conn.serverHandle), OCI_HTYPE_SERVER, 0, 0)
-	if err = CheckStatus(status); err != nil {
+	if ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
+		C.OCI_HTYPE_SERVER,
+		(*unsafe.Pointer)(unsafe.Pointer(&conn.serverHandle))); err != nil {
 		err.At = "Connect[allocate server handle]"
-		return
+		return err
 	}
 
 	// attach to the server
@@ -90,87 +112,85 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	       return -1;
 	*/
 
-	buffer := []byte(conn.dsn) + []byte{0}
+	buffer := make([]byte, len(conn.dsn)+1, max(16, len(conn.dsn), len(conn.username), len(conn.password))+1)
+	copy(buffer, []byte(conn.dsn))
+	buffer[len(conn.dsn)] = 0
+	// dsn := C.CString(conn.dsn)
+	// defer C.free(unsafe.Pointer(dsn))
 	// Py_BEGIN_ALLOW_THREADS
 	conn.srvMtx.Lock()
 	status = C.OCIServerAttach(conn.serverHandle,
-		conn.environment.errorHandle, (*C.text)(unsafe.Pointer(buffer)),
-		len(buffer), C.OCI_DEFAULT)
+		conn.environment.errorHandle, (*C.OraText)(&buffer[0]),
+		C.sb4(len(buffer)), C.OCI_DEFAULT)
 	// Py_END_ALLOW_THREADS
 	conn.srvMtx.Unlock()
 	// cxBuffer_Clear(&buffer);
 	if err = CheckStatus(status); err != nil {
 		err.At = "Connect[server attach]"
-		return
+		return err
 	}
 
 	// allocate the service context handle
-	status = C.OCIHandleAlloc(conn.environment.handle,
-		(**C.dvoid)(&conn.handle), C.OCI_HTYPE_SVCCTX, 0, 0)
-	if err = CheckStatus(status); err != nil {
+	if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
+		C.OCI_HTYPE_SVCCTX, (*unsafe.Pointer)(unsafe.Pointer(&conn.handle))); err != nil {
 		err.At = "Connect[allocate service context handle]"
-		return
+		return err
 	}
 
 	// set attribute for server handle
-	status = C.OCIAttrSet(conn.handle, C.OCI_HTYPE_SVCCTX, conn.serverHandle, 0,
-		C.OCI_ATTR_SERVER, conn.environment.errorHandle)
-	if err = CheckStatus(status); err != nil {
+	if err = conn.AttrSet(C.OCI_ATTR_SERVER, unsafe.Pointer(conn.serverHandle)); err != nil {
 		err.At = "Connect[set server handle]"
-		return
+		return err
 	}
 
 	// set the internal and external names; these are needed for global
 	// transactions but are limited in terms of the lengths of the strings
 	if twophase {
-		buffer = []byte{"goracle"} + []byte{0}
-		status = C.OCIAttrSet(conn.serverHandle, C.OCI_HTYPE_SERVER,
-			buffer, 0, C.OCI_ATTR_INTERNAL_NAME,
-			conn.environment.errorHandle)
-		if err = CheckStatus(status); err != nil {
+		copy(buffer, []byte("goracle"))
+		buffer[len("goracle")] = 0
+
+		if err = conn.ServerAttrSet(C.OCI_ATTR_INTERNAL_NAME,
+			unsafe.Pointer(&buffer[0])); err != nil {
 			err.At = "Connect[set internal name]"
-			return
+			return err
 		}
-		status = C.OCIAttrSet(conn.serverHandle, C.OCI_HTYPE_SERVER,
-			buffer, 0, C.OCI_ATTR_EXTERNAL_NAME,
-			conn.environment.errorHandle)
-		if err = CheckStatus(status); err != nil {
+		if err = conn.ServerAttrSet(C.OCI_ATTR_EXTERNAL_NAME,
+			unsafe.Pointer(&buffer[0])); err != nil {
 			err.At = "Connect[set external name]"
-			return
+			return err
 		}
 	}
 
 	// allocate the session handle
-	status = C.OCIHandleAlloc(conn.environment.handle,
-		(**C.dvoid)(&conn.sessionHandle), C.OCI_HTYPE_SESSION, 0, 0)
-	if err = CheckStatus(status); err != nil {
+	if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
+		C.OCI_HTYPE_SESSION,
+		(*unsafe.Pointer)(unsafe.Pointer(&conn.sessionHandle))); err != nil {
 		err.At = "Connect[allocate session handle]"
-		return
+		return err
 	}
 
 	// set user name in session handle
 	if conn.username != "" {
-		buffer = []byte(conn.username) + []byte{0}
+		copy(buffer, []byte(conn.username))
+		buffer[len(conn.username)] = 0
 		credentialType = C.OCI_CRED_RDBMS
-		status = C.OCIAttrSet(conn.sessionHandle, C.OCI_HTYPE_SESSION,
-			(*C.text)(unsafe.Pointer(buffer)), len(buffer), C.OCI_ATTR_USERNAME,
-			conn.environment.errorHandle)
-		if err = CheckStatus(status); err != nil {
+
+		if err = conn.SessionAttrSet(C.OCI_ATTR_USERNAME,
+			unsafe.Pointer(&buffer[0])); err != nil {
 			err.At = "Connect[set user name]"
-			return
+			return err
 		}
 	}
 
 	// set password in session handle
-	if conn.password {
-		buffer = []byte(conn.password) + []byte{0}
+	if conn.password != "" {
+		copy(buffer, []byte(conn.password))
+		buffer[len(conn.password)] = 0
 		credentialType = C.OCI_CRED_RDBMS
-		status = C.OCIAttrSet(conn.sessionHandle, C.OCI_HTYPE_SESSION,
-			(*C.text)(unsafe.Pointer(buffer)), len(buffer), C.OCI_ATTR_PASSWORD,
-			conn.environment.errorHandle)
-		if err = CheckStatus(status); err != nil {
+		if err = conn.SessionAttrSet(C.OCI_ATTR_PASSWORD,
+			unsafe.Pointer(&buffer[0])); err != nil {
 			err.At = "Connect[set password]"
-			return
+			return err
 		}
 	}
 
@@ -187,12 +207,10 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	*/
 
 	// set the session handle on the service context handle
-	status = C.OCIAttrSet(conn.handle, C.OCI_HTYPE_SVCCTX,
-		conn.sessionHandle, 0, C.OCI_ATTR_SESSION,
-		conn.environment.errorHandle)
-	if err = CheckStatus(status); err != nil {
+	if err = conn.AttrSet(C.OCI_ATTR_SESSION,
+		unsafe.Pointer(conn.sessionHandle)); err != nil {
 		err.At = "Connect[set session handle]"
-		return
+		return err
 	}
 
 	/*
@@ -206,14 +224,59 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// Py_BEGIN_ALLOW_THREADS
 	conn.srvMtx.Lock()
 	status = C.OCISessionBegin(conn.handle, conn.environment.errorHandle,
-		conn.sessionHandle, credentialType, mode)
+		conn.sessionHandle, C.ub4(credentialType), C.ub4(mode))
 	// Py_END_ALLOW_THREADS
 	conn.srvMtx.Unlock()
 	if err = CheckStatus(status); err != nil {
 		err.At = "Connect[begin session]"
 		conn.sessionHandle = nil
-		return
+		return err
 	}
 
-	return
+	return nil
+}
+
+func (conn *Connection) Rollback() {
+	C.OCITransRollback(conn.handle, conn.environment.errorHandle,
+		C.OCI_DEFAULT)
+}
+
+// Deallocate the connection, disconnecting from the database if necessary.
+func (conn *Connection) Close() {
+	if conn.release {
+		// Py_BEGIN_ALLOW_THREADS
+		conn.srvMtx.Lock()
+		conn.Rollback()
+		C.OCISessionRelease(conn.handle, conn.environment.errorHandle, nil,
+			0, C.OCI_DEFAULT)
+		// Py_END_ALLOW_THREADS
+		conn.srvMtx.Unlock()
+	} else if !conn.attached {
+		if conn.sessionHandle != nil {
+			// Py_BEGIN_ALLOW_THREADS
+			conn.srvMtx.Lock()
+			conn.Rollback()
+			C.OCISessionEnd(conn.handle, conn.environment.errorHandle,
+				conn.sessionHandle, C.OCI_DEFAULT)
+			// Py_END_ALLOW_THREADS
+			conn.srvMtx.Unlock()
+		}
+		if conn.serverHandle != nil {
+			C.OCIServerDetach(conn.serverHandle,
+				conn.environment.errorHandle, C.OCI_DEFAULT)
+		}
+	}
+}
+
+func max(numbers ...int) int {
+	if len(numbers) == 0 {
+		return 0
+	}
+	m := numbers[0]
+	for _, x := range numbers {
+		if m < x {
+			m = x
+		}
+	}
+	return m
 }
