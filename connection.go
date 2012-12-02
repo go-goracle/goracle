@@ -7,6 +7,7 @@ package goracle
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
 #cgo LDFLAGS: -lclntsh -L/usr/lib/oracle/11.2/client64/lib
 
+#include <stdlib.h>
 #include <oci.h>
 //#include <datetime.h>
 //#include <structmember.h>
@@ -236,13 +237,13 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	return nil
 }
 
-func (conn *Connection) Rollback() {
-	C.OCITransRollback(conn.handle, conn.environment.errorHandle,
-		C.OCI_DEFAULT)
+func (conn *Connection) Rollback() *Error {
+	return CheckStatus(C.OCITransRollback(conn.handle, conn.environment.errorHandle,
+		C.OCI_DEFAULT))
 }
 
 // Deallocate the connection, disconnecting from the database if necessary.
-func (conn *Connection) Close() {
+func (conn *Connection) Free() {
 	if conn.release {
 		// Py_BEGIN_ALLOW_THREADS
 		conn.srvMtx.Lock()
@@ -266,6 +267,45 @@ func (conn *Connection) Close() {
 				conn.environment.errorHandle, C.OCI_DEFAULT)
 		}
 	}
+}
+
+//   Close the connection, disconnecting from the database.
+func (conn *Connection) Close() (err *Error) {
+	if !conn.IsConnected() {
+		return nil //?
+	}
+
+	// Py_BEGIN_ALLOW_THREADS
+	conn.srvMtx.Lock()
+	defer conn.srvMtx.Unlock()
+
+	// perform a rollback
+	if err = conn.Rollback(); err != nil {
+		err.At = "Close[rollback]"
+		return
+	}
+	// Py_END_ALLOW_THREADS
+
+	// logoff of the server
+	if conn.sessionHandle != nil {
+		// Py_BEGIN_ALLOW_THREADS
+		if err = CheckStatus(C.OCISessionEnd((conn.handle),
+			conn.environment.errorHandle, conn.sessionHandle,
+			C.OCI_DEFAULT)); err != nil {
+			err.At = "Close[end session]"
+			return
+		}
+		C.OCIHandleFree(unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX)
+	}
+	conn.handle = nil
+	if conn.serverHandle != nil {
+		if err = CheckStatus(C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT)); err != nil {
+			err.At = "Close[server detach]"
+			return
+		}
+		conn.serverHandle = nil
+	}
+	return nil
 }
 
 func max(numbers ...int) int {
