@@ -90,7 +90,21 @@ func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer) *Error {
 		key, value)
 }
 
-//   Create a new connection object by connecting to the database.
+//   Initialize the connection members.
+func NewConnection(username, password, dsn string, commitMode /*, pool*/, twophase bool) (
+	conn Connection, err error) {
+	conn = Connection{username: username, password: password, dsn: dsn}
+	/*
+		if pool != nil {
+			conn.environment = pool.environment
+		} else
+	*/
+	conn.environment, err = NewEnvironment()
+
+	return conn, err
+}
+
+// Connect to the database.
 func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string*/) error {
 	credentialType := C.OCI_CRED_EXT
 	var (
@@ -101,8 +115,8 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// allocate the server handle
 	if ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
 		C.OCI_HTYPE_SERVER,
-		(*unsafe.Pointer)(unsafe.Pointer(&conn.serverHandle))); err != nil {
-		err.At = "Connect[allocate server handle]"
+		(*unsafe.Pointer)(unsafe.Pointer(&conn.serverHandle)),
+		"Connect[allocate server handle]"); err != nil {
 		return err
 	}
 
@@ -126,15 +140,14 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// Py_END_ALLOW_THREADS
 	conn.srvMtx.Unlock()
 	// cxBuffer_Clear(&buffer);
-	if err = CheckStatus(status); err != nil {
-		err.At = "Connect[server attach]"
+	if err = CheckStatus(status, "Connect[server attach]"); err != nil {
 		return err
 	}
 
 	// allocate the service context handle
 	if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
-		C.OCI_HTYPE_SVCCTX, (*unsafe.Pointer)(unsafe.Pointer(&conn.handle))); err != nil {
-		err.At = "Connect[allocate service context handle]"
+		C.OCI_HTYPE_SVCCTX, (*unsafe.Pointer)(unsafe.Pointer(&conn.handle)),
+		"Connect[allocate service context handle]"); err != nil {
 		return err
 	}
 
@@ -165,8 +178,8 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// allocate the session handle
 	if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
 		C.OCI_HTYPE_SESSION,
-		(*unsafe.Pointer)(unsafe.Pointer(&conn.sessionHandle))); err != nil {
-		err.At = "Connect[allocate session handle]"
+		(*unsafe.Pointer)(unsafe.Pointer(&conn.sessionHandle)),
+		"Connect[allocate session handle]"); err != nil {
 		return err
 	}
 
@@ -228,8 +241,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		conn.sessionHandle, C.ub4(credentialType), C.ub4(mode))
 	// Py_END_ALLOW_THREADS
 	conn.srvMtx.Unlock()
-	if err = CheckStatus(status); err != nil {
-		err.At = "Connect[begin session]"
+	if err = CheckStatus(status, "Connect[begin session]"); err != nil {
 		conn.sessionHandle = nil
 		return err
 	}
@@ -238,16 +250,18 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 }
 
 func (conn *Connection) Rollback() *Error {
+	conn.srvMtx.Lock()
+	defer conn.srvMtx.Unlock()
 	return CheckStatus(C.OCITransRollback(conn.handle, conn.environment.errorHandle,
-		C.OCI_DEFAULT))
+		C.OCI_DEFAULT), "Rollback")
 }
 
 // Deallocate the connection, disconnecting from the database if necessary.
 func (conn *Connection) Free() {
 	if conn.release {
 		// Py_BEGIN_ALLOW_THREADS
-		conn.srvMtx.Lock()
 		conn.Rollback()
+		conn.srvMtx.Lock()
 		C.OCISessionRelease(conn.handle, conn.environment.errorHandle, nil,
 			0, C.OCI_DEFAULT)
 		// Py_END_ALLOW_THREADS
@@ -255,8 +269,8 @@ func (conn *Connection) Free() {
 	} else if !conn.attached {
 		if conn.sessionHandle != nil {
 			// Py_BEGIN_ALLOW_THREADS
-			conn.srvMtx.Lock()
 			conn.Rollback()
+			conn.srvMtx.Lock()
 			C.OCISessionEnd(conn.handle, conn.environment.errorHandle,
 				conn.sessionHandle, C.OCI_DEFAULT)
 			// Py_END_ALLOW_THREADS
@@ -275,38 +289,74 @@ func (conn *Connection) Close() (err *Error) {
 		return nil //?
 	}
 
-	// Py_BEGIN_ALLOW_THREADS
-	conn.srvMtx.Lock()
-	defer conn.srvMtx.Unlock()
-
 	// perform a rollback
 	if err = conn.Rollback(); err != nil {
 		err.At = "Close[rollback]"
 		return
 	}
-	// Py_END_ALLOW_THREADS
+	conn.srvMtx.Lock()
+	defer conn.srvMtx.Unlock()
 
 	// logoff of the server
 	if conn.sessionHandle != nil {
 		// Py_BEGIN_ALLOW_THREADS
 		if err = CheckStatus(C.OCISessionEnd((conn.handle),
 			conn.environment.errorHandle, conn.sessionHandle,
-			C.OCI_DEFAULT)); err != nil {
-			err.At = "Close[end session]"
+			C.OCI_DEFAULT), "Close[end session]"); err != nil {
 			return
 		}
 		C.OCIHandleFree(unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX)
 	}
 	conn.handle = nil
 	if conn.serverHandle != nil {
-		if err = CheckStatus(C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT)); err != nil {
-			err.At = "Close[server detach]"
+		if err = CheckStatus(C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT),
+			"Close[server detach]"); err != nil {
 			return
 		}
 		conn.serverHandle = nil
 	}
 	return nil
 }
+
+// Execute an OCIBreak() to cause an immediate (asynchronous) abort of any
+// currently executing OCI function.
+func (conn *Connection) Cancel() *Error {
+	// make sure we are actually connected
+	if !conn.IsConnected() {
+		return nil
+	}
+
+	// perform the break
+	return CheckStatus(C.OCIBreak(unsafe.Pointer(conn.handle),
+		conn.environment.errorHandle), "Cancel")
+}
+
+// Makes a round trip call to the server to confirm that the connection and
+// server are active.
+func (conn *Connection) Ping() *Error {
+	if !conn.IsConnected() {
+		return nil
+	}
+	return CheckStatus(C.OCIPing(conn.handle, conn.environment.errorHandle,
+		C.OCI_DEFAULT), "Ping")
+
+}
+
+/*
+// Create a new cursor (statement) referencing the connection.
+func (conn *Connection) NewCursor() (*Cursor, error) {
+    PyObject *createArgs, *result;
+
+    createArgs = PyTuple_New(1);
+    if (!createArgs)
+        return NULL;
+    Py_INCREF(self);
+    PyTuple_SET_ITEM(createArgs, 0, (PyObject*) self);
+    result = PyObject_Call( (PyObject*) &g_CursorType, createArgs, NULL);
+    Py_DECREF(createArgs);
+    return result;
+}
+*/
 
 func max(numbers ...int) int {
 	if len(numbers) == 0 {
