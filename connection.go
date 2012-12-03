@@ -21,6 +21,8 @@ import "C"
 
 import (
 	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -91,7 +93,7 @@ func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer) *Error {
 }
 
 //   Initialize the connection members.
-func NewConnection(username, password, dsn string, commitMode /*, pool*/, twophase bool) (
+func NewConnection(username, password, dsn string /*commitMode , pool, twophase bool*/) (
 	conn Connection, err error) {
 	conn = Connection{username: username, password: password, dsn: dsn}
 	/*
@@ -134,6 +136,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// defer C.free(unsafe.Pointer(dsn))
 	// Py_BEGIN_ALLOW_THREADS
 	conn.srvMtx.Lock()
+	log.Printf("buffer=%s", buffer)
 	status = C.OCIServerAttach(conn.serverHandle,
 		conn.environment.errorHandle, (*C.OraText)(&buffer[0]),
 		C.sb4(len(buffer)), C.OCI_DEFAULT)
@@ -369,4 +372,18 @@ func max(numbers ...int) int {
 		}
 	}
 	return m
+}
+
+// splits username/password@sid
+func SplitDsn(dsn string) (username, password, sid string) {
+	if i := strings.Index(dsn, "/"); i > 0 {
+		username = dsn[:i]
+		dsn = dsn[i+1:]
+	}
+	if i := strings.Index(dsn, "@"); i > 0 {
+		password = dsn[:i]
+		dsn = dsn[i+1:]
+	}
+	sid = dsn
+	return
 }

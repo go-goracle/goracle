@@ -1,8 +1,15 @@
 package goracle
 
 import (
+	"flag"
 	"testing"
 )
+
+var dsn = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
+
+func init() {
+	flag.Parse()
+}
 
 func TestMakeDSN(t *testing.T) {
 	dsn := MakeDSN("localhost", 1521, "sid", "")
@@ -28,4 +35,22 @@ func TestIsConnected(t *testing.T) {
 	if (Connection{}).IsConnected() {
 		t.Fail()
 	}
+}
+
+func TestConnect(t *testing.T) {
+	if !(dsn != nil && *dsn != "") {
+		t.Logf("cannot test connection without dsn!")
+		return
+	}
+	user, passw, sid := SplitDsn(*dsn)
+	conn, err := NewConnection(user, passw, sid)
+	if err != nil {
+		t.Logf("error creating connection to %s: %s", *dsn, err)
+		t.Fail()
+	}
+	if err = conn.Connect(0, false); err != nil {
+		t.Logf("error connecting: %s", err)
+		t.Fail()
+	}
+	conn.Free()
 }

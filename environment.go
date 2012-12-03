@@ -12,6 +12,7 @@ package goracle
 import "C"
 
 import (
+	"log"
 	"unsafe"
 )
 
@@ -46,15 +47,29 @@ func NewEnvironment() (*Environment, error) {
 
 	// create the new environment handle
 	if err = CheckStatus(C.OCIEnvNlsCreate(
-		&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0,
-		0), "Unable to acquire Oracle environment handle"); err != nil {
+		&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
+		0, 0), // C.ub2(873), 0),
+		"Unable to acquire Oracle environment handle"); err != nil {
 		return nil, err
 	}
+	/*
+		buffer := []byte("AL32UTF8\000")
+		csid := C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
+			(*C.oratext)(&buffer[0]))
+		log.Printf("csid=%d", csid)
+		if err = CheckStatus(C.OCIEnvNlsCreate(
+			&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
+			csid, 0),
+			"Unable to acquire Oracle environment handle with AL32UTF8 charset"); err != nil {
+			return nil, err
+		}
+	*/
+	// log.Printf("env=%+v err=%+v", env.handle, err)
 
 	// create the error handle
 	if err = ociHandleAlloc(unsafe.Pointer(env.handle),
 		C.OCI_HTYPE_ERROR, (*unsafe.Pointer)(unsafe.Pointer(&env.errorHandle)),
-		"NewEnvironment"); err != nil {
+		"env.errorHandle"); err != nil || env.handle == nil {
 		return nil, err
 	}
 
@@ -67,6 +82,7 @@ func NewEnvironment() (*Environment, error) {
 	}
 	env.maxBytesPerCharacter = int(sb4)
 	env.maxStringBytes = MAX_STRING_CHARS * env.maxBytesPerCharacter
+	log.Printf("maxBytesPerCharacter=%d", env.maxBytesPerCharacter)
 
 	// acquire whether character set is fixed width
 	if err = CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
@@ -89,9 +105,8 @@ func NewEnvironment() (*Environment, error) {
 }
 
 func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at string) *Error {
-	var vsize C.ub4
-	return CheckStatus(C.OCIHandleAlloc(parent, dst, typ,
-		C.size_t(0), (*unsafe.Pointer)(unsafe.Pointer(&vsize))),
+	// var vsize C.ub4
+	return CheckStatus(C.OCIHandleAlloc(parent, dst, typ, C.size_t(0), nil),
 		"HandleAlloc["+at+"]")
 }
 
@@ -136,10 +151,10 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 	ianaCharsetName := make([]byte, C.OCI_NLS_MAXBUFSZ)
 
 	// get character set name
-	status = C.OCINlsCharSetIdToName(unsafe.Pointer(env.handle),
+	if err = CheckStatus(C.OCINlsCharSetIdToName(unsafe.Pointer(env.handle),
 		(*C.oratext)(&charsetName[0]),
-		C.OCI_NLS_MAXBUFSZ, C.ub2(charsetId))
-	if err = CheckStatus(status, "GetCharacterSetName[get Oracle charset name]"); err != nil {
+		C.OCI_NLS_MAXBUFSZ, C.ub2(charsetId)),
+		"GetCharacterSetName[get Oracle charset name]"); err != nil {
 		return "", err
 	}
 
@@ -159,11 +174,11 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 
 // Check for an error in the last call and if an error has occurred.
 func CheckStatus(status C.sword, at string) *Error {
-	if status != C.OCI_SUCCESS && status != C.OCI_SUCCESS_WITH_INFO {
-		if status != C.OCI_INVALID_HANDLE {
-			return &Error{Code: -1, Message: "other error", At: at}
-		}
-		return &Error{Code: -1, Message: "invalid handle", At: at}
+	switch status {
+	case C.OCI_SUCCESS, C.OCI_SUCCESS_WITH_INFO:
+		return nil
+	case C.OCI_INVALID_HANDLE:
+		return &Error{Code: int(status), Message: "invalid handle", At: at}
 	}
-	return nil
+	return &Error{Code: int(status), Message: "other error", At: at}
 }
