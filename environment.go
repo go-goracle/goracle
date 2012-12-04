@@ -12,6 +12,7 @@ package goracle
 import "C"
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"unsafe"
@@ -208,17 +209,30 @@ func checkStatus(status C.sword, justSpecific bool) *Error {
 // Check for an error in the last call and if an error has occurred,
 // retrieve the error message from the database environment
 func (env *Environment) CheckStatus(status C.sword, at string) (err *Error) {
+	if status == C.OCI_SUCCESS || status == C.OCI_SUCCESS_WITH_INFO {
+		return nil
+	}
 	if err = checkStatus(status, true); err != nil {
 		return err
 	}
 	var (
 		errcode C.sb4
 		errbuf  = make([]byte, 2001)
+		i       = C.ub4(0)
+		errstat C.sword
+		message = make([]byte, 0, 2000)
 	)
-	C.OCIErrorGet(unsafe.Pointer(env.errorHandle), C.ub4(1), nil,
-		&errcode, (*C.OraText)(&errbuf[0]), C.ub4(len(errbuf)-1),
-		C.OCI_HTYPE_ERROR)
+	for {
+		i++
+		errstat = C.OCIErrorGet(unsafe.Pointer(env.errorHandle), i, nil,
+			&errcode, (*C.OraText)(&errbuf[0]), C.ub4(len(errbuf)-1),
+			C.OCI_HTYPE_ERROR)
+		message = append(message, errbuf[:bytes.IndexByte(errbuf, 0)]...)
+		if errstat == C.OCI_NO_DATA {
+			break
+		}
+	}
 	return &Error{Code: int(errcode),
-		Message: fmt.Sprintf("[%d] %s", status, errbuf),
+		Message: fmt.Sprintf("[%d] %s", status, message),
 		At:      at}
 }
