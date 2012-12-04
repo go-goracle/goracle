@@ -347,21 +347,10 @@ func (conn *Connection) Ping() *Error {
 
 }
 
-/*
 // Create a new cursor (statement) referencing the connection.
-func (conn *Connection) NewCursor() (*Cursor, error) {
-    PyObject *createArgs, *result;
-
-    createArgs = PyTuple_New(1);
-    if (!createArgs)
-        return NULL;
-    Py_INCREF(self);
-    PyTuple_SET_ITEM(createArgs, 0, (PyObject*) self);
-    result = PyObject_Call( (PyObject*) &g_CursorType, createArgs, NULL);
-    Py_DECREF(createArgs);
-    return result;
+func (conn *Connection) NewCursor() Cursor {
+	return NewCursor(conn)
 }
-*/
 
 func max(numbers ...int) int {
 	if len(numbers) == 0 {
