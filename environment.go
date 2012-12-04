@@ -12,6 +12,7 @@ package goracle
 import "C"
 
 import (
+	"fmt"
 	"log"
 	"unsafe"
 )
@@ -46,10 +47,10 @@ func NewEnvironment() (*Environment, error) {
 	env.maxStringBytes = MAX_STRING_CHARS
 
 	// create the new environment handle
-	if err = CheckStatus(C.OCIEnvNlsCreate(
-		&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
-		0, 0), // C.ub2(873), 0),
-		"Unable to acquire Oracle environment handle"); err != nil {
+	if err = checkStatus(C.OCIEnvNlsCreate(&env.handle,
+		C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0, 0),
+		false); err != nil { //, C.ub2(873), 0),
+		err.At = "Unable to acquire Oracle environment handle"
 		return nil, err
 	}
 	/*
@@ -75,7 +76,7 @@ func NewEnvironment() (*Environment, error) {
 
 	var sb4 C.sb4
 	// acquire max bytes per character
-	if err = CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
+	if err = env.CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
 		env.errorHandle, &sb4, C.OCI_NLS_CHARSET_MAXBYTESZ),
 		"Environment_New(): get max bytes per character"); err != nil {
 		return nil, err
@@ -85,7 +86,7 @@ func NewEnvironment() (*Environment, error) {
 	log.Printf("maxBytesPerCharacter=%d", env.maxBytesPerCharacter)
 
 	// acquire whether character set is fixed width
-	if err = CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
+	if err = env.CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
 		env.errorHandle, &sb4, C.OCI_NLS_CHARSET_FIXEDWIDTH),
 		"Environment_New(): determine if charset fixed width"); err != nil {
 		return nil, err
@@ -106,13 +107,12 @@ func NewEnvironment() (*Environment, error) {
 
 func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at string) *Error {
 	// var vsize C.ub4
-	return CheckStatus(C.OCIHandleAlloc(parent, dst, typ, C.size_t(0), nil),
-		"HandleAlloc["+at+"]")
+	return checkStatus(C.OCIHandleAlloc(parent, dst, typ, C.size_t(0), nil), false)
 }
 
 func (env *Environment) AttrSet(parent unsafe.Pointer, parentTyp C.ub4,
 	key C.ub4, value unsafe.Pointer) *Error {
-	return CheckStatus(C.OCIAttrSet(parent, parentTyp, value, 0, key, env.errorHandle),
+	return env.CheckStatus(C.OCIAttrSet(parent, parentTyp, value, 0, key, env.errorHandle),
 		"AttrSet")
 }
 
@@ -143,7 +143,7 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 		&vsize,           //ub4 *sizep
 		C.ub4(attribute), //ub4 attrtype
 		env.errorHandle)  //OCIError *errhp
-	if err = CheckStatus(status, "GetCharacterSetName[get charset id]"); err != nil {
+	if err = env.CheckStatus(status, "GetCharacterSetName[get charset id]"); err != nil {
 		return "", err
 	}
 
@@ -151,7 +151,7 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 	ianaCharsetName := make([]byte, C.OCI_NLS_MAXBUFSZ)
 
 	// get character set name
-	if err = CheckStatus(C.OCINlsCharSetIdToName(unsafe.Pointer(env.handle),
+	if err = env.CheckStatus(C.OCINlsCharSetIdToName(unsafe.Pointer(env.handle),
 		(*C.oratext)(&charsetName[0]),
 		C.OCI_NLS_MAXBUFSZ, C.ub2(charsetId)),
 		"GetCharacterSetName[get Oracle charset name]"); err != nil {
@@ -163,7 +163,7 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 		(*C.oratext)(&ianaCharsetName[0]),
 		C.OCI_NLS_MAXBUFSZ, (*C.oratext)(&charsetName[0]),
 		C.OCI_NLS_CS_ORA_TO_IANA)
-	if err = CheckStatus(status, "GetCharacterSetName[translate NLS charset]"); err != nil {
+	if err = env.CheckStatus(status, "GetCharacterSetName[translate NLS charset]"); err != nil {
 		return "", err
 	}
 
@@ -172,13 +172,53 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 	return string(ianaCharsetName), nil
 }
 
+// Error handling
+var (
+	Warning        = &Error{Code: -(1<<30 - 1), Message: "WARNING"}
+	NeedData       = &Error{Code: -(1<<30 - 2), Message: "NEED_DATA"}
+	NoDataFound    = &Error{Code: -(1<<30 - 3), Message: "NO_DATA_FOUND"}
+	StillExecuting = &Error{Code: -(1<<30 - 4), Message: "STILL_EXECUTING"}
+	Continue       = &Error{Code: -(1<<30 - 5), Message: "CONTINUE"}
+	Other          = &Error{Code: -(1<<30 - 6), Message: "other"}
+	InvalidHandle  = &Error{Code: -(1<<30 - 7), Message: "invalid handle"}
+)
+
 // Check for an error in the last call and if an error has occurred.
-func CheckStatus(status C.sword, at string) *Error {
+func checkStatus(status C.sword, justSpecific bool) *Error {
 	switch status {
 	case C.OCI_SUCCESS, C.OCI_SUCCESS_WITH_INFO:
 		return nil
+	case C.OCI_NEED_DATA:
+		return NeedData
+	case C.OCI_NO_DATA:
+		return NoDataFound
+	case C.OCI_STILL_EXECUTING:
+		return StillExecuting
+	case C.OCI_CONTINUE:
+		return Continue
 	case C.OCI_INVALID_HANDLE:
-		return &Error{Code: int(status), Message: "invalid handle", At: at}
+		return InvalidHandle
 	}
-	return &Error{Code: int(status), Message: "other error", At: at}
+	if !justSpecific {
+		return Other
+	}
+	return nil
+}
+
+// Check for an error in the last call and if an error has occurred,
+// retrieve the error message from the database environment
+func (env *Environment) CheckStatus(status C.sword, at string) (err *Error) {
+	if err = checkStatus(status, true); err != nil {
+		return err
+	}
+	var (
+		errcode C.sb4
+		errbuf  = make([]byte, 2001)
+	)
+	C.OCIErrorGet(unsafe.Pointer(env.errorHandle), C.ub4(1), nil,
+		&errcode, (*C.OraText)(&errbuf[0]), C.ub4(len(errbuf)-1),
+		C.OCI_HTYPE_ERROR)
+	return &Error{Code: int(errcode),
+		Message: fmt.Sprintf("[%d] %s", status, errbuf),
+		At:      at}
 }

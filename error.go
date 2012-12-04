@@ -4,7 +4,9 @@
 
 package goracle
 
-import "strconv"
+import (
+	"strconv"
+)
 
 type Error struct {
 	Code    int

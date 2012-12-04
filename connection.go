@@ -143,9 +143,10 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// Py_END_ALLOW_THREADS
 	conn.srvMtx.Unlock()
 	// cxBuffer_Clear(&buffer);
-	if err = CheckStatus(status, "Connect[server attach]"); err != nil {
+	if err = conn.environment.CheckStatus(status, "Connect[server attach]"); err != nil {
 		return err
 	}
+	log.Printf("attached to server %s", conn.serverHandle)
 
 	// allocate the service context handle
 	if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
@@ -153,6 +154,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		"Connect[allocate service context handle]"); err != nil {
 		return err
 	}
+	log.Printf("allocated service context handle")
 
 	// set attribute for server handle
 	if err = conn.AttrSet(C.OCI_ATTR_SERVER, unsafe.Pointer(conn.serverHandle)); err != nil {
@@ -244,7 +246,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		conn.sessionHandle, C.ub4(credentialType), C.ub4(mode))
 	// Py_END_ALLOW_THREADS
 	conn.srvMtx.Unlock()
-	if err = CheckStatus(status, "Connect[begin session]"); err != nil {
+	if err = conn.environment.CheckStatus(status, "Connect[begin session]"); err != nil {
 		conn.sessionHandle = nil
 		return err
 	}
@@ -255,7 +257,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 func (conn *Connection) Rollback() *Error {
 	conn.srvMtx.Lock()
 	defer conn.srvMtx.Unlock()
-	return CheckStatus(C.OCITransRollback(conn.handle, conn.environment.errorHandle,
+	return conn.environment.CheckStatus(C.OCITransRollback(conn.handle, conn.environment.errorHandle,
 		C.OCI_DEFAULT), "Rollback")
 }
 
@@ -303,7 +305,7 @@ func (conn *Connection) Close() (err *Error) {
 	// logoff of the server
 	if conn.sessionHandle != nil {
 		// Py_BEGIN_ALLOW_THREADS
-		if err = CheckStatus(C.OCISessionEnd((conn.handle),
+		if err = conn.environment.CheckStatus(C.OCISessionEnd((conn.handle),
 			conn.environment.errorHandle, conn.sessionHandle,
 			C.OCI_DEFAULT), "Close[end session]"); err != nil {
 			return
@@ -312,7 +314,7 @@ func (conn *Connection) Close() (err *Error) {
 	}
 	conn.handle = nil
 	if conn.serverHandle != nil {
-		if err = CheckStatus(C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT),
+		if err = conn.environment.CheckStatus(C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT),
 			"Close[server detach]"); err != nil {
 			return
 		}
@@ -330,7 +332,7 @@ func (conn *Connection) Cancel() *Error {
 	}
 
 	// perform the break
-	return CheckStatus(C.OCIBreak(unsafe.Pointer(conn.handle),
+	return conn.environment.CheckStatus(C.OCIBreak(unsafe.Pointer(conn.handle),
 		conn.environment.errorHandle), "Cancel")
 }
 
@@ -340,7 +342,7 @@ func (conn *Connection) Ping() *Error {
 	if !conn.IsConnected() {
 		return nil
 	}
-	return CheckStatus(C.OCIPing(conn.handle, conn.environment.errorHandle,
+	return conn.environment.CheckStatus(C.OCIPing(conn.handle, conn.environment.errorHandle,
 		C.OCI_DEFAULT), "Ping")
 
 }
