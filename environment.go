@@ -112,8 +112,10 @@ func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at st
 }
 
 func (env *Environment) AttrSet(parent unsafe.Pointer, parentTyp C.ub4,
-	key C.ub4, value unsafe.Pointer) *Error {
-	return env.CheckStatus(C.OCIAttrSet(parent, parentTyp, value, 0, key, env.errorHandle),
+	key C.ub4, value unsafe.Pointer, valueLength int) *Error {
+	return env.CheckStatus(C.OCIAttrSet(parent, parentTyp,
+		value, C.ub4(valueLength),
+		key, env.errorHandle),
 		"AttrSet")
 }
 

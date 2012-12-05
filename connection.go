@@ -9,13 +9,6 @@ package goracle
 
 #include <stdlib.h>
 #include <oci.h>
-//#include <datetime.h>
-//#include <structmember.h>
-//#include <time.h>
-//#include <oci.h>
-//#include <orid.h>
-//#include <xa.h>
-
 */
 import "C"
 
@@ -74,22 +67,22 @@ func (conn Connection) IsConnected() bool {
 	return conn.handle != nil
 }
 
-func (conn *Connection) AttrSet(key C.ub4, value unsafe.Pointer) *Error {
+func (conn *Connection) AttrSet(key C.ub4, value unsafe.Pointer, valueLength int) *Error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX,
-		key, value)
+		key, value, valueLength)
 }
 
-func (conn *Connection) ServerAttrSet(key C.ub4, value unsafe.Pointer) *Error {
+func (conn *Connection) ServerAttrSet(key C.ub4, value unsafe.Pointer, valueLength int) *Error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER,
-		key, value)
+		key, value, valueLength)
 }
 
-func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer) *Error {
+func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer, valueLength int) *Error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION,
-		key, value)
+		key, value, valueLength)
 }
 
 //   Initialize the connection members.
@@ -107,12 +100,26 @@ func NewConnection(username, password, dsn string /*commitMode , pool, twophase 
 }
 
 // Connect to the database.
+// good minimal example: http://www.adp-gmbh.ch/ora/misc/oci/index.html
 func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string*/) error {
 	credentialType := C.OCI_CRED_EXT
 	var (
 		status C.sword
 		err    *Error
 	)
+	defer func() {
+		if err != nil {
+			if conn.sessionHandle != nil {
+				C.OCIHandleFree(unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION)
+			}
+			if conn.handle != nil {
+				C.OCIHandleFree(unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX)
+			}
+			if conn.serverHandle != nil {
+				C.OCIHandleFree(unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER)
+			}
+		}
+	}()
 
 	// allocate the server handle
 	if ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
@@ -157,7 +164,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	log.Printf("allocated service context handle")
 
 	// set attribute for server handle
-	if err = conn.AttrSet(C.OCI_ATTR_SERVER, unsafe.Pointer(conn.serverHandle)); err != nil {
+	if err = conn.AttrSet(C.OCI_ATTR_SERVER, unsafe.Pointer(conn.serverHandle), 0); err != nil {
 		err.At = "Connect[set server handle]"
 		return err
 	}
@@ -165,16 +172,17 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// set the internal and external names; these are needed for global
 	// transactions but are limited in terms of the lengths of the strings
 	if twophase {
-		copy(buffer, []byte("goracle"))
-		buffer[len("goracle")] = 0
+		name := []byte("goracle")
+		copy(buffer, name)
+		buffer[len(name)] = 0
 
 		if err = conn.ServerAttrSet(C.OCI_ATTR_INTERNAL_NAME,
-			unsafe.Pointer(&buffer[0])); err != nil {
+			unsafe.Pointer(&buffer[0]), len(name)); err != nil {
 			err.At = "Connect[set internal name]"
 			return err
 		}
 		if err = conn.ServerAttrSet(C.OCI_ATTR_EXTERNAL_NAME,
-			unsafe.Pointer(&buffer[0])); err != nil {
+			unsafe.Pointer(&buffer[0]), len(name)); err != nil {
 			err.At = "Connect[set external name]"
 			return err
 		}
@@ -187,6 +195,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		"Connect[allocate session handle]"); err != nil {
 		return err
 	}
+	log.Printf("allocated session handle")
 
 	// set user name in session handle
 	if conn.username != "" {
@@ -195,10 +204,11 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		credentialType = C.OCI_CRED_RDBMS
 
 		if err = conn.SessionAttrSet(C.OCI_ATTR_USERNAME,
-			unsafe.Pointer(&buffer[0])); err != nil {
+			unsafe.Pointer(&buffer[0]), len(conn.username)); err != nil {
 			err.At = "Connect[set user name]"
 			return err
 		}
+		// log.Printf("set user name %s", buffer)
 	}
 
 	// set password in session handle
@@ -207,10 +217,11 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		buffer[len(conn.password)] = 0
 		credentialType = C.OCI_CRED_RDBMS
 		if err = conn.SessionAttrSet(C.OCI_ATTR_PASSWORD,
-			unsafe.Pointer(&buffer[0])); err != nil {
+			unsafe.Pointer(&buffer[0]), len(conn.password)); err != nil {
 			err.At = "Connect[set password]"
 			return err
 		}
+		// log.Printf("set password %s", buffer)
 	}
 
 	/*
@@ -227,7 +238,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 
 	// set the session handle on the service context handle
 	if err = conn.AttrSet(C.OCI_ATTR_SESSION,
-		unsafe.Pointer(conn.sessionHandle)); err != nil {
+		unsafe.Pointer(conn.sessionHandle), 0); err != nil {
 		err.At = "Connect[set session handle]"
 		return err
 	}
@@ -314,7 +325,8 @@ func (conn *Connection) Close() (err *Error) {
 	}
 	conn.handle = nil
 	if conn.serverHandle != nil {
-		if err = conn.environment.CheckStatus(C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT),
+		if err = conn.environment.CheckStatus(
+			C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT),
 			"Close[server detach]"); err != nil {
 			return
 		}
@@ -348,7 +360,7 @@ func (conn *Connection) Ping() *Error {
 }
 
 // Create a new cursor (statement) referencing the connection.
-func (conn *Connection) NewCursor() Cursor {
+func (conn *Connection) NewCursor() *Cursor {
 	return NewCursor(conn)
 }
 
