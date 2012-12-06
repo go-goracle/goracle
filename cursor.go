@@ -35,7 +35,7 @@ type Cursor struct {
 	setInputSizes, outputSize, outputSizeColumn int
 	rowCount, actualRows, rownum                int
 	statement                                   []byte
-	statementTag                                int
+	statementTag                                []byte
 	statementType                               int
 	numbersAsStrings, isDML, isOpen, isOwned    bool
 }
@@ -48,7 +48,9 @@ var DefaultArraySize int = 50
 func (cur *Cursor) allocateHandle(typ C.ub4) *Error {
 	cur.isOwned = true
 	return ociHandleAlloc(unsafe.Pointer(cur.environment.handle),
-		(unsafe.Pointer)(unsafe.Pointer(&cur.handle)))
+		C.OCI_HTYPE_STMT,
+		(*unsafe.Pointer)(unsafe.Pointer(&cur.handle)),
+		"allocate statement handle")
 }
 
 //   Free the handle which may be reallocated if necessary.
@@ -57,12 +59,13 @@ func (cur *Cursor) freeHandle() *Error {
 		return nil
 	}
 	if cur.isOwned {
-		return CheckStatus(C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
+		return cur.environment.CheckStatus(C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
 			"freeCursor")
 	} else if cur.connection.handle != nil {
-		return CheckStatus(C.OCIStmtRelease(unsafe.Pointer(cur.handle),
-			cur.environment.errorHandle, (*C.text)(&cur.statementTag[0]),
-			len(cur.statementTag), C.OCI_DEFAULT))
+		return cur.environment.CheckStatus(C.OCIStmtRelease(cur.handle,
+			cur.environment.errorHandle, (*C.OraText)(&cur.statementTag[0]),
+			C.ub4(len(cur.statementTag)), C.OCI_DEFAULT),
+			"statement release")
 	}
 	cur.handle = nil
 }
@@ -82,7 +85,7 @@ func NewCursor(conn *Connection) *Cursor {
 		isOpen: true}
 }
 
-func (cur Cursor) String() {
+func (cur Cursor) String() string {
 	return fmt.Sprintf("<goracle.Cursor on %s>", cur.connection)
 }
 

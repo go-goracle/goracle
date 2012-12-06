@@ -35,15 +35,26 @@ func TestIsConnected(t *testing.T) {
 	if (Connection{}).IsConnected() {
 		t.Fail()
 	}
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.Fail()
+	}
 }
 
-func TestConnect(t *testing.T) {
+var conn Connection
+
+func getConnection(t *testing.T) Connection {
+	if conn.handle != nil {
+		return conn
+	}
+
 	if !(dsn != nil && *dsn != "") {
 		t.Logf("cannot test connection without dsn!")
-		return
+		return conn
 	}
 	user, passw, sid := SplitDsn(*dsn)
-	conn, err := NewConnection(user, passw, sid)
+	var err error
+	conn, err = NewConnection(user, passw, sid)
 	if err != nil {
 		t.Logf("error creating connection to %s: %s", *dsn, err)
 		t.Fail()
@@ -52,5 +63,5 @@ func TestConnect(t *testing.T) {
 		t.Logf("error connecting: %s", err)
 		t.Fail()
 	}
-	conn.Free()
+	return conn
 }
