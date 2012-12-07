@@ -184,5 +184,14 @@ func (cur *Cursor) PerformDefine() error {
 }
 
 func FromOraText(textp *C.OraText, length int) string {
+	/*
+        var theGoSlice []TheCType
+        sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&theGoSlice)))
+        sliceHeader.Cap = length
+        sliceHeader.Len = length
+        sliceHeader.Data = uintptr(unsafe.Pointer(&theCArray[0]))
+        // now theGoSlice is a normal Go slice backed by the C array
+    */
+
 	return string(C.GoBytes(unsafe.Pointer(textp), C.int(C.sizeof_OraText*length)))
 }
