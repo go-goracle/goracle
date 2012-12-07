@@ -10,20 +10,20 @@ package goracle
 #include <stdlib.h>
 #include <oci.h>
 
-const int bindInfo_elementSize = (sizeof(char*) + sizeof(ub1) + sizeof(char*) + sizeof(ub1) +
-            sizeof(ub1) + sizeof(OCIBind*));
+const int sizeof_OraText = sizeof(OraText);
 */
 import "C"
 
 import (
 	"errors"
 	"fmt"
-	"log"
+	// "log"
+	// "reflect"
 	"unsafe"
 )
 
 func init() {
-	log.Printf("bindInfo_elementSize=%d", C.bindInfo_elementSize)
+	// log.Printf("bindInfo_elementSize=%d", C.bindInfo_elementSize)
 }
 
 type Cursor struct {
@@ -68,6 +68,7 @@ func (cur *Cursor) freeHandle() *Error {
 			"statement release")
 	}
 	cur.handle = nil
+	return nil
 }
 
 func (cur *Cursor) IsOpen() bool {
@@ -96,44 +97,53 @@ func (cur *Cursor) GetBindNames(numElements int) (names []string, err error) {
 	if cur.statement == nil {
 		err = errors.New("statement must be prepared first!")
 	}
+	var foundElements C.sb4
 
 	// avoid bus errors on 64-bit platforms
 	// numElements = numElements + (sizeof(void*) - numElements % sizeof(void*));
 
 	// initialize the buffers
-	buffer := make([]byte, numElements*int(C.bindInfo_elementSize))
-	bindNames := (*unsafe.Pointer)(unsafe.Pointer(&buffer[0]))
-	bindNameLengths := &buffer[0+numElements]
-	indicatorNames := (*unsafe.Pointer)(unsafe.Pointer(&buffer[1*numElements+numElements]))
-	indicatorNameLengths := &buffer[2*numElements+numElements]
-	duplicate := (*unsafe.Pointer)(unsafe.Pointer(&buffer[3*numElements+numElements]))
-	bindHandles := (*C.OCIBind)(unsafe.Pointer(&buffer[4*numElements+numElements]))
+	// buffer := make([]byte, numElements*int(C.bindInfo_elementSize))
+	// bindNames := (**C.OraText)(unsafe.Pointer(&buffer[0]))
+	bindNames := make([](*C.OraText), numElements)
+	// bindNameLengths := (*C.ub1)(&buffer[0+numElements])
+	bindNameLengths := make([]byte, numElements)
+	// indicatorNames := (**C.OraText)(unsafe.Pointer(&buffer[1*numElements+numElements]))
+	indicatorNames := make([](*C.OraText), numElements)
+	// indicatorNameLengths := (*C.ub1)(&buffer[2*numElements+numElements])
+	indicatorNameLengths := make([]byte, numElements)
+	// duplicate := (*C.ub1)(unsafe.Pointer(&buffer[3*numElements+numElements]))
+	duplicate := make([]byte, numElements)
+	// bindHandles := (**C.OCIBind)(unsafe.Pointer(&buffer[4*numElements+numElements]))
+	bindHandles := make([](*C.OCIBind), numElements)
 
 	// get the bind information
 	status := C.OCIStmtGetBindInfo(cur.handle,
-		cur.environment.errorHandle, numElements, 1, &foundElements,
-		(**C.text)(bindNames), bindNameLengths, (**C.text)(indicatorNames),
-		indicatorNameLengths, duplicate, bindHandles)
+		cur.environment.errorHandle, C.ub4(numElements), 1, &foundElements,
+		(**C.OraText)(unsafe.Pointer(&bindNames[0])),
+		(*C.ub1)(&bindNameLengths[0]),
+		(**C.OraText)(&indicatorNames[0]), (*C.ub1)(&indicatorNameLengths[0]),
+		(*C.ub1)(&duplicate[0]), (**C.OCIBind)(&bindHandles[0]))
 	if status != C.OCI_NO_DATA {
-		if e := CheckStatus(status, "GetBindInfo"); e != nil {
-			return e
+		if e := cur.environment.CheckStatus(status, "GetBindInfo"); e != nil {
+			return nil, e
 		}
 	}
 	if foundElements < 0 {
-		return NewError(-foundElements, "negative foundElements")
+		return nil, NewError(-int(foundElements), "negative foundElements")
 	}
 
 	// create the list which is to be returned
 	names = make([]string, 0, foundElements)
 	// process the bind information returned
-	for i = 0; i < foundElements; i++ {
+	for i := 0; i < int(foundElements); i++ {
 		if duplicate[i] > 0 {
 			continue
 		}
-		names = append(names, cur.environment.FromEncodedString(bindNames[i][:bindNameLengths[i]]))
+		names = append(names, FromOraText(bindNames[i], int(bindNameLengths[i])))
 	}
 
-	return nil
+	return names, nil
 }
 
 //-----------------------------------------------------------------------------
@@ -141,11 +151,14 @@ func (cur *Cursor) GetBindNames(numElements int) (names []string, err error) {
 // statement being executed is in fact a query.
 //-----------------------------------------------------------------------------
 func (cur *Cursor) PerformDefine() error {
-	var numParams, pos int
+	var numParams int
+	var x C.ub4 = 0
 
 	// determine number of items in select-list
-	if err := CheckStatus(C.OCIAttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
-		unsafe.Pointer(&numParams), 0,
+	if err := cur.environment.CheckStatus(C.OCIAttrGet(
+		unsafe.Pointer(cur.handle),
+		C.OCI_HTYPE_STMT,
+		unsafe.Pointer(&numParams), &x,
 		C.OCI_ATTR_PARAM_COUNT, cur.environment.errorHandle),
 		"PerformDefine"); err != nil {
 		return err
@@ -157,10 +170,19 @@ func (cur *Cursor) PerformDefine() error {
 	// define a variable for each select-item
 	cur.fetchArraySize = cur.arraySize
 	for pos := 1; pos <= numParams; pos++ {
-		v, e := defineVariable(cur, cur.fetchArraySize, pos)
+		// FIXME defineVariable
+		// v, e := defineVariable(cur, cur.fetchArraySize, pos)
+		var v *Variable
+		var e error
+		v, e = nil, nil
 		if e != nil {
 			return e
 		}
 		cur.fetchVariables[pos-1] = v
 	}
+	return nil
+}
+
+func FromOraText(textp *C.OraText, length int) string {
+	return string(C.GoBytes(unsafe.Pointer(textp), C.int(C.sizeof_OraText*length)))
 }
