@@ -12,6 +12,7 @@ type Error struct {
 	Code    int
 	Message string
 	At      string
+	Offset int
 }
 
 func NewError(code int, message string) *Error {
@@ -24,8 +25,12 @@ func (err Error) Error() string {
 
 func (err Error) String() string {
 	tail := strconv.Itoa(err.Code) + ": " + err.Message
-	if err.At != "" {
-		return "@" + err.At + " " + tail
+	var head string
+	if err.Offset != 0 {
+		head = "row " + strconv.Itoa(err.Offset) + " "
 	}
-	return tail
+	if err.At != "" {
+		return head + "@" + err.At + " " + tail
+	}
+	return head + tail
 }
