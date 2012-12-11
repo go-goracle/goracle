@@ -12,7 +12,7 @@ type Error struct {
 	Code    int
 	Message string
 	At      string
-	Offset int
+	Offset  int
 }
 
 func NewError(code int, message string) *Error {
@@ -33,4 +33,10 @@ func (err Error) String() string {
 		return head + "@" + err.At + " " + tail
 	}
 	return head + tail
+}
+
+type mismatchElementNum int
+
+func (men mismatchElementNum) Error() string {
+	return "Mismatch element number: found " + strconv.Itoa(int(men))
 }

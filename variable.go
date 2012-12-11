@@ -23,6 +23,7 @@ type Variable struct {
 	//PyObject*boundName;
 	//PyObject*inConverter;
 	//PyObject*outConverter;
+	typ                                                                             *VariableType
 	boundPos, allocatedElements, actualElements, internalFetchNum, size, bufferSize int
 	environment                                                                     *Environment
 	isArray, isAllocatedInternally                                                  bool
@@ -32,9 +33,14 @@ type Variable struct {
 }
 
 type VariableDescription struct {
-	Name string
+	Name                                              string
 	Type, InternalSize, DisplaySize, Precision, Scale int
-	NullOk bool
+	NullOk                                            bool
+}
+
+type VariableType struct {
+	variableLength bool
+	size           int
 }
 
 //   Returns a boolean indicating if the object is a variable.
@@ -45,29 +51,32 @@ func isVariable(value interface{}) bool {
 	}
 	return false
 	/*
-    return (Py_TYPE(object) == &g_CursorVarType ||
-            Py_TYPE(object) == &g_DateTimeVarType ||
-            Py_TYPE(object) == &g_BFILEVarType ||
-            Py_TYPE(object) == &g_BLOBVarType ||
-            Py_TYPE(object) == &g_CLOBVarType ||
-            Py_TYPE(object) == &g_LongStringVarType ||
-            Py_TYPE(object) == &g_LongBinaryVarType ||
-            Py_TYPE(object) == &g_NumberVarType ||
-            Py_TYPE(object) == &g_StringVarType ||
-            Py_TYPE(object) == &g_FixedCharVarType ||
-            Py_TYPE(object) == &g_NCLOBVarType ||
-#if PY_MAJOR_VERSION < 3
-            Py_TYPE(object) == &g_UnicodeVarType ||
-            Py_TYPE(object) == &g_FixedUnicodeVarType ||
-#endif
-            Py_TYPE(object) == &g_RowidVarType ||
-            Py_TYPE(object) == &g_BinaryVarType ||
-            Py_TYPE(object) == &g_TimestampVarType ||
-            Py_TYPE(object) == &g_IntervalVarType
-#ifdef SQLT_BFLOAT
-            || Py_TYPE(object) == &g_NativeFloatVarType
-#endif
-            );
-     */
+		    return (Py_TYPE(object) == &g_CursorVarType ||
+		            Py_TYPE(object) == &g_DateTimeVarType ||
+		            Py_TYPE(object) == &g_BFILEVarType ||
+		            Py_TYPE(object) == &g_BLOBVarType ||
+		            Py_TYPE(object) == &g_CLOBVarType ||
+		            Py_TYPE(object) == &g_LongStringVarType ||
+		            Py_TYPE(object) == &g_LongBinaryVarType ||
+		            Py_TYPE(object) == &g_NumberVarType ||
+		            Py_TYPE(object) == &g_StringVarType ||
+		            Py_TYPE(object) == &g_FixedCharVarType ||
+		            Py_TYPE(object) == &g_NCLOBVarType ||
+		#if PY_MAJOR_VERSION < 3
+		            Py_TYPE(object) == &g_UnicodeVarType ||
+		            Py_TYPE(object) == &g_FixedUnicodeVarType ||
+		#endif
+		            Py_TYPE(object) == &g_RowidVarType ||
+		            Py_TYPE(object) == &g_BinaryVarType ||
+		            Py_TYPE(object) == &g_TimestampVarType ||
+		            Py_TYPE(object) == &g_IntervalVarType
+		#ifdef SQLT_BFLOAT
+		            || Py_TYPE(object) == &g_NativeFloatVarType
+		#endif
+		            );
+	*/
 }
 
+func (t VariableType) NewVariable(cur *Cursor) *Variable {
+	return nil
+}
