@@ -40,3 +40,7 @@ type mismatchElementNum int
 func (men mismatchElementNum) Error() string {
 	return "Mismatch element number: found " + strconv.Itoa(int(men))
 }
+
+func ProgrammingError(text string) error {
+	return fmt.Errorf("Programming error: %s", text)
+}

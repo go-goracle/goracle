@@ -19,6 +19,8 @@ import (
 	"fmt"
 	// "log"
 	// "reflect"
+	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -46,6 +48,7 @@ var DefaultArraySize int = 50
 var (
 	CursorIsClosed      = errors.New("cursor is closed")
 	QueriesNotSupported = errors.New("queries not supported: results undefined")
+	ListIsEmpty         = errors.New("list is empty")
 )
 
 //statement // statementTag // rowFactory // inputTypeHandler // outputTypeHandler
@@ -266,7 +269,9 @@ func (cur *Cursor) internalExecute(numIters int) error {
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtExecute(cur.connection.handle,
 			cur.handle, cur.environment.errorHandle,
-			C.ub4(numIters), 0, 0, 0, mode),
+			C.ub4(numIters), 0, // iters, rowOff
+			nil, nil, // snapIn, snapOut
+			mode),
 		"internalExecute"); err != nil {
 		cur.setErrorOffset(err)
 		return err
@@ -277,14 +282,15 @@ func (cur *Cursor) internalExecute(numIters int) error {
 // Determine if the cursor is executing a select statement.
 func (cur *Cursor) getStatementType() error {
 	var statementType C.ub2
+	var vsize C.ub4
 	if err := cur.environment.CheckStatus(
 		C.OCIAttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
-			&statementType, 0, C.OCI_ATTR_STMT_TYPE,
+			unsafe.Pointer(&statementType), &vsize, C.OCI_ATTR_STMT_TYPE,
 			cur.environment.errorHandle),
 		"getStatementType"); err != nil {
 		return err
 	}
-	cur.statementType = statementType
+	cur.statementType = int(statementType)
 	if cur.fetchVariables != nil {
 		cur.fetchVariables = nil
 	}
@@ -304,7 +310,7 @@ func (cur *Cursor) fixupBoundCursor() error {
 				return err
 			}
 		}
-		if err := cur.setRowCount(self); err != nil {
+		if err := cur.setRowCount(); err != nil {
 			return err
 		}
 	}
@@ -315,121 +321,110 @@ func (cur *Cursor) fixupBoundCursor() error {
 // constantly free the descriptor when an error takes place.
 func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc VariableDescription, err error) {
 	var (
-		internalSize, charSize C.ub2
-		variable               Variable
-		displaySize, index     int
-		nameLength             C.ub4
-		precision              C.sb2
-		// ub1 nullOk;
-		// sb1 scale;
+		internalSize, charSize         C.ub2
+		varType                        *VariableType
+		nameLength, displaySize, index int
+		precision                      C.sb2
+		nullOk                         C.ub1
+		scale                          C.ub1
 	)
+	name := make([]byte, 100)
 
 	// acquire usable type of item
-	if variable, err = cur.environment.variableByOracleDescriptor(param); err != nil {
+	if varType, err = cur.environment.varTypeByOracleDescriptor(param); err != nil {
 		return
 	}
 
 	// acquire internal size of item
-	if err = cur.environment.CheckStatus(
-		C.OCIAttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
-			&internalSize, 0,
-			C.OCI_ATTR_DATA_SIZE, cur.environment.errorHandle),
+	if _, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+		C.OCI_ATTR_DATA_SIZE, unsafe.Pointer(&internalSize),
 		"itemDescription: internal size"); err != nil {
 		return
 	}
 
 	// acquire character size of item
-	if err = cur.environment.CheckStatus(
-		C.OCIAttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
-			&charSize, 0,
-			C.OCI_ATTR_CHAR_SIZE, cur.environment.errorHandle),
+	if _, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+		C.OCI_ATTR_CHAR_SIZE, unsafe.Pointer(&charSize),
 		"itemDescription(): character size"); err != nil {
 		return
 	}
 
 	// aquire name of item
-	if err = cur.environment.CheckStatus(
-		C.OCIAttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
-			&name,
-			&nameLength, C.OCI_ATTR_NAME, cur.environment.errorHandle),
+	if nameLength, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+		C.OCI_ATTR_NAME, unsafe.Pointer(&name[0]),
 		"itemDescription(): name"); err != nil {
 		return
 	}
 
 	// lookup precision and scale
-	if variable.IsNumber() {
-		if err = cur.environment.CheckStatus(
-			C.OCIAttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
-				&scale, 0,
-				C.OCI_ATTR_SCALE, cur.environment.errorHandle),
+	if varType.IsNumber() {
+		if _, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+			C.OCI_ATTR_SCALE, unsafe.Pointer(&scale),
 			"itemDescription(): scale"); err != nil {
 			return
 		}
-		if err = cur.environment.CheckStatus(
-			C.OCIAttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
-				&precision, 0,
-				C.OCI_ATTR_PRECISION, cur.environment.errorHandle),
+		if _, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+			C.OCI_ATTR_PRECISION, unsafe.Pointer(&precision),
 			"itemDescription(): precision"); err != nil {
 			return
 		}
 	}
 
 	// lookup whether null is permitted for the attribute
-	if err = cur.environment.CheckStatus(
-		C.OCIAttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
-			&nullOk, 0,
-			C.OCI_ATTR_IS_NULL, cur.environment.errorHandle),
+	if _, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+		C.OCI_ATTR_IS_NULL, unsafe.Pointer(&nullOk),
 		"itemDescription(): nullable"); err != nil {
 		return
 	}
 
 	// set display size based on data type
 	switch {
-	case variable.IsString():
-		displaySie = charSize
-	case variable.IsBinary():
-		displaySize = internalSize
+	case varType.IsString():
+		displaySize = int(charSize)
+	case varType.IsBinary():
+		displaySize = int(internalSize)
 	// case variable.IsFixed():
-	case variable.IsNumber():
+	case varType.IsNumber():
 		if precision > 0 {
-			displaySize = precision + 1
+			displaySize = int(precision + 1)
 			if scale > 0 {
-				displaySize += scale + 1
+				displaySize += int(scale + 1)
 			}
 		} else {
 			displaySize = 127
 		}
-	case variable.IsDate():
+	case varType.IsDate():
 		displaySize = 23
 	default:
 		displaySize = -1
 	}
 
-	desc = VariableDescription{Name: cur.environment.FromEncodedString(name, nameLength),
+	desc = VariableDescription{
+		Name:        cur.environment.FromEncodedString(name, nameLength),
 		Type:        -1,                        //FIXME
-		DisplaySize: displaySize, InternalSize: internalSize,
-		Precision: precision, Scale: scale, NullOk: nullOk != 0,
+		DisplaySize: displaySize, InternalSize: int(internalSize),
+		Precision: int(precision), Scale: int(scale),
+		NullOk: nullOk != 0,
 	}
 	return
 }
 
 // Return a tuple describing the item at the given position.
-func (cur *Cursor) itemDescription(pos uint) (VariableDescription, error) {
+func (cur *Cursor) itemDescription(pos uint) (desc VariableDescription, err error) {
 	var param *C.OCIParam
 
 	// acquire parameter descriptor
 	if err = cur.environment.CheckStatus(
 		C.OCIParamGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 			cur.environment.errorHandle,
-			(*unsafe.Pointer)(unsafe.Pointer(&param)), pos),
+			(*unsafe.Pointer)(unsafe.Pointer(&param)), C.ub4(pos)),
 		"itemDescription(): parameter"); err != nil {
 		return
 	}
 
 	// use helper routine to get tuple
-	desc, e := cur.itemDescriptionHelper(pos, param)
-	err = e
-	C.OCIDescriptorFree(param, C.OCI_DTYPE_PARAM)
+	desc, err = cur.itemDescriptionHelper(pos, param)
+	C.OCIDescriptorFree(unsafe.Pointer(param), C.OCI_DTYPE_PARAM)
 	return
 }
 
@@ -439,8 +434,8 @@ func (cur *Cursor) GetDescription() (descs []VariableDescription, err error) {
 	var numItems int
 
 	// make sure the cursor is open
-	if !cur.IsOpen() {
-		err = ClosedCursor
+	if !cur.isOpen {
+		err = CursorIsClosed
 		return
 	}
 
@@ -455,10 +450,8 @@ func (cur *Cursor) GetDescription() (descs []VariableDescription, err error) {
 	}
 
 	// determine number of items in select-list
-	if err = cur.environment.CheckStatus(
-		C.OCIAttrGet(unsafe.Pointer(handle), C.OCI_HTYPE_STMT,
-			&numItems, 0,
-			C.OCI_ATTR_PARAM_COUNT, cur.environment.errorHandle),
+	if _, err = cur.environment.AttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
+		C.OCI_ATTR_PARAM_COUNT, unsafe.Pointer(&numItems),
 		"GetDescription()"); err != nil {
 		return
 	}
@@ -479,7 +472,7 @@ func (cur *Cursor) GetDescription() (descs []VariableDescription, err error) {
 // Close the cursor.
 func (cur *Cursor) Close() {
 	// make sure we are actually open
-	if !cur.IsOpen() {
+	if !cur.isOpen {
 		return
 	}
 	// close the cursor
@@ -507,13 +500,13 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 		// if the value is a variable object, rebind it if necessary
 		if isValueVar {
 			if origVar != value {
-				newVar = value.(Variable)
+				newVar = value.(*Variable)
 			}
 
 			// if the number of elements has changed, create a new variable
 			// this is only necessary for executemany() since execute() always
 			// passes a value of 1 for the number of elements
-		} else if numElements > origVar.allocatedElements {
+		} else if int(numElements) > origVar.allocatedElements {
 			if newVar, err = NewVariable(cur, numElements, origVar.typ,
 				origVar.size); err != nil {
 				return
@@ -536,7 +529,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 			           !PyErr_ExceptionMatches(PyExc_TypeError))
 			       return -1;
 			*/
-			return err
+			return
 
 			// clear the exception and try to create a new variable
 			origVar = nil
@@ -577,16 +570,16 @@ func (cur *Cursor) setBindVariablesByPos(parameters []interface{}, // parameters
 	err error) {
 	var origBoundByPos, origNumParams, boundByPos, numParams int
 	// PyObject *key, *value, *origVar;
-	newVar * Variable // udt_Variable *newVar;
+	var origVar, newVar *Variable // udt_Variable *newVar;
 
 	// make sure positional and named binds are not being intermixed
 	if parameters == nil || len(parameters) <= 0 {
-		return EmptyList
+		return ListIsEmpty
 	}
 	if cur.bindVarsArr != nil {
 		origNumParams = len(cur.bindVarsArr)
 	} else {
-		cur.bindVarsArr = make([]interface{}, len(parameters))
+		cur.bindVarsArr = make([]*Variable, len(parameters))
 	}
 
 	// handle positional binds
@@ -618,16 +611,16 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 ) (err error) {
 	var origBoundByPos, origNumParams, boundByPos, numParams int
 	// PyObject *key, *value, *origVar;
-	newVar * Variable // udt_Variable *newVar;
+	var origVar, newVar *Variable // udt_Variable *newVar;
 
 	// make sure positional and named binds are not being intermixed
 	if parameters == nil || len(parameters) <= 0 {
-		return EmptyList
+		return ListIsEmpty
 	}
 	if cur.bindVarsMap != nil {
 		origNumParams = len(cur.bindVarsMap)
 	} else {
-		cur.bindVarsMap = make(map[string]interface{}, len(parameters))
+		cur.bindVarsMap = make(map[string]*Variable, len(parameters))
 	}
 
 	// handle named binds
@@ -646,7 +639,7 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 }
 
 // Perform the binds on the cursor.
-func (cur *Cursor) performBind() error {
+func (cur *Cursor) performBind() (err error) {
 	// PyObject *key, *var;
 	// Py_ssize_t pos;
 	// ub2 i;
@@ -715,7 +708,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 	// nothing to do if the statement is identical to the one already stored
 	// but go ahead and prepare anyway for create, alter and drop statments
 	if statement == "" || statement == string(cur.statement) {
-		if cur.statementType != c.OCI_STMT_CREATE &&
+		if cur.statementType != C.OCI_STMT_CREATE &&
 			cur.statementType != C.OCI_STMT_DROP &&
 			cur.statementType != C.OCI_STMT_ALTER {
 			return nil
@@ -738,8 +731,8 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtPrepare2(cur.connection.handle, &cur.handle,
 			cur.environment.errorHandle,
-			(*C.text)(unsafe.Pointer(&cur.statement[0])), len(cur.statement),
-			(*C.text)(unsafe.Pointer(&cur.statementTag[0])), len(cur.statementTag),
+			(*C.OraText)(unsafe.Pointer(&cur.statement[0])), C.ub4(len(cur.statement)),
+			(*C.OraText)(unsafe.Pointer(&cur.statementTag[0])), C.ub4(len(cur.statementTag)),
 			C.OCI_NTV_SYNTAX, C.OCI_DEFAULT),
 		"internalPrepare"); err != nil {
 		// Py_END_ALLOW_THREADS
@@ -751,15 +744,16 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 	}
 
 	// clear bind variables, if applicable
-	if cur.setInputSizes == nil {
-		cur.bindVariables = nil
+	if cur.setInputSizes < 0 {
+		cur.bindVarsArr = nil
+		cur.bindVarsMap = nil
 	}
 
 	// clear row factory, if applicable
 	// cur.rowFactory = nil
 
 	// determine if statement is a query
-	if _, err := cur.getStatementType(); err != nil {
+	if err := cur.getStatementType(); err != nil {
 		return err
 	}
 
@@ -777,12 +771,12 @@ func (cur *Cursor) parse(statement string) error {
 	}
 
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return nil
 	}
 
 	// prepare the statement
-	if err := cur.internalPrepare(statement); err != nil {
+	if err := cur.internalPrepare(statement, ""); err != nil {
 		return err
 	}
 
@@ -795,7 +789,10 @@ func (cur *Cursor) parse(statement string) error {
 	// Py_BEGIN_ALLOW_THREADS
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtExecute(cur.connection.handle, cur.handle,
-			cur.environment.errorHandle, 0, 0, 0, 0, mode),
+			cur.environment.errorHandle,
+			0, 0, //iters, rowoff
+			nil, nil, //snapIn, snapOut
+			mode),
 		"parse"); err != nil {
 		// Py_END_ALLOW_THREADS
 		return err
@@ -805,9 +802,9 @@ func (cur *Cursor) parse(statement string) error {
 }
 
 // Prepare the statement for execution. statementTag is optional
-func (cur *Cursor) Prepare(statement, statemenetTag string) error {
+func (cur *Cursor) Prepare(statement, statementTag string) error {
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return nil
 	}
 
@@ -839,7 +836,7 @@ func (cur *Cursor) callCalculateSize(
 	// is a boolean value
 	if listOfArguments != nil {
 		if len(listOfArguments) == 0 {
-			return nil, EmptyArgumentList
+			return -1, ListIsEmpty
 		}
 		size += len(listOfArguments) * 9
 	}
@@ -849,7 +846,7 @@ func (cur *Cursor) callCalculateSize(
 	// is a boolean value
 	if keywordArguments != nil {
 		if len(keywordArguments) == 0 {
-			return nil, EmptyArgumentList
+			return -1, ListIsEmpty
 		}
 		size += len(keywordArguments) * 15
 	}
@@ -918,7 +915,7 @@ func (cur *Cursor) callBuildStatement(
 			} else {
 				plus = ""
 			}
-			argchunks[argNum-1] = key + "=>:" + strconv.Itoa(argNum) + plus
+			argchunks[argNum-1] = k + "=>:" + strconv.Itoa(argNum) + plus
 			bindVarsArr[argNum-1] = arg
 			argNum++
 		}
@@ -938,7 +935,7 @@ func (cur *Cursor) call( // cursor to call procedure/function
 	keywordArguments map[string]interface{}, // keyword arguments
 ) error {
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return CursorIsClosed
 	}
 
@@ -1019,7 +1016,7 @@ func (cur *Cursor) Execute(statement string,
 	listArgs []interface{}, keywordArgs map[string]interface{}) error {
 
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return CursorIsClosed
 	}
 
@@ -1067,7 +1064,7 @@ func (cur *Cursor) Execute(statement string,
 // number of elements in the array of dictionaries.
 func (cur *Cursor) ExecuteMany(statement, params []map[string]interface{}) error {
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return CursorIsClosed
 	}
 
@@ -1115,7 +1112,7 @@ func (cur *Cursor) ExecuteManyPrepared(numIters int) error {
 	}
 
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return CursorIsClosed
 	}
 
@@ -1137,7 +1134,7 @@ func (cur *Cursor) ExecuteManyPrepared(numIters int) error {
 // Verify that fetching may happen from this cursor.
 func (cur *Cursor) verifyFetch() error {
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return CursorIsClosed
 	}
 
@@ -1205,12 +1202,13 @@ func (cur *Cursor) moreRows() (bool, error) {
 // Return a list consisting of the remaining rows up to the given row limit
 // (if specified).
 func (cur *Cursor) multiFetch(rowLimit int) (results [][]interface{}, err error) {
+	var ok bool
 	// create an empty list
 	results = make([]interface{}, 0, 2)
 
 	// fetch as many rows as possible
 	for rowNum := 0; rowLimit == 0 || rowNum < rowLimit; rowNum++ {
-		if ok, err := cur.moreRows(); err != nil {
+		if ok, err = cur.moreRows(); err != nil {
 			return
 		} else if !ok {
 			break
@@ -1290,7 +1288,7 @@ func (cur *Cursor) fetcRaw(numRows int) (int, error) {
 // Set the sizes of the bind variables by position (array).
 func (cur *Cursor) SetInputSizesByPos(types []VariableType) error {
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return CursorIsClosed
 	}
 
@@ -1312,17 +1310,13 @@ func (cur *Cursor) SetInputSizesByPos(types []VariableType) error {
 // Set the sizes of the bind variables by name (map).
 func (cur *Cursor) SetInputSizesByName(types map[string]VariableType) error {
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return CursorIsClosed
 	}
 
 	// eliminate existing bind variables
-	if cur.bindVarsMap == nil {
+	if cur.bindVarsMap == nil || len(cur.bindVarsMap) > 0 {
 		cur.bindVarsMap = make(map[string]*Variables, 0, len(types))
-	} else {
-		for k, _ := range cur.bindVarsMap {
-			delete(cur.bindVarsMap, k)
-		}
 	}
 	cur.setInputSizes = 1
 
@@ -1404,7 +1398,7 @@ func (cur *Cursor) ArrayVar(varType *VariableType, values []interface{}, size in
 // Return a list of bind variable names.
 func (cur *Cursor) bindNames() ([]string, error) {
 	// make sure the cursor is open
-	if !cur.isOpen() {
+	if !cur.isOpen {
 		return CursorIsClosed
 	}
 

@@ -13,14 +13,15 @@ package goracle
 import "C"
 
 import (
-// "unsafe"
+	// "unsafe"
+	"errors"
 )
 
 type Variable struct {
 	bindHandle        *C.OCIBind
 	defineHandle      *C.OCIDefine
 	boundCursorHandle *C.OCIStmt
-	//PyObject*boundName;
+	boundName         string
 	//PyObject*inConverter;
 	//PyObject*outConverter;
 	typ                                                                             *VariableType
@@ -30,6 +31,12 @@ type Variable struct {
 	indicator                                                                       *C.sb2
 	returnCode, actualLength                                                        *C.ub2
 	data                                                                            []byte
+}
+
+var NotImplemented = errors.New("not implemented")
+
+func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size int) (*Variable, error) {
+	return nil, NotImplemented
 }
 
 type VariableDescription struct {
@@ -77,6 +84,23 @@ func isVariable(value interface{}) bool {
 	*/
 }
 
+func (t VariableType) IsNumber() bool {
+	return false
+}
+func (t VariableType) IsBinary() bool {
+	return false
+}
+func (t VariableType) IsString() bool {
+	return false
+}
+func (t VariableType) IsDate() bool {
+	return false
+}
+
 func (t VariableType) NewVariable(cur *Cursor) *Variable {
 	return nil
+}
+
+func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableType, error) {
+	return nil, nil
 }

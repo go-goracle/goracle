@@ -238,3 +238,19 @@ func (env *Environment) CheckStatus(status C.sword, at string) (err *Error) {
 		Message: fmt.Sprintf("[%d] %s", status, message),
 		At:      at}
 }
+
+func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
+	dst unsafe.Pointer, errText string) (size int, err error) {
+	var osize C.ub4
+	if err = cur.environment.CheckStatus(
+		C.OCIAttrGet(parent, parentType, dst, &osize, key,
+			cur.environment.errorHandle), errText); err != nil {
+		return
+	}
+	size = int(osize)
+	return
+}
+
+func (env *Environment) FromEncodedString(text []byte, length int) string {
+	return string(text[:length])
+}
