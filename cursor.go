@@ -19,6 +19,7 @@ import (
 	"fmt"
 	// "log"
 	// "reflect"
+	"io"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -511,12 +512,12 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 				origVar.size); err != nil {
 				return
 			}
-			if err = newVar.setValue(arrayPos, value); err != nil {
+			if err = newVar.SetValue(arrayPos, value); err != nil {
 				return
 			}
 
 			// otherwise, attempt to set the value
-		} else if origVar.setValue(arrayPos, value); err != nil {
+		} else if origVar.SetValue(arrayPos, value); err != nil {
 
 			// executemany() should simply fail after the first element
 			if arrayPos > 0 {
@@ -549,10 +550,10 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 			// otherwise, create a new variable, unless the value is None and
 			// we wish to defer type assignment
 		} else if value != nil || !deferTypeAssignment {
-			if newVar, err = NewVariableByValue(value, numElements); err != nil {
+			if newVar, err = NewVariableByValue(cur, value, numElements); err != nil {
 				return
 			}
-			if err = newVar.setValue(arrayPos, value); err != nil {
+			if err = newVar.SetValue(arrayPos, value); err != nil {
 				return
 			}
 		}
@@ -653,13 +654,13 @@ func (cur *Cursor) performBind() (err error) {
 	// set values and perform binds for all bind variables
 	if cur.bindVarsMap != nil {
 		for k, v := range cur.bindVarsMap {
-			if err = v.bind(cur, k, 0); err != nil {
+			if err = v.Bind(cur, k, 0); err != nil {
 				return err
 			}
 		}
 	} else if cur.bindVarsArr != nil {
 		for i, v := range cur.bindVarsArr {
-			if err = v.bind(cur, "", i+1); err != nil {
+			if err = v.Bind(cur, "", uint(i+1)); err != nil {
 				return err
 			}
 		}
@@ -672,13 +673,16 @@ func (cur *Cursor) performBind() (err error) {
 // row factory function called with the argument tuple that would otherwise be
 // returned.
 func (cur *Cursor) createRow() ([]interface{}, error) {
+	var err error
 	// create a new tuple
 	numItems := len(cur.fetchVariables)
 	row := make([]interface{}, numItems)
 
 	// acquire the value for each item
 	for pos, v := range cur.fetchVariables {
-		row[pos] = v.getValue(cur.rowNum)
+		if row[pos], err = v.GetValue(uint(cur.rowNum)); err != nil {
+			return nil, err
+		}
 	}
 
 	// increment row counters
@@ -954,7 +958,7 @@ func (cur *Cursor) call( // cursor to call procedure/function
 	}
 
 	// execute the statement on the cursor
-	return cur.execute(statement, bindVarArrs)
+	return cur.Execute(statement, bindVarArrs, nil)
 }
 
 // Call a stored function and return the return value of the function.
@@ -963,14 +967,16 @@ func (cur *Cursor) CallFunc(
 	returnType VariableType,
 	parameters []interface{},
 	keywordParameters map[string]interface{}) (interface{}, error) {
-	var variable *Variable
 
 	// create the return variable
-	variable = NewVariableByType(cur, returnType)
+	variable, err := returnType.NewVariable(cur, 0, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	// call the function
-	if err := cur.call(variable, name, parameters, keywordParameters); err != nil {
-		return err
+	if err = cur.call(variable, name, parameters, keywordParameters); err != nil {
+		return nil, err
 	}
 
 	// determine the results
@@ -979,11 +985,11 @@ func (cur *Cursor) CallFunc(
 
 // Call a stored procedure and return the (possibly modified) arguments.
 func (cur *Cursor) CallProc(name string,
-	parameters []interface{}, keywordParamenters map[string]interface{}) (
+	parameters []interface{}, keywordParameters map[string]interface{}) (
 	results []interface{}, err error) {
 	// call the stored procedure
-	if err = cur.call(0, name, parameters, keywordParameters); err != nil {
-		return err
+	if err = cur.call(nil, name, parameters, keywordParameters); err != nil {
+		return
 	}
 
 	// create the return value
@@ -993,7 +999,7 @@ func (cur *Cursor) CallProc(name string,
 	i := 0
 	for _, v := range cur.bindVarsArr {
 		if val, err = v.GetValue(0); err != nil {
-			return err
+			return
 		}
 		results[i] = val
 		i++
@@ -1022,8 +1028,8 @@ func (cur *Cursor) Execute(statement string,
 
 	var err error
 	// prepare the statement, if applicable
-	if err = cur.internalPrepare(statement); err != nil {
-		return
+	if err = cur.internalPrepare(statement, ""); err != nil {
+		return err
 	}
 
 	// perform binds
@@ -1042,7 +1048,11 @@ func (cur *Cursor) Execute(statement string,
 
 	// execute the statement
 	isQuery := cur.statementType == C.OCI_STMT_SELECT
-	if err = cur.internalExecute(isQuery); err != nil {
+	numIters := 0
+	if isQuery {
+		numIters = 1
+	}
+	if err = cur.internalExecute(numIters); err != nil {
 		return err
 	}
 
@@ -1062,7 +1072,7 @@ func (cur *Cursor) Execute(statement string,
 
 // Execute the statement many times. The number of times is equivalent to the
 // number of elements in the array of dictionaries.
-func (cur *Cursor) ExecuteMany(statement, params []map[string]interface{}) error {
+func (cur *Cursor) ExecuteMany(statement string, params []map[string]interface{}) error {
 	// make sure the cursor is open
 	if !cur.isOpen {
 		return CursorIsClosed
@@ -1070,7 +1080,7 @@ func (cur *Cursor) ExecuteMany(statement, params []map[string]interface{}) error
 
 	var err error
 	// prepare the statement
-	if err = cur.internalPrepare(statement); err != nil {
+	if err = cur.internalPrepare(statement, ""); err != nil {
 		return err
 	}
 
@@ -1082,7 +1092,7 @@ func (cur *Cursor) ExecuteMany(statement, params []map[string]interface{}) error
 	// perform binds
 	numRows := len(params)
 	for i, arguments := range params {
-		if err = cur.setBindVariablesByName(arguments, numRows, i,
+		if err = cur.setBindVariablesByName(arguments, uint(numRows), uint(i),
 			(i < numRows-1)); err != nil {
 			return err
 		}
@@ -1123,12 +1133,12 @@ func (cur *Cursor) ExecuteManyPrepared(numIters int) error {
 
 	var err error
 	// perform binds
-	if err = cur.performBind(self); err != nil {
+	if err = cur.performBind(); err != nil {
 		return err
 	}
 
 	// execute the statement
-	return cur.internalExecute(self, numIters)
+	return cur.internalExecute(numIters)
 }
 
 // Verify that fetching may happen from this cursor.
@@ -1156,25 +1166,25 @@ func (cur *Cursor) internalFetch(numRows int) error {
 	if cur.fetchVariables == nil {
 		return errors.New("query not executed")
 	}
+	var err error
 	for _, v := range cur.fetchVariables {
 		v.internalFetchNum++
-		if v.typ.preFetchProc != nil {
-			if err := v.typ.preFetchProc(); err != nil {
+		if v.typ.preFetch != nil {
+			if err = v.typ.preFetch(v); err != nil {
 				return err
 			}
 		}
 	}
 	// Py_BEGIN_ALLOW_THREADS
-	if err := cur.environment.CheckStatus(
-		C.OCIStmtFetch(unsafe.Pointer(cur.handle), cur.environment.errorHandle,
-			numRows, C.OCI_FETCH_NEXT, C.OCI_DEFAULT),
+	if err = cur.environment.CheckStatus(
+		C.OCIStmtFetch(cur.handle, cur.environment.errorHandle,
+			C.ub4(numRows), C.OCI_FETCH_NEXT, C.OCI_DEFAULT),
 		"internalFetch(): fetch"); err != nil {
 		return err
 	}
 	var rowCount int
-	if err := cur.environment.CheckStatus(
-		C.OCIAttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT, &rowCount, 0,
-			C.OCI_ATTR_ROW_COUNT, cur.environment.errorHandle),
+	if _, err = cur.environment.AttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
+		C.OCI_ATTR_ROW_COUNT, unsafe.Pointer(&rowCount),
 		"internalFetch(): row count"); err != nil {
 		return err
 	}
@@ -1188,23 +1198,24 @@ func (cur *Cursor) internalFetch(numRows int) error {
 func (cur *Cursor) moreRows() (bool, error) {
 	if cur.rowNum >= cur.actualRows {
 		if cur.actualRows < 0 || cur.actualRows == cur.fetchArraySize {
-			if err := cur.internalFetch(self, cur.fetchArraySize); err != nil {
+			if err := cur.internalFetch(cur.fetchArraySize); err != nil {
 				return false, err
 			}
 		}
 		if cur.rowNum >= cur.actualRows {
-			return false
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
 }
 
 // Return a list consisting of the remaining rows up to the given row limit
 // (if specified).
 func (cur *Cursor) multiFetch(rowLimit int) (results [][]interface{}, err error) {
 	var ok bool
+	var row []interface{}
 	// create an empty list
-	results = make([]interface{}, 0, 2)
+	results = make([][]interface{}, 0, 2)
 
 	// fetch as many rows as possible
 	for rowNum := 0; rowLimit == 0 || rowNum < rowLimit; rowNum++ {
@@ -1213,33 +1224,33 @@ func (cur *Cursor) multiFetch(rowLimit int) (results [][]interface{}, err error)
 		} else if !ok {
 			break
 		}
-		row = cur.createRow()
+		if row, err = cur.createRow(); err != nil {
+			return
+		}
 		results = append(results, row)
 	}
 
-	return results
+	return
 }
 
 // Fetch a single row from the cursor.
-func (cur *Cursor) FetchOne() error {
+func (cur *Cursor) FetchOne() (row []interface{}, err error) {
 	// verify fetch can be performed
-	if err := cur.verifyFetch(); err != nil {
-		return err
+	if err = cur.verifyFetch(); err != nil {
+		return
 	}
 
+	var ok bool
 	// setup return value
-	if ok, err := cur.moreRows(); err != nil {
-		return err
-	} else if ok {
-		return cur.createRow()
+	if ok, err = cur.moreRows(); err != nil {
+		return
 	}
-
-	return nil
+	return cur.createRow()
 }
 
 // Fetch multiple rows from the cursor based on the arraysize.
 // for default (arraySize) row limit, use negative rowLimit
-func (cur *Cursor) FetchMany(numRows, rowLimit int) error {
+func (cur *Cursor) FetchMany(numRows, rowLimit int) ([][]interface{}, error) {
 	// parse arguments -- optional rowlimit expected
 	if rowLimit < 0 {
 		rowLimit = cur.arraySize
@@ -1247,24 +1258,24 @@ func (cur *Cursor) FetchMany(numRows, rowLimit int) error {
 
 	// verify fetch can be performed
 	if err := cur.verifyFetch(); err != nil {
-		return err
+		return nil, err
 	}
 
-	return cur.mutliFetch(rowLimit)
+	return cur.multiFetch(rowLimit)
 }
 
 // Fetch all remaining rows from the cursor.
-func (cur *Cursor) fetchAll() error {
+func (cur *Cursor) fetchAll() ([][]interface{}, error) {
 	if err := cur.verifyFetch(); err != nil {
-		return err
+		return nil, err
 	}
 	return cur.multiFetch(0)
 }
 
 // Perform raw fetch on the cursor; return the actual number of rows fetched.
-func (cur *Cursor) fetcRaw(numRows int) (int, error) {
+func (cur *Cursor) fetchRaw(numRows int) (int, error) {
 	if numRows > cur.fetchArraySize {
-		return nil, errors.New("rows to fetch exceeds array size")
+		return -1, errors.New("rows to fetch exceeds array size")
 	}
 
 	// do not attempt to perform fetch if no more rows to fetch
@@ -1274,7 +1285,7 @@ func (cur *Cursor) fetcRaw(numRows int) (int, error) {
 
 	// perform internal fetch
 	if err := cur.internalFetch(numRows); err != nil {
-		return 0, err
+		return -1, err
 	}
 
 	cur.rowCount += cur.actualRows
@@ -1282,7 +1293,7 @@ func (cur *Cursor) fetcRaw(numRows int) (int, error) {
 	if cur.actualRows == numRows {
 		cur.actualRows = -1
 	}
-	return numRowsFetched
+	return numRowsFetched, nil
 }
 
 // Set the sizes of the bind variables by position (array).
@@ -1294,15 +1305,20 @@ func (cur *Cursor) SetInputSizesByPos(types []VariableType) error {
 
 	// eliminate existing bind variables
 	if cur.bindVarsArr == nil {
-		cur.bindVarsArr = make([]*Variables, 0, len(types))
+		cur.bindVarsArr = make([]*Variable, 0, len(types))
 	} else {
 		cur.bindVarsArr = cur.bindVarsArr[:0]
 	}
 	cur.setInputSizes = 1
 
 	// process each input
+	var nv *Variable
+	var err error
 	for _, t := range types {
-		cur.bindVarsArr = append(cur.bindVarsArr, t.NewVariable(cur))
+		if nv, err = t.NewVariable(cur, 0, 0); err != nil {
+			return err
+		}
+		cur.bindVarsArr = append(cur.bindVarsArr, nv)
 	}
 	return nil
 }
@@ -1316,13 +1332,16 @@ func (cur *Cursor) SetInputSizesByName(types map[string]VariableType) error {
 
 	// eliminate existing bind variables
 	if cur.bindVarsMap == nil || len(cur.bindVarsMap) > 0 {
-		cur.bindVarsMap = make(map[string]*Variables, 0, len(types))
+		cur.bindVarsMap = make(map[string]*Variable, len(types))
 	}
 	cur.setInputSizes = 1
 
+	var err error
 	// process each input
 	for k, t := range types {
-		cur.bindVarsMap[k] = t.NewVariable(cur)
+		if cur.bindVarsMap[k], err = t.NewVariable(cur, 0, 0); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1335,10 +1354,10 @@ func (cur *Cursor) SetOutputSize(outputSize, outputSizeColumn int) {
 }
 
 // Create a bind variable and return it.
-func (cur *Cursor) NewVar(varType VariableType, size int, arraySize int /*inconverter, outconverter, typename*/) *Variable {
+func (cur *Cursor) NewVar(varType *VariableType, size int, arraySize int /*inconverter, outconverter, typename*/) (v *Variable, err error) {
 	// determine the type of variable
 	// varType = Variable_TypeByPythonType(self, type);
-	if varType.variableLength && size == 0 {
+	if varType.isVariableLength && size == 0 {
 		size = varType.size
 	}
 	/*
@@ -1350,7 +1369,7 @@ func (cur *Cursor) NewVar(varType VariableType, size int, arraySize int /*inconv
 	*/
 
 	// create the variable
-	v := NewVariable(cur, arraySize, varType, size)
+	v, err = NewVariable(cur, uint(arraySize), varType, size)
 	/*
 	   var->inConverter = inConverter;
 	   var->outConverter = outConverter;
@@ -1369,37 +1388,39 @@ func (cur *Cursor) NewVar(varType VariableType, size int, arraySize int /*inconv
 	   }
 	*/
 
-	return v
+	return
 }
 
 // Create an array bind variable and return it.
-func (cur *Cursor) ArrayVar(varType *VariableType, values []interface{}, size int) (*Variable, error) {
-	if varType.variableLength && size == 0 {
+func (cur *Cursor) ArrayVar(varType *VariableType, values []interface{}, size int) (v *Variable, err error) {
+	if varType.isVariableLength && size == 0 {
 		size = varType.size
 	}
 
 	// determine the number of elements to create
-	numElements := len(value)
+	numElements := len(values)
 
 	// create the variable
-	v := NewVariable(cur, numElements, varType, size)
-	if err := v.MakeArray(); err != nil {
-		return nil, err
+	if v, err = NewVariable(cur, uint(numElements), varType, size); err != nil {
+		return
+	}
+	if err = v.makeArray(); err != nil {
+		return
 	}
 
 	// set the value, if applicable
-	if err := v.SetArrayValue(value); err != nil {
-		return nil, err
+	if err = v.setArrayValue(values); err != nil {
+		return
 	}
 
-	return v, nil
+	return
 }
 
 // Return a list of bind variable names.
 func (cur *Cursor) bindNames() ([]string, error) {
 	// make sure the cursor is open
 	if !cur.isOpen {
-		return CursorIsClosed
+		return nil, CursorIsClosed
 	}
 
 	// return result
@@ -1429,7 +1450,8 @@ func (cur *Cursor) getNext() error {
 	if more, err := cur.moreRows(); err != nil {
 		return err
 	} else if more {
-		return cur.createRow()
+		_, err = cur.createRow()
+		return err
 	}
-	return nil, io.EOF
+	return io.EOF
 }

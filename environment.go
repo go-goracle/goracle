@@ -242,9 +242,9 @@ func (env *Environment) CheckStatus(status C.sword, at string) (err *Error) {
 func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 	dst unsafe.Pointer, errText string) (size int, err error) {
 	var osize C.ub4
-	if err = cur.environment.CheckStatus(
-		C.OCIAttrGet(parent, parentType, dst, &osize, key,
-			cur.environment.errorHandle), errText); err != nil {
+	if err = env.CheckStatus(
+		C.OCIAttrGet(parent, C.ub4(parentType), dst, &osize, C.ub4(key),
+			env.errorHandle), errText); err != nil {
 		return
 	}
 	size = int(osize)
