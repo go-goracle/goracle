@@ -251,6 +251,6 @@ func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 	return
 }
 
-func (env *Environment) FromEncodedString(text []byte, length int) string {
-	return string(text[:length])
+func (env *Environment) FromEncodedString(text []byte) string {
+	return string(text)
 }

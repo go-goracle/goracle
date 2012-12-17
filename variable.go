@@ -15,6 +15,7 @@ import "C"
 import (
 	// "unsafe"
 	"errors"
+	"time"
 )
 
 var (
@@ -94,15 +95,17 @@ type VariableType struct {
 	isVariableLength          bool
 	size                      int
 	canBeInArray, canBeCopied bool
+	charsetForm, oracleType   int
+	isCharData                bool
 	initialize                func(*Variable, *Cursor) error
 	finalize                  func(*Variable) error
 	preDefine                 func(*Variable, *C.OCIParam) error
 	postDefine                func(*Variable) error
 	isNull                    func(*Variable, uint) bool
 	getValue                  func(*Variable, uint) (interface{}, error)
-	setValue                  func(*Variable, uint, interface{}) (interface{}, error)
+	setValue                  func(*Variable, uint, interface{}) error
 	preFetch                  func(*Variable) error
-	getBufferSize             func() int
+	getBufferSize             func(*Variable) int
 }
 
 //   Returns a boolean indicating if the object is a variable.
@@ -167,7 +170,7 @@ func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableT
 func (v *Variable) allocateData() error {
 	// set the buffer size for the variable
 	if v.typ.getBufferSize != nil {
-		v.bufferSize = v.typ.getBufferSize()
+		v.bufferSize = v.typ.getBufferSize(v)
 	} else {
 		v.bufferSize = v.size
 	}
@@ -314,7 +317,7 @@ type OraTyper interface {
 // value does not have a corresponding variable type.
 func VarTypeByValue(data interface{}) (vt *VariableType, size int, numElements uint, err error) {
 	if data == nil {
-		return &StringVarType, 1, 0, nil
+		return StringVarType, 1, 0, nil
 	}
 	switch x := data.(type) {
 	case VariableType:
@@ -327,28 +330,28 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size int, numElements u
 		return x.typ, x.typ.size, 0, nil
 	case string:
 		if len(x) > MAX_STRING_CHARS {
-			return &LongStringVarType, len(x), 0, nil
+			return LongStringVarType, len(x), 0, nil
 		}
 		return StringVarType, len(x), 0, nil
 	case bool:
-		return &BoolVarType, 0, 0, nil
+		return BoolVarType, 0, 0, nil
 	case int8, uint8, byte, int16, uint16, int, uint, int32, uint32:
-		return &IntVarType, 0, 0, nil
+		return IntVarType, 0, 0, nil
 	case int64, uint64:
-		return &LongVarType, 0, 0, nil
+		return LongVarType, 0, 0, nil
 	case float32, float64:
-		return &FloatVarType, 0, 0, nil
+		return FloatVarType, 0, 0, nil
 	case time.Duration:
-		return &IntervarlVarType, 0, 0, nil
+		return IntervarlVarType, 0, 0, nil
 	case time.Time:
-		return &DateTimeVarType, 0, 0, nil
+		return DateTimeVarType, 0, 0, nil
 	case []byte:
 		if len(x) > MAX_BINARY_BYTES {
-			return &LongBinaryVarType, len(x), 0, nil
+			return LongBinaryVarType, len(x), 0, nil
 		}
-		return &BinaryVarType, len(x), 0, nil
+		return BinaryVarType, len(x), 0, nil
 	case CursorType:
-		return &CursorVarType, 0, 0, nil
+		return CursorVarType, 0, 0, nil
 	case []interface{}:
 		numElements = len(x)
 		if numElements == 0 {

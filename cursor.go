@@ -401,7 +401,7 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 	}
 
 	desc = VariableDescription{
-		Name:        cur.environment.FromEncodedString(name, nameLength),
+		Name:        cur.environment.FromEncodedString(name[:nameLength]),
 		Type:        -1,                        //FIXME
 		DisplaySize: displaySize, InternalSize: int(internalSize),
 		Precision: int(precision), Scale: int(scale),
