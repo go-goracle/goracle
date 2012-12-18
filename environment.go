@@ -46,6 +46,9 @@ func NewEnvironment() (*Environment, error) {
 	env.fixedWidth = 1
 	env.maxBytesPerCharacter = 4
 	env.maxStringBytes = MAX_STRING_CHARS
+	env.numberToStringFormatBuffer = []byte("TM9")
+	env.numberFromStringFormatBuffer = []byte("999999999999999999999999999999999999999999999999999999999999999")
+	env.nlsNumericCharactersBuffer = []byte("NLS_NUMERIC_CHARACTERS='.,'")
 
 	// create the new environment handle
 	if err = checkStatus(C.OCIEnvNlsCreate(&env.handle,

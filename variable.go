@@ -14,6 +14,7 @@ import "C"
 
 import (
 	// "unsafe"
+"fmt"
 	"errors"
 	"time"
 )
@@ -91,21 +92,20 @@ type VariableDescription struct {
 }
 
 type VariableType struct {
-	Id                        byte
-	isVariableLength          bool
-	size                      int
-	canBeInArray, canBeCopied bool
-	charsetForm, oracleType   int
-	isCharData                bool
-	initialize                func(*Variable, *Cursor) error
-	finalize                  func(*Variable) error
-	preDefine                 func(*Variable, *C.OCIParam) error
-	postDefine                func(*Variable) error
-	isNull                    func(*Variable, uint) bool
-	getValue                  func(*Variable, uint) (interface{}, error)
-	setValue                  func(*Variable, uint, interface{}) error
-	preFetch                  func(*Variable) error
-	getBufferSize             func(*Variable) int
+	// Id                        byte
+	isVariableLength, isCharData bool
+	size                         int
+	canBeInArray, canBeCopied    bool
+	charsetForm, oracleType      int
+	initialize                   func(*Variable, *Cursor) error
+	finalize                     func(*Variable) error
+	preDefine                    func(*Variable, *C.OCIParam) error
+	postDefine                   func(*Variable) error
+	isNull                       func(*Variable, uint) bool
+	getValue                     func(*Variable, uint) (interface{}, error)
+	setValue                     func(*Variable, uint, interface{}) error
+	preFetch                     func(*Variable) error
+	getBufferSize                func(*Variable) int
 }
 
 //   Returns a boolean indicating if the object is a variable.
@@ -336,9 +336,9 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size int, numElements u
 	case bool:
 		return BoolVarType, 0, 0, nil
 	case int8, uint8, byte, int16, uint16, int, uint, int32, uint32:
-		return IntVarType, 0, 0, nil
+		return Int32VarType, 0, 0, nil
 	case int64, uint64:
-		return LongVarType, 0, 0, nil
+		return Int64VarType, 0, 0, nil
 	case float32, float64:
 		return FloatVarType, 0, 0, nil
 	case time.Duration:
@@ -353,7 +353,7 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size int, numElements u
 	case CursorType:
 		return CursorVarType, 0, 0, nil
 	case []interface{}:
-		numElements = len(x)
+		numElements = uint(len(x))
 		if numElements == 0 {
 			return nil, 0, 0, ListIsEmpty
 		}

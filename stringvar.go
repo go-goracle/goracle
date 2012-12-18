@@ -122,7 +122,7 @@ func stringVar_GetBufferSize(v *Variable) int {
 	return v.size
 }
 
-var StringVarType = &VariableType{Id: 0,
+var StringVarType = &VariableType{
 	isVariableLength: true,
 	initialize:       stringVar_Initialize,
 	setValue:         stringVar_SetValue,
