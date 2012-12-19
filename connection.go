@@ -67,19 +67,19 @@ func (conn Connection) IsConnected() bool {
 	return conn.handle != nil
 }
 
-func (conn *Connection) AttrSet(key C.ub4, value unsafe.Pointer, valueLength int) *Error {
+func (conn *Connection) AttrSet(key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX,
 		key, value, valueLength)
 }
 
-func (conn *Connection) ServerAttrSet(key C.ub4, value unsafe.Pointer, valueLength int) *Error {
+func (conn *Connection) ServerAttrSet(key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER,
 		key, value, valueLength)
 }
 
-func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer, valueLength int) *Error {
+func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION,
 		key, value, valueLength)
@@ -105,7 +105,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	credentialType := C.OCI_CRED_EXT
 	var (
 		status C.sword
-		err    *Error
+		err    error
 	)
 	defer func() {
 		if err != nil {
@@ -136,7 +136,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	       return -1;
 	*/
 
-	buffer := make([]byte, len(conn.dsn)+1, max(16, len(conn.dsn), len(conn.username), len(conn.password))+1)
+	buffer := make([]byte, max(16, len(conn.dsn), len(conn.username), len(conn.password))+1)
 	copy(buffer, []byte(conn.dsn))
 	buffer[len(conn.dsn)] = 0
 	// dsn := C.CString(conn.dsn)
@@ -165,7 +165,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 
 	// set attribute for server handle
 	if err = conn.AttrSet(C.OCI_ATTR_SERVER, unsafe.Pointer(conn.serverHandle), 0); err != nil {
-		err.At = "Connect[set server handle]"
+		setErrAt(err, "Connect[set server handle]")
 		return err
 	}
 
@@ -178,12 +178,12 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 
 		if err = conn.ServerAttrSet(C.OCI_ATTR_INTERNAL_NAME,
 			unsafe.Pointer(&buffer[0]), len(name)); err != nil {
-			err.At = "Connect[set internal name]"
+			setErrAt(err, "Connect[set internal name]")
 			return err
 		}
 		if err = conn.ServerAttrSet(C.OCI_ATTR_EXTERNAL_NAME,
 			unsafe.Pointer(&buffer[0]), len(name)); err != nil {
-			err.At = "Connect[set external name]"
+			setErrAt(err, "Connect[set external name]")
 			return err
 		}
 	}
@@ -205,7 +205,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 
 		if err = conn.SessionAttrSet(C.OCI_ATTR_USERNAME,
 			unsafe.Pointer(&buffer[0]), len(conn.username)); err != nil {
-			err.At = "Connect[set user name]"
+			setErrAt(err, "Connect[set user name]")
 			return err
 		}
 		// log.Printf("set user name %s", buffer)
@@ -218,7 +218,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		credentialType = C.OCI_CRED_RDBMS
 		if err = conn.SessionAttrSet(C.OCI_ATTR_PASSWORD,
 			unsafe.Pointer(&buffer[0]), len(conn.password)); err != nil {
-			err.At = "Connect[set password]"
+			setErrAt(err, "Connect[set password]")
 			return err
 		}
 		// log.Printf("set password %s", buffer)
@@ -239,7 +239,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// set the session handle on the service context handle
 	if err = conn.AttrSet(C.OCI_ATTR_SESSION,
 		unsafe.Pointer(conn.sessionHandle), 0); err != nil {
-		err.At = "Connect[set session handle]"
+		setErrAt(err, "Connect[set session handle]")
 		return err
 	}
 
@@ -265,7 +265,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	return nil
 }
 
-func (conn *Connection) Rollback() *Error {
+func (conn *Connection) Rollback() error {
 	conn.srvMtx.Lock()
 	defer conn.srvMtx.Unlock()
 	return conn.environment.CheckStatus(C.OCITransRollback(conn.handle, conn.environment.errorHandle,
@@ -300,14 +300,14 @@ func (conn *Connection) Free() {
 }
 
 //   Close the connection, disconnecting from the database.
-func (conn *Connection) Close() (err *Error) {
+func (conn *Connection) Close() (err error) {
 	if !conn.IsConnected() {
 		return nil //?
 	}
 
 	// perform a rollback
 	if err = conn.Rollback(); err != nil {
-		err.At = "Close[rollback]"
+		setErrAt(err, "Close[rollback]")
 		return
 	}
 	conn.srvMtx.Lock()
@@ -337,7 +337,7 @@ func (conn *Connection) Close() (err *Error) {
 
 // Execute an OCIBreak() to cause an immediate (asynchronous) abort of any
 // currently executing OCI function.
-func (conn *Connection) Cancel() *Error {
+func (conn *Connection) Cancel() error {
 	// make sure we are actually connected
 	if !conn.IsConnected() {
 		return nil
@@ -350,7 +350,7 @@ func (conn *Connection) Cancel() *Error {
 
 // Makes a round trip call to the server to confirm that the connection and
 // server are active.
-func (conn *Connection) Ping() *Error {
+func (conn *Connection) Ping() error {
 	if !conn.IsConnected() {
 		return nil
 	}

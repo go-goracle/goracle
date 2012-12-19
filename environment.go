@@ -39,7 +39,7 @@ const (
 
 // Create and initialize a new environment object
 func NewEnvironment() (*Environment, error) {
-	var err *Error
+	var err error
 
 	// create a new object for the Oracle environment
 	env := new(Environment)
@@ -54,7 +54,7 @@ func NewEnvironment() (*Environment, error) {
 	if err = checkStatus(C.OCIEnvNlsCreate(&env.handle,
 		C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0, 0),
 		false); err != nil { //, C.ub2(873), 0),
-		err.At = "Unable to acquire Oracle environment handle"
+		setErrAt(err, "Unable to acquire Oracle environment handle")
 		return nil, err
 	}
 	/*
@@ -109,13 +109,13 @@ func NewEnvironment() (*Environment, error) {
 	return env, nil
 }
 
-func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at string) *Error {
+func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at string) error {
 	// var vsize C.ub4
 	return checkStatus(C.OCIHandleAlloc(parent, dst, typ, C.size_t(0), nil), false)
 }
 
 func (env *Environment) AttrSet(parent unsafe.Pointer, parentTyp C.ub4,
-	key C.ub4, value unsafe.Pointer, valueLength int) *Error {
+	key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return env.CheckStatus(C.OCIAttrSet(parent, parentTyp,
 		value, C.ub4(valueLength),
 		key, env.errorHandle),
@@ -128,7 +128,7 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 	var (
 		charsetId, vsize C.ub4
 		status           C.sword
-		err              *Error
+		err              error
 	)
 
 	/*
@@ -190,7 +190,7 @@ var (
 )
 
 // Check for an error in the last call and if an error has occurred.
-func checkStatus(status C.sword, justSpecific bool) *Error {
+func checkStatus(status C.sword, justSpecific bool) error {
 	switch status {
 	case C.OCI_SUCCESS, C.OCI_SUCCESS_WITH_INFO:
 		return nil
@@ -213,45 +213,56 @@ func checkStatus(status C.sword, justSpecific bool) *Error {
 
 // Check for an error in the last call and if an error has occurred,
 // retrieve the error message from the database environment
-func (env *Environment) CheckStatus(status C.sword, at string) (err *Error) {
+func (env *Environment) CheckStatus(status C.sword, at string) error {
+	// if status != C.OCI_SUCCESS {
+	log.Printf("CheckStatus(%d (%s), %s)", status, status == C.OCI_SUCCESS, at)
+	// }
 	if status == C.OCI_SUCCESS || status == C.OCI_SUCCESS_WITH_INFO {
+		// log.Printf("CheckStatus(%d): OK", status)
 		return nil
 	}
-	if err = checkStatus(status, true); err != nil {
+	if err := checkStatus(status, true); err != nil {
+		log.Printf("CheckStatus(%d): ERR=%s", status, err)
 		return err
 	}
 	var (
-		errcode C.sb4
-		errbuf  = make([]byte, 2001)
-		i       = C.ub4(0)
-		errstat C.sword
-		message = make([]byte, 0, 2000)
+		errorcode int
+		ec        C.sb4
+		errbuf    = make([]byte, 2001)
+		i         = C.ub4(0)
+		errstat   C.sword
+		message   = make([]byte, 0, 2000)
 	)
 	for {
 		i++
 		errstat = C.OCIErrorGet(unsafe.Pointer(env.errorHandle), i, nil,
-			&errcode, (*C.OraText)(&errbuf[0]), C.ub4(len(errbuf)-1),
+			&ec, (*C.OraText)(&errbuf[0]), C.ub4(len(errbuf)-1),
 			C.OCI_HTYPE_ERROR)
+		if ec != 0 && errorcode == 0 {
+			errorcode = int(ec)
+		}
 		message = append(message, errbuf[:bytes.IndexByte(errbuf, 0)]...)
 		if errstat == C.OCI_NO_DATA {
 			break
 		}
 	}
-	return &Error{Code: int(errcode),
+	err := &Error{Code: errorcode,
 		Message: fmt.Sprintf("[%d] %s", status, message),
 		At:      at}
+	log.Printf("CheckStatus(%d) ERR=%v", err)
+	return err
 }
 
 func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
-	dst unsafe.Pointer, errText string) (size int, err error) {
+	dst unsafe.Pointer, errText string) (int, error) {
 	var osize C.ub4
-	if err = env.CheckStatus(
+	if err := env.CheckStatus(
 		C.OCIAttrGet(parent, C.ub4(parentType), dst, &osize, C.ub4(key),
 			env.errorHandle), errText); err != nil {
-		return
+		log.Printf("error gettint attr: %s", err)
+		return -1, err
 	}
-	size = int(osize)
-	return
+	return int(osize), nil
 }
 
 func (env *Environment) FromEncodedString(text []byte) string {

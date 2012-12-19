@@ -39,6 +39,30 @@ func TestIsConnected(t *testing.T) {
 	if !conn.IsConnected() {
 		t.Fail()
 	}
+	if err := conn.Ping(); err != nil {
+		t.Logf("error with Ping: %s", err)
+		t.Fail()
+	}
+}
+
+func TestCursor(t *testing.T) {
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+	cur := conn.NewCursor()
+	defer cur.Close()
+	qry := "SELECT owner, object_name, object_id FROM all_objects"
+	if err := cur.Execute(qry, nil, nil); err != nil {
+		t.Logf(`error with "%s": %s`, qry, err)
+		t.Fail()
+	}
+	row, err := cur.FetchOne()
+	if err != nil {
+		t.Logf("error fetching: %s", err)
+		t.Fail()
+	}
+	t.Logf("row: %+v", row)
 }
 
 var conn Connection

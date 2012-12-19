@@ -13,6 +13,7 @@ package goracle
 import "C"
 
 import (
+	"log"
 	// "bytes"
 	// "encoding/binary"
 	"fmt"
@@ -150,6 +151,7 @@ func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
 			}
 		}
 	}
+	log.Printf("numberVar_PreDefine ok")
 
 	return nil
 }

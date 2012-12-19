@@ -17,7 +17,8 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	// "log"
+	"hash/fnv"
+	"log"
 	// "reflect"
 	"io"
 	"strconv"
@@ -36,7 +37,7 @@ type Cursor struct {
 	bindVarsArr                                 []*Variable
 	bindVarsMap                                 map[string]*Variable
 	fetchVariables                              []*Variable
-	arraySize, bindArraySize, fetchArraySize    int
+	arraySize, bindArraySize, fetchArraySize    uint
 	setInputSizes, outputSize, outputSizeColumn int
 	rowCount, actualRows, rowNum                int
 	statement                                   []byte
@@ -45,7 +46,7 @@ type Cursor struct {
 	numbersAsStrings, isDML, isOpen, isOwned    bool
 }
 
-var DefaultArraySize int = 50
+var DefaultArraySize uint = 50
 var (
 	CursorIsClosed      = errors.New("cursor is closed")
 	QueriesNotSupported = errors.New("queries not supported: results undefined")
@@ -55,7 +56,7 @@ var (
 //statement // statementTag // rowFactory // inputTypeHandler // outputTypeHandler
 
 //   Allocate a new handle.
-func (cur *Cursor) allocateHandle(typ C.ub4) *Error {
+func (cur *Cursor) allocateHandle(typ C.ub4) error {
 	cur.isOwned = true
 	return ociHandleAlloc(unsafe.Pointer(cur.environment.handle),
 		C.OCI_HTYPE_STMT,
@@ -64,15 +65,17 @@ func (cur *Cursor) allocateHandle(typ C.ub4) *Error {
 }
 
 //   Free the handle which may be reallocated if necessary.
-func (cur *Cursor) freeHandle() *Error {
+func (cur *Cursor) freeHandle() error {
 	if cur.handle == nil {
 		return nil
 	}
+	log.Printf("freeing cursor handle %v", cur.handle)
 	if cur.isOwned {
 		return cur.environment.CheckStatus(
 			C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
 			"freeCursor")
-	} else if cur.connection.handle != nil {
+	} else if cur.connection.handle != nil &&
+		cur.statementTag != nil && len(cur.statementTag) > 0 {
 		return cur.environment.CheckStatus(C.OCIStmtRelease(cur.handle,
 			cur.environment.errorHandle, (*C.OraText)(&cur.statementTag[0]),
 			C.ub4(len(cur.statementTag)), C.OCI_DEFAULT),
@@ -184,7 +187,7 @@ func (cur *Cursor) getBindInfo(numElements int) ([]string, error) {
 // Perform the defines for the cursor. At this point it is assumed that the
 // statement being executed is in fact a query.
 func (cur *Cursor) performDefine() error {
-	var numParams int
+	var numParams uint
 	var x C.ub4 = 0
 
 	// determine number of items in select-list
@@ -196,23 +199,28 @@ func (cur *Cursor) performDefine() error {
 		"PerformDefine"); err != nil {
 		return err
 	}
+	log.Printf("performDefine param count = %d", numParams)
 
 	// create a list corresponding to the number of items
 	cur.fetchVariables = make([]*Variable, numParams)
 
 	// define a variable for each select-item
+	var v *Variable
+	var e error
 	cur.fetchArraySize = cur.arraySize
-	for pos := 1; pos <= numParams; pos++ {
-		// FIXME defineVariable
-		// v, e := defineVariable(cur, cur.fetchArraySize, pos)
-		var v *Variable
-		var e error
-		v, e = nil, nil
+	for pos := uint(1); pos <= numParams; pos++ {
+		v, e = varDefine(cur, cur.fetchArraySize, pos)
+		log.Printf("varDefine[%d]: %s nil?%s", pos, e, e == nil)
 		if e != nil {
-			return e
+			return fmt.Errorf("error defining variable %d: %s", pos, e)
 		}
+		if v == nil {
+			return fmt.Errorf("empty variable on pos %d!", pos)
+		}
+		// log.Printf("var %d=%v", pos, v)
 		cur.fetchVariables[pos-1] = v
 	}
+	log.Printf("len(cur.fetchVariables)=%d", len(cur.fetchVariables))
 	return nil
 }
 
@@ -251,13 +259,15 @@ func (cur *Cursor) getErrorOffset() int {
 	return int(offset)
 }
 
-func (cur *Cursor) setErrorOffset(err *Error) {
-	err.Offset = cur.getErrorOffset()
+func (cur *Cursor) setErrorOffset(err error) {
+	if x, ok := err.(*Error); ok {
+		x.Offset = cur.getErrorOffset()
+	}
 }
 
 // Perform the work of executing a cursor and set the rowcount appropriately
 // regardless of whether an error takes place.
-func (cur *Cursor) internalExecute(numIters int) error {
+func (cur *Cursor) internalExecute(numIters uint) error {
 	var mode C.ub4
 
 	if cur.connection.autocommit {
@@ -716,18 +726,21 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 		}
 		statement = string(cur.statement)
 	}
-
 	// keep track of the statement
 	cur.statement = []byte(statement)
-
+	if statementTag == "" {
+		cur.statementTag = hashTag(cur.statement)
+	} else {
+		cur.statementTag = []byte(statementTag)
+	}
 	// release existing statement, if necessary
-	cur.statementTag = []byte(statementTag)
 	if err := cur.freeHandle(); err != nil {
 		return err
 	}
 
 	// prepare statement
 	cur.isOwned = false
+	log.Printf("Prepare2 for %s", cur.statement)
 	// Py_BEGIN_ALLOW_THREADS
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtPrepare2(cur.connection.handle, &cur.handle,
@@ -743,6 +756,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 		cur.handle = nil
 		return err
 	}
+	log.Printf("prepared")
 
 	// clear bind variables, if applicable
 	if cur.setInputSizes < 0 {
@@ -1029,6 +1043,7 @@ func (cur *Cursor) Execute(statement string,
 		return err
 	}
 
+	log.Printf("internalPrepare done, performing binds")
 	// perform binds
 	if listArgs != nil && len(listArgs) > 0 {
 		if err = cur.setBindVariablesByPos(listArgs, 1, 0, false); err != nil {
@@ -1042,16 +1057,18 @@ func (cur *Cursor) Execute(statement string,
 	if err = cur.performBind(); err != nil {
 		return err
 	}
+	log.Printf("bind done, executing statement")
 
 	// execute the statement
 	isQuery := cur.statementType == C.OCI_STMT_SELECT
-	numIters := 0
+	numIters := uint(1)
 	if isQuery {
-		numIters = 1
+		numIters = 0
 	}
 	if err = cur.internalExecute(numIters); err != nil {
 		return err
 	}
+	log.Printf("executed, calling performDefine")
 
 	// perform defines, if necessary
 	if isQuery && cur.fetchVariables == nil {
@@ -1101,7 +1118,7 @@ func (cur *Cursor) ExecuteMany(statement string, params []map[string]interface{}
 	// execute the statement, but only if the number of rows is greater than
 	// zero since Oracle raises an error otherwise
 	if numRows > 0 {
-		if err = cur.internalExecute(numRows); err != nil {
+		if err = cur.internalExecute(uint(numRows)); err != nil {
 			return err
 		}
 	}
@@ -1113,7 +1130,7 @@ func (cur *Cursor) ExecuteMany(statement string, params []map[string]interface{}
 // Execute the prepared statement the number of times requested. At this
 // point, the statement must have been already prepared and the bind variables
 // must have their values set.
-func (cur *Cursor) ExecuteManyPrepared(numIters int) error {
+func (cur *Cursor) ExecuteManyPrepared(numIters uint) error {
 	if numIters > cur.bindArraySize {
 		return fmt.Errorf("iterations exceed bind array size")
 	}
@@ -1159,19 +1176,24 @@ func (cur *Cursor) verifyFetch() error {
 }
 
 // Performs the actual fetch from Oracle.
-func (cur *Cursor) internalFetch(numRows int) error {
+func (cur *Cursor) internalFetch(numRows uint) error {
 	if cur.fetchVariables == nil {
 		return errors.New("query not executed")
 	}
+	// log.Printf("fetchVars=%v", cur.fetchVariables)
 	var err error
 	for _, v := range cur.fetchVariables {
+		// log.Printf("fetchvar %d=%s", v.internalFetchNum, v)
 		v.internalFetchNum++
+		// log.Printf("typ=%s", v.typ)
+		// log.Printf("preFetch=%s", v.typ.preFetch)
 		if v.typ.preFetch != nil {
 			if err = v.typ.preFetch(v); err != nil {
 				return err
 			}
 		}
 	}
+	log.Printf("StmtFetch numRows=%d", numRows)
 	// Py_BEGIN_ALLOW_THREADS
 	if err = cur.environment.CheckStatus(
 		C.OCIStmtFetch(cur.handle, cur.environment.errorHandle,
@@ -1179,12 +1201,14 @@ func (cur *Cursor) internalFetch(numRows int) error {
 		"internalFetch(): fetch"); err != nil {
 		return err
 	}
+	log.Printf("fetched, getting row count")
 	var rowCount int
 	if _, err = cur.environment.AttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 		C.OCI_ATTR_ROW_COUNT, unsafe.Pointer(&rowCount),
 		"internalFetch(): row count"); err != nil {
 		return err
 	}
+	log.Printf("row count = %d", rowCount)
 	cur.actualRows = rowCount - cur.rowCount
 	cur.rowNum = 0
 	return nil
@@ -1193,8 +1217,9 @@ func (cur *Cursor) internalFetch(numRows int) error {
 // Returns an integer indicating if more rows can be retrieved from the
 // cursor.
 func (cur *Cursor) moreRows() (bool, error) {
+	log.Printf("moreRows rowNum=%d actualRows=%d", cur.rowNum, cur.actualRows)
 	if cur.rowNum >= cur.actualRows {
-		if cur.actualRows < 0 || cur.actualRows == cur.fetchArraySize {
+		if cur.actualRows < 0 || uint(cur.actualRows) == cur.fetchArraySize {
 			if err := cur.internalFetch(cur.fetchArraySize); err != nil {
 				return false, err
 			}
@@ -1246,10 +1271,10 @@ func (cur *Cursor) FetchOne() (row []interface{}, err error) {
 
 // Fetch multiple rows from the cursor based on the arraysize.
 // for default (arraySize) row limit, use negative rowLimit
-func (cur *Cursor) FetchMany(numRows, rowLimit int) ([][]interface{}, error) {
+func (cur *Cursor) FetchMany(rowLimit int) ([][]interface{}, error) {
 	// parse arguments -- optional rowlimit expected
 	if rowLimit < 0 {
-		rowLimit = cur.arraySize
+		rowLimit = int(cur.arraySize)
 	}
 
 	// verify fetch can be performed
@@ -1269,13 +1294,13 @@ func (cur *Cursor) fetchAll() ([][]interface{}, error) {
 }
 
 // Perform raw fetch on the cursor; return the actual number of rows fetched.
-func (cur *Cursor) fetchRaw(numRows int) (int, error) {
+func (cur *Cursor) fetchRaw(numRows uint) (int, error) {
 	if numRows > cur.fetchArraySize {
 		return -1, errors.New("rows to fetch exceeds array size")
 	}
 
 	// do not attempt to perform fetch if no more rows to fetch
-	if 0 < cur.actualRows && cur.actualRows < cur.fetchArraySize {
+	if 0 < cur.actualRows && uint(cur.actualRows) < cur.fetchArraySize {
 		return 0, nil
 	}
 
@@ -1286,7 +1311,7 @@ func (cur *Cursor) fetchRaw(numRows int) (int, error) {
 
 	cur.rowCount += cur.actualRows
 	numRowsFetched := cur.actualRows
-	if cur.actualRows == numRows {
+	if cur.actualRows == int(numRows) {
 		cur.actualRows = -1
 	}
 	return numRowsFetched, nil
@@ -1450,4 +1475,10 @@ func (cur *Cursor) getNext() error {
 		return err
 	}
 	return io.EOF
+}
+
+var statementTagHash = fnv.New64a()
+
+func hashTag(tag []byte) []byte {
+	return statementTagHash.Sum(tag)
 }

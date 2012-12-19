@@ -15,6 +15,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"log"
 	// "time"
 	"unsafe"
 )
@@ -46,19 +47,21 @@ type Variable struct {
 
 // allocate a new variable
 func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size uint) (v *Variable, err error) {
+	// log.Printf("cur=%+v varType=%+v", cur, varType)
 	// perform basic initialization
-	v.environment = cur.connection.environment
 	if numElements < 1 {
-		v.allocatedElements = 1
-	} else {
-		v.allocatedElements = numElements
+		numElements = 1
 	}
-	v.isAllocatedInternally = true
-	v.typ = varType
+	v = &Variable{typ: varType, environment: cur.connection.environment,
+		isAllocatedInternally: true, allocatedElements: numElements,
+		size:      varType.size,
+		indicator: make([]C.sb2, numElements), //sizeof(sb2)
+		// returnCode:   make([]C.ub2, numElements),
+		// actualLength: make([]C.ub2, numElements),
+	}
 
 	// set the maximum length of the variable, ensure that a minimum of
 	// 2 bytes is allocated to ensure that the array size check works
-	v.size = v.typ.size
 	if v.typ.isVariableLength {
 		if size < 2 {
 			size = 2
@@ -67,16 +70,15 @@ func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size uint
 	}
 
 	// allocate the data for the variable
+	log.Printf("allocate data for the variable")
 	if err = v.allocateData(); err != nil {
 		return
 	}
 
-	// allocate the indicator for the variable
-	v.indicator = make([]C.sb2, v.allocatedElements) //sizeof(sb2)
-
 	// for variable length data, also allocate the return code
 	if v.typ.isVariableLength {
 		v.returnCode = make([]C.ub2, v.allocatedElements)
+		v.actualLength = make([]C.ub2, v.allocatedElements)
 	}
 
 	// perform extended initialization
@@ -432,6 +434,7 @@ func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableTyp
 	case C.SQLT_AFC:
 		return FixedCharVarType, nil
 	case C.SQLT_CHR:
+		// log.Printf("StringVarType=%v", StringVarType)
 		return StringVarType, nil
 	case C.SQLT_BIN:
 		return BinaryVarType, nil
@@ -440,6 +443,7 @@ func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableTyp
 	case C.SQLT_NUM, C.SQLT_VNU:
 		return FloatVarType, nil
 	}
+	log.Printf("unhandled data type: %d", oracleDataType)
 	return nil, fmt.Errorf("TypeByOracleDataType: unhandled data type %d",
 		oracleDataType)
 }
@@ -453,6 +457,7 @@ func varTypeByOracleDescriptor(param *C.OCIParam, environment *Environment) (*Va
 		unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 		C.OCI_ATTR_DATA_TYPE, unsafe.Pointer(&dataType),
 		"data type"); err != nil {
+		log.Printf("error with data type: %s", err)
 		return nil, err
 	}
 
@@ -466,6 +471,7 @@ func varTypeByOracleDescriptor(param *C.OCIParam, environment *Environment) (*Va
 			unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 			C.OCI_ATTR_CHARSET_FORM, unsafe.Pointer(&charsetForm),
 			"charset form"); err != nil {
+			log.Printf("error with charsetForm: %s", err)
 			return nil, err
 		}
 	}
@@ -664,16 +670,25 @@ static udt_Variable *Variable_NewByOutputTypeHandler(
 }
 */
 
+func (v *Variable) aLrC() (aL, rC *C.ub2) {
+	if v.actualLength != nil {
+		aL = &v.actualLength[0]
+		rC = &v.returnCode[0]
+	}
+	return aL, rC
+}
+
 // Helper routine for Variable_Define() used so that constant calls to
 // OCIDescriptorFree() is not necessary.
 func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements uint) (v *Variable, err error) {
 	var size C.ub4
+	var varType *VariableType
 
 	// determine data type
-	varType, e := varTypeByOracleDescriptor(param, cur.environment)
-	if e != nil {
-		err = e
-		return
+	varType, err = varTypeByOracleDescriptor(param, cur.environment)
+	if err != nil {
+		log.Printf("error determining data type: %s", err)
+		return nil, err
 	}
 	// if (cursor->numbersAsStrings && varType == &vt_Float)
 	//     varType = &vt_NumberAsString;
@@ -687,6 +702,7 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 			unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 			C.OCI_ATTR_DATA_SIZE, unsafe.Pointer(&sizeFromOracle),
 			"data size"); err != nil {
+			log.Printf("error getting data size: %+v", err)
 			return nil, err
 		}
 
@@ -714,61 +730,71 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 	               numElements);
 	   else
 	*/
-	if v, err = NewVariable(cur, numElements, varType, uint(size)); err != nil {
-		return
+	v, err = NewVariable(cur, numElements, varType, uint(size))
+	if err != nil {
+		return nil, fmt.Errorf("error creating variable: %s", err)
 	}
 
 	// call the procedure to set values prior to define
 	if v.typ.preDefine != nil {
 		if err = v.typ.preDefine(v, param); err != nil {
-			return
+			return nil, fmt.Errorf("error with preDefine(%s): %s", v, err)
 		}
 	}
 
 	// perform the define
+	aL, rC := v.aLrC()
 	if err = cur.environment.CheckStatus(
 		C.OCIDefineByPos(cur.handle,
 			&v.defineHandle,
 			v.environment.errorHandle, C.ub4(position), *v.getDataArr(),
 			C.sb4(v.bufferSize), C.ub2(v.typ.oracleType),
 			unsafe.Pointer(&v.indicator[0]),
-			&v.actualLength[0], &v.returnCode[0], C.OCI_DEFAULT),
+			aL, rC, C.OCI_DEFAULT),
 		"define"); err != nil {
-		return
+		return nil, fmt.Errorf("error defining: %s", err)
 	}
 
 	// call the procedure to set values after define
 	if v.typ.postDefine != nil {
 		if err = v.typ.postDefine(v); err != nil {
-			return
+			return nil, fmt.Errorf("error with postDefine(%s): %s", v, err)
 		}
 	}
 
-	return
+	return v, nil
 }
 
 // Allocate a variable and define it for the given statement.
-func varDefine(cur *Cursor, numElements, position uint) (v *Variable, err error) {
+func varDefine(cur *Cursor, numElements, position uint) (*Variable, error) {
 	var param *C.OCIParam
 	// retrieve parameter descriptor
-	if err = cur.environment.CheckStatus(
+	if cur.handle == nil {
+		log.Printf("WARN: nil cursor handle in varDefine!")
+	}
+	log.Printf("retrieve parameter descriptor cur.handle=%s pos=%d", cur.handle, position)
+	if err := cur.environment.CheckStatus(
 		C.OCIParamGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 			cur.environment.errorHandle,
 			(*unsafe.Pointer)(unsafe.Pointer(&param)), C.ub4(position)),
 		"parameter"); err != nil {
-		return
+		log.Printf("NO PARAM! %s", err)
+		return nil, err
 	}
+	log.Printf("got param handle")
 
 	// call the helper to do the actual work
-	v, err = variableDefineHelper(cur, param, position, numElements)
+	v, err := variableDefineHelper(cur, param, position, numElements)
+	log.Printf("variable defined err=%s nil?%s", err, err == nil)
 	C.OCIDescriptorFree(unsafe.Pointer(param), C.OCI_DTYPE_PARAM)
-	return
+	return v, err
 }
 
 // Allocate a variable and bind it to the given statement.
 func (v *Variable) internalBind() (err error) {
 	var status C.sword
 	// perform the bind
+	aL, rC := v.aLrC()
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if v.isArray {
@@ -779,7 +805,7 @@ func (v *Variable) internalBind() (err error) {
 				(*C.OraText)(&bname[0]), C.sb4(len(bname)),
 				*v.getDataArr(), C.sb4(v.bufferSize),
 				v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
-				&v.actualLength[0], &v.returnCode[0],
+				aL, rC,
 				C.ub4(v.allocatedElements),
 				&actElts, C.OCI_DEFAULT)
 			v.actualElements = uint(actElts)
@@ -790,7 +816,7 @@ func (v *Variable) internalBind() (err error) {
 				(*C.OraText)(&bname[0]), C.sb4(len(bname)),
 				*v.getDataArr(), C.sb4(v.bufferSize),
 				v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
-				&v.actualLength[0], &v.returnCode[0],
+				aL, rC,
 				0, nil, C.OCI_DEFAULT)
 		}
 	} else {
@@ -800,7 +826,7 @@ func (v *Variable) internalBind() (err error) {
 				v.environment.errorHandle, C.ub4(v.boundPos), *v.getDataArr(),
 				C.sb4(v.bufferSize), v.typ.oracleType,
 				unsafe.Pointer(&v.indicator[0]),
-				&v.actualLength[0], &v.returnCode[0],
+				aL, rC,
 				C.ub4(v.allocatedElements), &actElts, C.OCI_DEFAULT)
 			v.actualElements = uint(actElts)
 		} else {
@@ -808,7 +834,7 @@ func (v *Variable) internalBind() (err error) {
 				v.environment.errorHandle, C.ub4(v.boundPos), *v.getDataArr(),
 				C.sb4(v.bufferSize), v.typ.oracleType,
 				unsafe.Pointer(&v.indicator[0]),
-				&v.actualLength[0], &v.returnCode[0],
+				aL, rC,
 				0, nil, C.OCI_DEFAULT)
 		}
 	}

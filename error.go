@@ -45,3 +45,9 @@ func (men mismatchElementNum) Error() string {
 func ProgrammingError(text string) error {
 	return fmt.Errorf("Programming error: %s", text)
 }
+
+func setErrAt(err error, at string) {
+	if x, ok := err.(*Error); ok {
+		x.At = at
+	}
+}
