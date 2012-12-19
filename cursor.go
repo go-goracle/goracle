@@ -322,12 +322,12 @@ func (cur *Cursor) fixupBoundCursor() error {
 // constantly free the descriptor when an error takes place.
 func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc VariableDescription, err error) {
 	var (
-		internalSize, charSize         C.ub2
-		varType                        *VariableType
-		nameLength, displaySize, index int
-		precision                      C.sb2
-		nullOk                         C.ub1
-		scale                          C.ub1
+		internalSize, charSize  C.ub2
+		varType                 *VariableType
+		nameLength, displaySize int
+		precision               C.sb2
+		nullOk                  C.ub1
+		scale                   C.ub1
 	)
 	name := make([]byte, 100)
 
@@ -507,7 +507,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 			// if the number of elements has changed, create a new variable
 			// this is only necessary for executemany() since execute() always
 			// passes a value of 1 for the number of elements
-		} else if int(numElements) > origVar.allocatedElements {
+		} else if numElements > origVar.allocatedElements {
 			if newVar, err = NewVariable(cur, numElements, origVar.typ,
 				origVar.size); err != nil {
 				return
@@ -569,7 +569,7 @@ func (cur *Cursor) setBindVariablesByPos(parameters []interface{}, // parameters
 	arrayPos uint, // array position to set
 	deferTypeAssignment bool) ( // defer type assignment if null?
 	err error) {
-	var origBoundByPos, origNumParams, boundByPos, numParams int
+	var origNumParams int
 	// PyObject *key, *value, *origVar;
 	var origVar, newVar *Variable // udt_Variable *newVar;
 
@@ -610,7 +610,6 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 	arrayPos uint, // array position to set
 	deferTypeAssignment bool, // defer type assignment if null?
 ) (err error) {
-	var origBoundByPos, origNumParams, boundByPos, numParams int
 	// PyObject *key, *value, *origVar;
 	var origVar, newVar *Variable // udt_Variable *newVar;
 
@@ -618,9 +617,7 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 	if parameters == nil || len(parameters) <= 0 {
 		return ListIsEmpty
 	}
-	if cur.bindVarsMap != nil {
-		origNumParams = len(cur.bindVarsMap)
-	} else {
+	if cur.bindVarsMap == nil || len(cur.bindVarsMap) > 0 {
 		cur.bindVarsMap = make(map[string]*Variable, len(parameters))
 	}
 
@@ -898,7 +895,7 @@ func (cur *Cursor) callBuildStatement(
 	argchunks := make([]string, allArgNum-(argNum-1))
 	if listOfArguments != nil && len(listOfArguments) > 0 {
 		plus := ""
-		for i, arg := range listOfArguments {
+		for _, arg := range listOfArguments {
 			if _, ok := arg.(bool); ok {
 				plus = " = 1"
 			} else {
@@ -944,7 +941,7 @@ func (cur *Cursor) call( // cursor to call procedure/function
 	}
 
 	// determine the statement size
-	statementSize, err := cur.callCalculateSize(name, returnValue, listOfArguments,
+	_, err := cur.callCalculateSize(name, returnValue, listOfArguments,
 		keywordArguments)
 	if err != nil {
 		return err
@@ -1240,9 +1237,8 @@ func (cur *Cursor) FetchOne() (row []interface{}, err error) {
 		return
 	}
 
-	var ok bool
 	// setup return value
-	if ok, err = cur.moreRows(); err != nil {
+	if _, err = cur.moreRows(); err != nil {
 		return
 	}
 	return cur.createRow()
@@ -1354,7 +1350,7 @@ func (cur *Cursor) SetOutputSize(outputSize, outputSizeColumn int) {
 }
 
 // Create a bind variable and return it.
-func (cur *Cursor) NewVar(varType *VariableType, size int, arraySize int /*inconverter, outconverter, typename*/) (v *Variable, err error) {
+func (cur *Cursor) NewVar(varType *VariableType, size uint, arraySize uint /*inconverter, outconverter, typename*/) (v *Variable, err error) {
 	// determine the type of variable
 	// varType = Variable_TypeByPythonType(self, type);
 	if varType.isVariableLength && size == 0 {
@@ -1392,7 +1388,7 @@ func (cur *Cursor) NewVar(varType *VariableType, size int, arraySize int /*incon
 }
 
 // Create an array bind variable and return it.
-func (cur *Cursor) ArrayVar(varType *VariableType, values []interface{}, size int) (v *Variable, err error) {
+func (cur *Cursor) ArrayVar(varType *VariableType, values []interface{}, size uint) (v *Variable, err error) {
 	if varType.isVariableLength && size == 0 {
 		size = varType.size
 	}

@@ -13,10 +13,10 @@ package goracle
 import "C"
 
 import (
-	// "unsafe"
-"fmt"
 	"errors"
-	"time"
+	"fmt"
+	// "time"
+	"unsafe"
 )
 
 var (
@@ -32,24 +32,26 @@ type Variable struct {
 	//PyObject*inConverter;
 	//PyObject*outConverter;
 	typ                               *VariableType
-	allocatedElements, actualElements int
-	boundPos, internalFetchNum        int
-	size, bufferSize                  int
+	allocatedElements, actualElements uint
+	boundPos, internalFetchNum        uint
+	size, bufferSize                  uint
 	environment                       *Environment
 	isArray, isAllocatedInternally    bool
 	indicator                         []C.sb2
 	returnCode, actualLength          []C.ub2
-	data                              []byte
+	dataBytes                         []byte
+	dataInts                          []int64
+	dataFloats                        []float64
 }
 
 // allocate a new variable
-func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size int) (v *Variable, err error) {
+func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size uint) (v *Variable, err error) {
 	// perform basic initialization
 	v.environment = cur.connection.environment
 	if numElements < 1 {
 		v.allocatedElements = 1
 	} else {
-		v.allocatedElements = int(numElements)
+		v.allocatedElements = numElements
 	}
 	v.isAllocatedInternally = true
 	v.typ = varType
@@ -94,9 +96,10 @@ type VariableDescription struct {
 type VariableType struct {
 	// Id                        byte
 	isVariableLength, isCharData bool
-	size                         int
+	size                         uint
 	canBeInArray, canBeCopied    bool
-	charsetForm, oracleType      int
+	charsetForm                  C.ub1
+	oracleType                   C.ub2
 	initialize                   func(*Variable, *Cursor) error
 	finalize                     func(*Variable) error
 	preDefine                    func(*Variable, *C.OCIParam) error
@@ -105,7 +108,7 @@ type VariableType struct {
 	getValue                     func(*Variable, uint) (interface{}, error)
 	setValue                     func(*Variable, uint, interface{}) error
 	preFetch                     func(*Variable) error
-	getBufferSize                func(*Variable) int
+	getBufferSize                func(*Variable) uint
 }
 
 //   Returns a boolean indicating if the object is a variable.
@@ -145,9 +148,6 @@ func isVariable(value interface{}) bool {
 	*/
 }
 
-func (t VariableType) IsNumber() bool {
-	return false
-}
 func (t VariableType) IsBinary() bool {
 	return false
 }
@@ -158,12 +158,22 @@ func (t VariableType) IsDate() bool {
 	return false
 }
 
-func (t *VariableType) NewVariable(cur *Cursor, numElements uint, size int) (*Variable, error) {
+func (t *VariableType) NewVariable(cur *Cursor, numElements uint, size uint) (*Variable, error) {
 	return NewVariable(cur, numElements, t, size)
 }
 
 func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableType, error) {
 	return nil, nil
+}
+
+func (v *Variable) getDataArr() *unsafe.Pointer {
+	if v.typ.IsNumber() && !v.typ.isCharData {
+		if v.typ == NativeFloatVarType || v.typ == FloatVarType {
+			return (*unsafe.Pointer)(unsafe.Pointer(&v.dataFloats))
+		}
+		return (*unsafe.Pointer)(unsafe.Pointer(&v.dataInts))
+	}
+	return (*unsafe.Pointer)(unsafe.Pointer(&v.dataBytes))
 }
 
 // Allocate the data for the variable.
@@ -180,7 +190,15 @@ func (v *Variable) allocateData() error {
 	if dataLength > 1<<31-1 {
 		return ArrayTooLarge
 	}
-	v.data = make([]byte, dataLength)
+	if v.typ.IsNumber() && !v.typ.isCharData {
+		if v.typ == NativeFloatVarType || v.typ == FloatVarType {
+			v.dataFloats = make([]float64, v.allocatedElements)
+		} else {
+			v.dataInts = make([]int64, v.allocatedElements)
+		}
+	} else {
+		v.dataBytes = make([]byte, dataLength)
+	}
 
 	return nil
 }
@@ -192,7 +210,9 @@ func (v *Variable) Free() {
 			v.typ.finalize(v)
 		}
 		v.indicator = nil
-		v.data = nil
+		v.dataBytes = nil
+		v.dataInts = nil
+		v.dataFloats = nil
 		v.actualLength = nil
 		v.returnCode = nil
 	}
@@ -205,15 +225,19 @@ func (v *Variable) Free() {
 // Resize the variable.
 func (v *Variable) resize(size uint) error {
 	// allocate the data for the new array
-	nsize := v.allocatedElements * int(size)
-	if len(v.data) == nsize {
+	if v.dataBytes == nil {
 		return nil
 	}
-	v.bufferSize = int(size)
-	if len(v.data) < nsize {
-		v.data = v.data[:nsize]
+
+	nsize := v.allocatedElements * size
+	if len(v.dataBytes) == int(nsize) {
+		return nil
+	}
+	v.bufferSize = size
+	if len(v.dataBytes) < int(nsize) {
+		v.dataBytes = v.dataBytes[:nsize]
 	} else {
-		v.data = append(v.data, make([]byte, nsize-len(v.data))...)
+		v.dataBytes = append(v.dataBytes, make([]byte, nsize-uint(len(v.dataBytes)))...)
 	}
 
 	// force rebinding
@@ -307,15 +331,15 @@ static udt_VariableType *Variable_TypeByPythonType(
     return NULL;
 }
 
+*/
 // Go => Oracle type conversion interface
 type OraTyper interface {
-    GetVarType() *VariableType
+	GetVarType() *VariableType
 }
-*/
 
 // Return a variable type given a Go object or error if the Go
 // value does not have a corresponding variable type.
-func VarTypeByValue(data interface{}) (vt *VariableType, size int, numElements uint, err error) {
+func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements uint, err error) {
 	if data == nil {
 		return StringVarType, 1, 0, nil
 	}
@@ -329,29 +353,35 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size int, numElements u
 	case *Variable:
 		return x.typ, x.typ.size, 0, nil
 	case string:
+		/* FIXME
 		if len(x) > MAX_STRING_CHARS {
 			return LongStringVarType, len(x), 0, nil
 		}
-		return StringVarType, len(x), 0, nil
+		*/
+		return StringVarType, uint(len(x)), 0, nil
 	case bool:
-		return BoolVarType, 0, 0, nil
-	case int8, uint8, byte, int16, uint16, int, uint, int32, uint32:
+		return BooleanVarType, 0, 0, nil
+	case int8, uint8, int16, uint16, int, uint, int32, uint32:
 		return Int32VarType, 0, 0, nil
 	case int64, uint64:
 		return Int64VarType, 0, 0, nil
 	case float32, float64:
 		return FloatVarType, 0, 0, nil
-	case time.Duration:
-		return IntervarlVarType, 0, 0, nil
-	case time.Time:
-		return DateTimeVarType, 0, 0, nil
+		/* FIXME
+			case time.Duration:
+				return IntervarlVarType, 0, 0, nil
+			case time.Time:
+				return DateTimeVarType, 0, 0, nil
+		    case CursorType:
+		        return CursorVarType, 0, 0, nil
+		*/
 	case []byte:
+		/* FIXME
 		if len(x) > MAX_BINARY_BYTES {
 			return LongBinaryVarType, len(x), 0, nil
 		}
-		return BinaryVarType, len(x), 0, nil
-	case CursorType:
-		return CursorVarType, 0, 0, nil
+		*/
+		return BinaryVarType, uint(len(x)), 0, nil
 	case []interface{}:
 		numElements = uint(len(x))
 		if numElements == 0 {
@@ -361,8 +391,8 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size int, numElements u
 		return
 	}
 
-	if data.(OraTyper) {
-		return data.GetVarType(), 0, 0, nil
+	if x, ok := data.(OraTyper); ok {
+		return x.GetVarType(), 0, 0, nil
 	}
 
 	return nil, 0, 0, fmt.Errorf("unhandled data type %T", data)
@@ -372,41 +402,43 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size int, numElements u
 // data type does not have a corresponding variable type.
 func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableType, error) {
 	switch oracleDataType {
-	case C.SQLT_LNG:
-		return &LongStringVarType, nil
+	/* FIXME
+	   	case C.SQLT_LNG:
+	   		return LongStringVarType, nil
+	       case C.SQLT_RDD:
+	           return RowidVarType, nil
+	       case C.SQLT_LBI:
+	           return LongBinaryVarType, nil
+	       case C.SQLT_DAT, C.SQLT_ODT:
+	           fallthrough
+	       case C.SQLT_DATE, C.SQLT_TIMESTAMP, C.SQLT_TIMESTAMP_TZ, C.SQLT_TIMESTAMP_LTZ:
+	           return DateTimeVarType, nil
+	       case C.SQLT_INTERVAL_DS:
+	           return IntervalVarType
+	       case C.SQLT_RSET:
+	           return CursorVarType, nil
+	           // case C.SQLT_NTY:
+	           //     return &vt_Object;
+	       case C.SQLT_CLOB:
+	           if charsetForm == C.SQLCS_NCHAR {
+	               return NClobVarType, nil
+	           }
+	           return ClobVarType, nil
+	       case C.SQLT_BLOB:
+	           return BlobVarType, nil
+	       case C.SQLT_BFILE:
+	           return BFileVarType, nil
+	*/
 	case C.SQLT_AFC:
-		return &FixedCharVarType, nil
+		return FixedCharVarType, nil
 	case C.SQLT_CHR:
-		return &StringVarType, nil
-	case C.SQLT_RDD:
-		return &RowidVarType, nil
+		return StringVarType, nil
 	case C.SQLT_BIN:
-		return &BinaryVarType, nil
-	case C.SQLT_LBI:
-		return &LongBinaryVarType, nil
+		return BinaryVarType, nil
 	case C.SQLT_BFLOAT, C.SQLT_IBFLOAT, C.SQLT_BDOUBLE, C.SQLT_IBDOUBLE:
 		fallthrough
 	case C.SQLT_NUM, C.SQLT_VNU:
-		return &FloatVarType, nil
-	case C.SQLT_DAT, C.SQLT_ODT:
-		fallthrough
-	case C.SQLT_DATE, C.SQLT_TIMESTAMP, C.SQLT_TIMESTAMP_TZ, C.SQLT_TIMESTAMP_LTZ:
-		return &DateTimeVarType, nil
-	case C.SQLT_INTERVAL_DS:
-		return &IntervalVarType
-	case C.SQLT_CLOB:
-		if charsetForm == C.SQLCS_NCHAR {
-			return &NClobVarType, nil
-		}
-		return &ClobVarType, nil
-	case C.SQLT_BLOB:
-		return &BlobVarType, nil
-	case C.SQLT_BFILE:
-		return &BFileVarType, nil
-	case C.SQLT_RSET:
-		return &CursorVarType, nil
-		// case C.SQLT_NTY:
-		//     return &vt_Object;
+		return FloatVarType, nil
 	}
 	return nil, fmt.Errorf("TypeByOracleDataType: unhandled data type %d",
 		oracleDataType)
@@ -417,7 +449,8 @@ func varTypeByOracleDescriptor(param *C.OCIParam, environment *Environment) (*Va
 	var dataType C.ub2
 
 	// retrieve datatype of the parameter
-	if _, err := environment.AttrGet(param, C.OCI_HTYPE_DESCRIBE,
+	if _, err := environment.AttrGet(
+		unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 		C.OCI_ATTR_DATA_TYPE, unsafe.Pointer(&dataType),
 		"data type"); err != nil {
 		return nil, err
@@ -429,14 +462,15 @@ func varTypeByOracleDescriptor(param *C.OCIParam, environment *Environment) (*Va
 		dataType != C.SQLT_CLOB {
 		charsetForm = C.SQLCS_IMPLICIT
 	} else {
-		if _, err := environment.AttrGet(param, C.OCI_HTYPE_DESCRIBE,
+		if _, err := environment.AttrGet(
+			unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 			C.OCI_ATTR_CHARSET_FORM, unsafe.Pointer(&charsetForm),
 			"charset form"); err != nil {
-			return
+			return nil, err
 		}
 	}
 
-	return varTypeByOracleDataType(dataType, charsetForm)
+	return varTypeByOraDataType(dataType, charsetForm)
 }
 
 // Make the variable an array, ensuring that the type supports arrays.
@@ -451,13 +485,14 @@ func (v *Variable) makeArray() error {
 // Default method for determining the type of variable to use for the data.
 func NewVariableByValue(cur *Cursor, value interface{}, numElements uint) (v *Variable, err error) {
 	var varType *VariableType
+	var size uint
 	if varType, size, numElements, err = VarTypeByValue(value); err != nil {
 		return
 	}
 	if v, err = NewVariable(cur, numElements, varType, size); err != nil {
 		return
 	}
-	if x, ok := value.([]interface{}); ok {
+	if _, ok := value.([]interface{}); ok {
 		err = v.makeArray()
 	}
 	return
@@ -504,13 +539,13 @@ func NewVariableByValue(cur *Cursor, value interface{}, numElements uint) (v *Va
 }
 */
 
-// Allocate a new PL/SQL array by looking at the Python data type.
-func NewVariableArrayByType(cur *Cursor, element interface{}, numElements uint) (*Variable, error) {
-	varType, err := Variable_TypeByPythonType(cursor, typeObj)
+// Allocate a new PL/SQL array by looking at the data
+func NewVariableArrayByValue(cur *Cursor, element interface{}, numElements uint) (*Variable, error) {
+	varType, size, _, err := VarTypeByValue(element)
 	if err != nil {
 		return nil, err
 	}
-	return NewVariable(cur, numElements, varType, varType.size)
+	return NewVariable(cur, numElements, varType, size)
 }
 
 /*
@@ -644,25 +679,25 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 	//     varType = &vt_NumberAsString;
 
 	// retrieve size of the parameter
-	size = varType.size
+	size = C.ub4(varType.size)
 	if varType.isVariableLength {
 		var sizeFromOracle C.ub2
 		// determine the maximum length from Oracle
 		if _, err = cur.environment.AttrGet(
-			param, C.OCI_HTYPE_DESCRIBE,
+			unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 			C.OCI_ATTR_DATA_SIZE, unsafe.Pointer(&sizeFromOracle),
 			"data size"); err != nil {
-			return err
+			return nil, err
 		}
 
 		// use the length from Oracle directly if available
-		if sizeFromOracle > 0 {
-			size = sizeFromOracle
+		if uint(sizeFromOracle) > 0 {
+			size = C.ub4(sizeFromOracle)
 		} else if cur.outputSize >= 0 {
 			// otherwise, use the value set with the setoutputsize() parameter
-			if cursor.outputSizeColumn < 0 ||
+			if cur.outputSizeColumn < 0 ||
 				int(position) == cur.outputSizeColumn {
-				size = cur.outputSize
+				size = C.ub4(cur.outputSize)
 			}
 		}
 	}
@@ -679,7 +714,7 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 	               numElements);
 	   else
 	*/
-	if v, err = NewVariable(cur, numElements, varType, size); err != nil {
+	if v, err = NewVariable(cur, numElements, varType, uint(size)); err != nil {
 		return
 	}
 
@@ -693,10 +728,11 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 	// perform the define
 	if err = cur.environment.CheckStatus(
 		C.OCIDefineByPos(cur.handle,
-			(*unsafe.Pointer)(unsafe.Pointer(&v.defineHandle)),
-			v.environment.errorHandle, position, v.data,
-			v.bufferSize, v.typ.oracleType, v.indicator,
-			v.actualLength, v.returnCode, C.OCI_DEFAULT),
+			&v.defineHandle,
+			v.environment.errorHandle, C.ub4(position), *v.getDataArr(),
+			C.sb4(v.bufferSize), C.ub2(v.typ.oracleType),
+			unsafe.Pointer(&v.indicator[0]),
+			&v.actualLength[0], &v.returnCode[0], C.OCI_DEFAULT),
 		"define"); err != nil {
 		return
 	}
@@ -716,68 +752,77 @@ func varDefine(cur *Cursor, numElements, position uint) (v *Variable, err error)
 	var param *C.OCIParam
 	// retrieve parameter descriptor
 	if err = cur.environment.CheckStatus(
-		C.OCIParamGet(cur.handle, C.OCI_HTYPE_STMT,
+		C.OCIParamGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 			cur.environment.errorHandle,
-			(*unsafe.Pointer)(unsafe.Pointer(&param)), position),
+			(*unsafe.Pointer)(unsafe.Pointer(&param)), C.ub4(position)),
 		"parameter"); err != nil {
 		return
 	}
 
 	// call the helper to do the actual work
 	v, err = variableDefineHelper(cur, param, position, numElements)
-	C.OCIDescriptorFree(param, C.OCI_DTYPE_PARAM)
+	C.OCIDescriptorFree(unsafe.Pointer(param), C.OCI_DTYPE_PARAM)
 	return
 }
 
 // Allocate a variable and bind it to the given statement.
 func (v *Variable) internalBind() (err error) {
-	var status sword
+	var status C.sword
 	// perform the bind
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if v.isArray {
+			actElts := C.ub4(0)
 			status = C.OCIBindByName(v.boundCursorHandle,
 				&v.bindHandle,
 				v.environment.errorHandle,
-				(*C.OraText)(&bname[0]), len(bname),
-				v.data, v.bufferSize,
-				v.typ.oracleType, v.indicator, v.actualLength,
-				v.returnCode, v.allocatedElements,
-				&v.actualElements, C.OCI_DEFAULT)
+				(*C.OraText)(&bname[0]), C.sb4(len(bname)),
+				*v.getDataArr(), C.sb4(v.bufferSize),
+				v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
+				&v.actualLength[0], &v.returnCode[0],
+				C.ub4(v.allocatedElements),
+				&actElts, C.OCI_DEFAULT)
+			v.actualElements = uint(actElts)
 		} else {
-			status = C.OCIBindByName(v.boundCursorHandle, &v.bindHandle,
+			status = C.OCIBindByName(v.boundCursorHandle,
+				&v.bindHandle,
 				v.environment.errorHandle,
-				(*C.OraText)(&bname[0]), len(bname),
-				v.data, v.bufferSize,
-				v.typ.oracleType, v.indicator, v.actualLength,
-				v.returnCode, 0, nil, C.OCI_DEFAULT)
+				(*C.OraText)(&bname[0]), C.sb4(len(bname)),
+				*v.getDataArr(), C.sb4(v.bufferSize),
+				v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
+				&v.actualLength[0], &v.returnCode[0],
+				0, nil, C.OCI_DEFAULT)
 		}
 	} else {
 		if v.isArray {
+			actElts := C.ub4(0)
 			status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
-				v.environment.errorHandle, v.boundPos, v.data,
-				v.bufferSize, v.typ.oracleType, v.indicator,
-				v.actualLength, v.returnCode,
-				v.allocatedElements, &v.actualElements,
-				C.OCI_DEFAULT)
+				v.environment.errorHandle, C.ub4(v.boundPos), *v.getDataArr(),
+				C.sb4(v.bufferSize), v.typ.oracleType,
+				unsafe.Pointer(&v.indicator[0]),
+				&v.actualLength[0], &v.returnCode[0],
+				C.ub4(v.allocatedElements), &actElts, C.OCI_DEFAULT)
+			v.actualElements = uint(actElts)
 		} else {
 			status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
-				v.environment.errorHandle, v.boundPos, v.data,
-				v.bufferSize, v.typ.oracleType, v.indicator,
-				v.actualLength, v.returnCode,
-				0, nil,
-				C.OCI_DEFAULT)
+				v.environment.errorHandle, C.ub4(v.boundPos), *v.getDataArr(),
+				C.sb4(v.bufferSize), v.typ.oracleType,
+				unsafe.Pointer(&v.indicator[0]),
+				&v.actualLength[0], &v.returnCode[0],
+				0, nil, C.OCI_DEFAULT)
 		}
 	}
-	if err = v.environment.CheckStatus(status); err != nil {
+	if err = v.environment.CheckStatus(status, "BindBy"); err != nil {
 		return
 	}
 
 	// set the max data size for strings
-	if (v.typ == &StringVarType || v.typ == &FixedCharVarType) &&
+	if (v.typ == StringVarType || v.typ == FixedCharVarType) &&
 		v.size > v.typ.size {
-		err = v.environment.AttrSet(v.bindHandle, C.OCI_HTYPE_BIND,
-			C.OCI_ATTR_MAXDATA_SIZE, unsafe.Pointer(&v.typ.size))
+		err = v.environment.AttrSet(
+			unsafe.Pointer(v.bindHandle), C.OCI_HTYPE_BIND,
+			C.OCI_ATTR_MAXDATA_SIZE, unsafe.Pointer(&v.typ.size),
+			C.sizeof_ub4)
 	}
 
 	return
@@ -804,7 +849,7 @@ func (v *Variable) Bind(cur *Cursor, name string, pos uint) error {
 func (v *Variable) verifyFetch(arrayPos uint) error {
 	if v.typ.isVariableLength {
 		if code := v.returnCode[arrayPos]; code != 0 {
-			err := NewError(code,
+			err := NewError(int(code),
 				fmt.Sprintf("column at array pos %d fetched with error: %d)",
 					arrayPos, code))
 			err.At = "verifyFetch"
@@ -850,14 +895,14 @@ func (v *Variable) getSingleValue(arrayPos uint) (interface{}, error) {
 }
 
 // Return the value of the variable as an array.
-func (v *Variable) getArrayvalue(numElements uint) (interface{}, error) {
+func (v *Variable) getArrayValue(numElements uint) (interface{}, error) {
 	value := make([]interface{}, numElements)
-	var singeValue interface{}
+	var singleValue interface{}
 	var err error
 
-	for i := 0; i < numElements; i++ {
-		if singleValue, err = v.getSingleValue(i); err != nil {
-			return err
+	for i := 0; i < int(numElements); i++ {
+		if singleValue, err = v.getSingleValue(uint(i)); err != nil {
+			return nil, err
 		}
 		value[i] = singleValue
 	}
@@ -868,7 +913,7 @@ func (v *Variable) getArrayvalue(numElements uint) (interface{}, error) {
 // Return the value of the variable.
 func (v *Variable) GetValue(arrayPos uint) (interface{}, error) {
 	if v.isArray {
-		return v.getArrayValue(v.actualElements)
+		return v.getArrayValue(uint(v.actualElements))
 	}
 	return v.getSingleValue(arrayPos)
 }
@@ -907,7 +952,7 @@ func (v *Variable) setSingleValue(arrayPos uint, value interface{}) error {
 // Set all of the array values for the variable.
 func (v *Variable) setArrayValue(value []interface{}) error {
 	// ensure we haven't exceeded the number of allocated elements
-	numElements := len(value)
+	numElements := uint(len(value))
 	if numElements > v.allocatedElements {
 		return errors.New("Variable_SetArrayValue: array size exceeded")
 	}
@@ -916,7 +961,7 @@ func (v *Variable) setArrayValue(value []interface{}) error {
 	v.actualElements = numElements
 	var err error
 	for i, elt := range value {
-		if err = v.setSingleValue(i, elt); err != nil {
+		if err = v.setSingleValue(uint(i), elt); err != nil {
 			return err
 		}
 	}
@@ -932,14 +977,14 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		if x, ok := value.([]interface{}); !ok {
 			return errors.New("array required!")
 		} else {
-			return v.setArrayValue(arrayPos, x)
+			return v.setArrayValue(x)
 		}
 	}
 	return v.setSingleValue(arrayPos, value)
 }
 
 // Copy the contents of the source variable to the destination variable.
-func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePost, targetPos uint) error {
+func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePos, targetPos uint) error {
 	if !sourceVar.typ.canBeCopied {
 		return errors.New("variable does not support copying")
 	}
@@ -949,7 +994,7 @@ func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePost, targetP
 		return errors.New("Variable_ExternalCopy: source array size exceeded")
 	}
 	if targetPos >= targetVar.allocatedElements {
-		return errors.News("Variable_ExternalCopy: target array size exceeded")
+		return errors.New("Variable_ExternalCopy: target array size exceeded")
 	}
 
 	// ensure target can support amount data from the source
@@ -966,16 +1011,27 @@ func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePost, targetP
 		if err = sourceVar.verifyFetch(sourcePos); err != nil {
 			return err
 		}
-		if targetVar.actualLength > 0 {
+		if targetVar.actualLength[targetPos] > 0 {
 			targetVar.actualLength[targetPos] =
 				sourceVar.actualLength[sourcePos]
 		}
-		if targetVar.returnCode != 0 {
+		if targetVar.returnCode[targetPos] != 0 {
 			targetVar.returnCode[targetPos] =
 				sourceVar.returnCode[sourcePos]
 		}
-		return copy(targetVar.data[targetPos*targetVar.bufferSize:],
-			sourceVar.data[sourcePos*sourceVar.bufferSize:(sourcePos+1)*sourceVar.bufferSize])
+
+		dp := targetPos * targetVar.bufferSize
+		sp := sourcePos * sourceVar.bufferSize
+		sq := (sourcePos + 1) * sourceVar.bufferSize
+		switch {
+		case sourceVar.dataFloats != nil:
+			copy(targetVar.dataFloats[dp:], sourceVar.dataFloats[sp:sq])
+		case sourceVar.dataInts != nil:
+			copy(targetVar.dataInts[dp:], sourceVar.dataInts[sp:sq])
+		default:
+			copy(targetVar.dataBytes[dp:], sourceVar.dataBytes[sp:sq])
+		}
+		return nil
 	}
 
 	return nil
@@ -983,12 +1039,12 @@ func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePost, targetP
 
 // Set the value of the variable at the given position.
 func (v *Variable) externalSetValue(pos uint, value interface{}) error {
-	return v.setValue(pos, value)
+	return v.SetValue(pos, value)
 }
 
 // Return the value of the variable at the given position.
 func (v *Variable) externalGetValue(pos uint) (interface{}, error) {
-	return v.getValue(pos)
+	return v.GetValue(pos)
 }
 
 /*

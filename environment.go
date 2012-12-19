@@ -21,11 +21,11 @@ import (
 type Environment struct {
 	handle                       *C.OCIEnv
 	errorHandle                  *C.OCIError
-	maxBytesPerCharacter         int
-	fixedWidth                   int
+	maxBytesPerCharacter         uint
+	fixedWidth                   uint
 	encoding                     string
 	nencoding                    string
-	maxStringBytes               int
+	maxStringBytes               uint
 	numberToStringFormatBuffer   []byte
 	numberFromStringFormatBuffer []byte
 	nlsNumericCharactersBuffer   []byte
@@ -85,7 +85,7 @@ func NewEnvironment() (*Environment, error) {
 		"Environment_New(): get max bytes per character"); err != nil {
 		return nil, err
 	}
-	env.maxBytesPerCharacter = int(sb4)
+	env.maxBytesPerCharacter = uint(sb4)
 	env.maxStringBytes = MAX_STRING_CHARS * env.maxBytesPerCharacter
 	log.Printf("maxBytesPerCharacter=%d", env.maxBytesPerCharacter)
 
@@ -95,7 +95,7 @@ func NewEnvironment() (*Environment, error) {
 		"Environment_New(): determine if charset fixed width"); err != nil {
 		return nil, err
 	}
-	env.fixedWidth = int(sb4)
+	env.fixedWidth = uint(sb4)
 
 	var e error
 	// determine encodings to use for Unicode values

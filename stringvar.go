@@ -58,7 +58,7 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	}
 
 	// ensure that the buffer is large enough
-	if length > v.bufferSize {
+	if length > int(v.bufferSize) {
 		if err := v.resize(uint(length)); err != nil {
 			return err
 		}
@@ -67,7 +67,7 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	// keep a copy of the string
 	v.actualLength[pos] = C.ub2(length)
 	if length > 0 {
-		copy(v.data[v.bufferSize*int(pos):], buf)
+		copy(v.dataBytes[int(v.bufferSize*pos):], buf)
 	}
 
 	return nil
@@ -75,7 +75,7 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) error {
 
 // Returns the value stored at the given array position.
 func stringVar_GetValue(v *Variable, pos uint) (interface{}, error) {
-	buf := v.data[v.bufferSize*int(pos) : v.bufferSize*int(pos)+int(v.actualLength[pos])]
+	buf := v.dataBytes[int(v.bufferSize*pos) : int(v.bufferSize*pos)+int(v.actualLength[pos])]
 	if v.typ == BinaryVarType {
 		return buf, nil
 	}
@@ -115,64 +115,71 @@ static int StringVar_PostDefine(
 */
 
 // Returns the buffer size to use for the variable.
-func stringVar_GetBufferSize(v *Variable) int {
+func stringVar_GetBufferSize(v *Variable) uint {
 	if v.typ.isCharData {
 		return v.size * v.environment.maxBytesPerCharacter
 	}
-	return v.size
+	return uint(v.size)
 }
 
-var StringVarType = &VariableType{
-	isVariableLength: true,
-	initialize:       stringVar_Initialize,
-	setValue:         stringVar_SetValue,
-	getValue:         stringVar_GetValue,
-	getBufferSize:    stringVar_GetBufferSize,
-	oracleType:       C.SQLT_CHR,       // Oracle type
-	charsetForm:      C.SQLCS_IMPLICIT, // charset form
-	size:             MAX_STRING_CHARS, // element length (default)
-	isCharData:       true,             // is character data
-	canBeCopied:      true,             // can be copied
-	canBeInArray:     true,             // can be in array
-}
+var (
+	StringVarType, FixedCharVarType *VariableType
+	BinaryVarType, RowidVarType     *VariableType
+)
 
-var FixedCharVarType = &VariableType{
-	initialize:       stringVar_Initialize,
-	setValue:         stringVar_SetValue,
-	getValue:         stringVar_GetValue,
-	getBufferSize:    stringVar_GetBufferSize,
-	oracleType:       C.SQLT_AFC,       // Oracle type
-	charsetForm:      C.SQLCS_IMPLICIT, // charset form
-	size:             2000,             // element length (default)
-	isCharData:       true,             // is character data
-	isVariableLength: true,             // is variable length
-	canBeCopied:      true,             // can be copied
-	canBeInArray:     true,             // can be in array
-}
+func init() {
+	StringVarType = &VariableType{
+		isVariableLength: true,
+		initialize:       stringVar_Initialize,
+		setValue:         stringVar_SetValue,
+		getValue:         stringVar_GetValue,
+		getBufferSize:    stringVar_GetBufferSize,
+		oracleType:       C.SQLT_CHR,       // Oracle type
+		charsetForm:      C.SQLCS_IMPLICIT, // charset form
+		size:             MAX_STRING_CHARS, // element length (default)
+		isCharData:       true,             // is character data
+		canBeCopied:      true,             // can be copied
+		canBeInArray:     true,             // can be in array
+	}
 
-var RowidVarType = &VariableType{
-	initialize:       stringVar_Initialize,
-	setValue:         stringVar_SetValue,
-	getValue:         stringVar_GetValue,
-	getBufferSize:    stringVar_GetBufferSize,
-	oracleType:       C.SQLT_CHR,       // Oracle type
-	charsetForm:      C.SQLCS_IMPLICIT, // charset form
-	size:             18,               // element length (default)
-	isCharData:       true,             // is character data
-	isVariableLength: false,            // is variable length
-	canBeCopied:      true,             // can be copied
-	canBeInArray:     true,             // can be in array
-}
+	FixedCharVarType = &VariableType{
+		initialize:       stringVar_Initialize,
+		setValue:         stringVar_SetValue,
+		getValue:         stringVar_GetValue,
+		getBufferSize:    stringVar_GetBufferSize,
+		oracleType:       C.SQLT_AFC,       // Oracle type
+		charsetForm:      C.SQLCS_IMPLICIT, // charset form
+		size:             2000,             // element length (default)
+		isCharData:       true,             // is character data
+		isVariableLength: true,             // is variable length
+		canBeCopied:      true,             // can be copied
+		canBeInArray:     true,             // can be in array
+	}
 
-var BinaryVarType = &VariableType{
-	initialize:       stringVar_Initialize,
-	setValue:         stringVar_SetValue,
-	getValue:         stringVar_GetValue,
-	oracleType:       C.SQLT_BIN,       // Oracle type
-	charsetForm:      C.SQLCS_IMPLICIT, // charset form
-	size:             MAX_BINARY_BYTES, // element length (default)
-	isCharData:       false,            // is character data
-	isVariableLength: true,             // is variable length
-	canBeCopied:      true,             // can be copied
-	canBeInArray:     true,             // can be in array
+	RowidVarType = &VariableType{
+		initialize:       stringVar_Initialize,
+		setValue:         stringVar_SetValue,
+		getValue:         stringVar_GetValue,
+		getBufferSize:    stringVar_GetBufferSize,
+		oracleType:       C.SQLT_CHR,       // Oracle type
+		charsetForm:      C.SQLCS_IMPLICIT, // charset form
+		size:             18,               // element length (default)
+		isCharData:       true,             // is character data
+		isVariableLength: false,            // is variable length
+		canBeCopied:      true,             // can be copied
+		canBeInArray:     true,             // can be in array
+	}
+
+	BinaryVarType = &VariableType{
+		initialize:       stringVar_Initialize,
+		setValue:         stringVar_SetValue,
+		getValue:         stringVar_GetValue,
+		oracleType:       C.SQLT_BIN,       // Oracle type
+		charsetForm:      C.SQLCS_IMPLICIT, // charset form
+		size:             MAX_BINARY_BYTES, // element length (default)
+		isCharData:       false,            // is character data
+		isVariableLength: true,             // is variable length
+		canBeCopied:      true,             // can be copied
+		canBeInArray:     true,             // can be in array
+	}
 }
