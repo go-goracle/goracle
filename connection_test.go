@@ -52,7 +52,7 @@ func TestCursor(t *testing.T) {
 	}
 	cur := conn.NewCursor()
 	defer cur.Close()
-	qry := "SELECT owner, object_name, object_id FROM all_objects"
+	qry := "SELECT owner, object_name FROM all_objects WHERE ROWNUM < 20"
 	if err := cur.Execute(qry, nil, nil); err != nil {
 		t.Logf(`error with "%s": %s`, qry, err)
 		t.Fail()
@@ -63,6 +63,15 @@ func TestCursor(t *testing.T) {
 		t.Fail()
 	}
 	t.Logf("row: %+v", row)
+	rows, err := cur.FetchMany(1000)
+	if err != nil {
+		t.Logf("error fetching many: %s", err)
+		t.Fail()
+	}
+	for i, row := range rows {
+		t.Logf("%03d: %v", i, row)
+	}
+
 }
 
 var conn Connection
