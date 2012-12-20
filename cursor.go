@@ -1198,7 +1198,7 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 	if err = cur.environment.CheckStatus(
 		C.OCIStmtFetch(cur.handle, cur.environment.errorHandle,
 			C.ub4(numRows), C.OCI_FETCH_NEXT, C.OCI_DEFAULT),
-		"internalFetch(): fetch"); err != nil {
+		"internalFetch(): fetch"); err != nil && err != NoDataFound {
 		return err
 	}
 	log.Printf("fetched, getting row count")
