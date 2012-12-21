@@ -168,14 +168,36 @@ func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableT
 	return nil, nil
 }
 
-func (v *Variable) getDataArr() *unsafe.Pointer {
-	if v.typ.IsNumber() && !v.typ.isCharData {
-		if v.typ == NativeFloatVarType || v.typ == FloatVarType {
-			return (*unsafe.Pointer)(unsafe.Pointer(&v.dataFloats))
+func (v *Variable) getDataArr() (p *unsafe.Pointer) {
+	defer func() {
+		log.Printf("getDataArr(%d): %v", v.typ.oracleType, p)
+		if p == nil {
+			log.Panicf("getDataArr(%+v) returns nil pointer!", v)
 		}
-		return (*unsafe.Pointer)(unsafe.Pointer(&v.dataInts))
+	}()
+
+	return (*unsafe.Pointer)(unsafe.Pointer(&v.dataBytes[0]))
+
+	if v.typ.IsNumber() && !v.typ.isCharData {
+		// if v.typ.IsFloat() {
+		// 	if v.dataFloats == nil || len(v.dataFloats) == 0 {
+		// 		log.Panicf("dataFloats is nil!")
+		// 	}
+		// 	return (*unsafe.Pointer)(unsafe.Pointer(&v.dataFloats[0]))
+		// }
+		// if v.dataInts == nil || len(v.dataInts) == 0 {
+		// 	log.Panicf("dataInts is nil!")
+		// }
+		// return (*unsafe.Pointer)(unsafe.Pointer(&v.dataInts[0]))
+		if v.dataFloats != nil && len(v.dataFloats) > 0 {
+			return (*unsafe.Pointer)(unsafe.Pointer(&v.dataFloats[0]))
+		}
+		return (*unsafe.Pointer)(unsafe.Pointer(&v.dataInts[0]))
 	}
-	return (*unsafe.Pointer)(unsafe.Pointer(&v.dataBytes))
+	if v.dataBytes == nil || len(v.dataBytes) == 0 {
+		log.Panicf("dataBytes is nil!")
+	}
+	return (*unsafe.Pointer)(unsafe.Pointer(&v.dataBytes[0]))
 }
 
 // Allocate the data for the variable.
@@ -192,15 +214,23 @@ func (v *Variable) allocateData() error {
 	if dataLength > 1<<31-1 {
 		return ArrayTooLarge
 	}
-	if v.typ.IsNumber() && !v.typ.isCharData {
-		if v.typ == NativeFloatVarType || v.typ == FloatVarType {
-			v.dataFloats = make([]float64, v.allocatedElements)
-		} else {
-			v.dataInts = make([]int64, v.allocatedElements)
-		}
-	} else {
-		v.dataBytes = make([]byte, dataLength)
-	}
+	log.Printf("bufsize=%d dataLength=%d", v.bufferSize, dataLength)
+	log.Printf("IsNumber?%s isCharData?%s", v.typ.IsNumber(), v.typ.isCharData)
+	v.dataFloats = nil
+	v.dataInts = nil
+	v.dataBytes = nil
+	// if v.typ.IsNumber() && !v.typ.isCharData {
+	// 	if v.typ.IsFloat() {
+	// 		v.dataFloats = make([]float64, v.allocatedElements)
+	// 		log.Printf("floats=%v", unsafe.Pointer(&v.dataFloats[0]))
+	// 	} else {
+	// 		v.dataInts = make([]int64, v.allocatedElements)
+	// 		log.Printf("ints=%v", unsafe.Pointer(&v.dataInts[0]))
+	// 	}
+	// } else {
+	v.dataBytes = make([]byte, dataLength)
+	log.Printf("bytes=%v", unsafe.Pointer(&v.dataBytes[0]))
+	// }
 
 	return nil
 }

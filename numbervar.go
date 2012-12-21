@@ -120,6 +120,10 @@ func (t *VariableType) IsNumber() bool {
 	return false
 }
 
+func (t *VariableType) IsFloat() bool {
+	return t == NativeFloatVarType || t == FloatVarType
+}
+
 // Set the type of value (integer, float or string) that will be returned
 // when values are fetched from this variable.
 func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
