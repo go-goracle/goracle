@@ -3,11 +3,18 @@ package main
 import (
 	"flag"
 	"github.com/tgulacsi/goracle"
+	"log"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"testing"
 )
 
-var dsn = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
+var (
+	dsn  = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
+	wait = flag.Bool("wait", false, "wait for USR1 signal?")
+)
 
 func init() {
 	flag.Parse()
@@ -23,7 +30,8 @@ func TestCursor(t *testing.T) {
 	}
 	cur := conn.NewCursor()
 	defer cur.Close()
-	qry := "SELECT owner, object_name, 1 FROM all_objects WHERE ROWNUM < 20"
+	qry := "SELECT owner, object_name, object_id FROM all_objects WHERE ROWNUM < 20"
+	log.Printf(`executing "%s"`, qry)
 	if err := cur.Execute(qry, nil, nil); err != nil {
 		t.Logf(`error with "%s": %s`, qry, err)
 		t.Fail()
@@ -58,6 +66,7 @@ func getConnection(t *testing.T) goracle.Connection {
 	}
 	user, passw, sid := goracle.SplitDsn(*dsn)
 	var err error
+	log.Printf("connecting to %s", *dsn)
 	conn, err = goracle.NewConnection(user, passw, sid)
 	if err != nil {
 		t.Logf("error creating connection to %s: %s", *dsn, err)
@@ -72,5 +81,20 @@ func getConnection(t *testing.T) goracle.Connection {
 
 func main() {
 	t := new(testing.T)
-	TestCursor(t)
+	if *wait {
+		c := make(chan os.Signal)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			log.Printf("waiting for signal...")
+			sig := <-c
+			log.Printf("got signal %s", sig)
+			TestCursor(t)
+			wg.Done()
+		}()
+		signal.Notify(c, syscall.SIGUSR1)
+		wg.Wait()
+	} else {
+		TestCursor(t)
+	}
 }

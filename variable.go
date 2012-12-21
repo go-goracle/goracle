@@ -173,7 +173,7 @@ func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableT
 	return nil, nil
 }
 
-func (v *Variable) getDataArr() (p *unsafe.Pointer) {
+func (v *Variable) getDataArr() (p unsafe.Pointer) {
 	defer func() {
 		log.Printf("getDataArr(%d): %v", v.typ.oracleType, p)
 		if p == nil {
@@ -181,28 +181,21 @@ func (v *Variable) getDataArr() (p *unsafe.Pointer) {
 		}
 	}()
 
-	return (*unsafe.Pointer)(unsafe.Pointer(&v.dataBytes[0]))
+	// return (unsafe.Pointer(&v.dataBytes[0]))
 
 	if v.typ.IsNumber() && !v.typ.isCharData {
-		// if v.typ.IsFloat() {
-		// 	if v.dataFloats == nil || len(v.dataFloats) == 0 {
-		// 		log.Panicf("dataFloats is nil!")
-		// 	}
-		// 	return (*unsafe.Pointer)(unsafe.Pointer(&v.dataFloats[0]))
-		// }
-		// if v.dataInts == nil || len(v.dataInts) == 0 {
-		// 	log.Panicf("dataInts is nil!")
-		// }
-		// return (*unsafe.Pointer)(unsafe.Pointer(&v.dataInts[0]))
 		if v.dataFloats != nil && len(v.dataFloats) > 0 {
-			return (*unsafe.Pointer)(unsafe.Pointer(&v.dataFloats[0]))
+			return (unsafe.Pointer(&v.dataFloats[0]))
 		}
-		return (*unsafe.Pointer)(unsafe.Pointer(&v.dataInts[0]))
+		if v.dataInts == nil || len(v.dataInts) == 0 {
+			log.Panicf("v=%+v but dataFloats + dataInts are nil!", v)
+		}
+		return (unsafe.Pointer(&v.dataInts[0]))
 	}
 	if v.dataBytes == nil || len(v.dataBytes) == 0 {
 		log.Panicf("dataBytes is nil!")
 	}
-	return (*unsafe.Pointer)(unsafe.Pointer(&v.dataBytes[0]))
+	return (unsafe.Pointer(&v.dataBytes[0]))
 }
 
 // Allocate the data for the variable.
@@ -212,6 +205,9 @@ func (v *Variable) allocateData() error {
 		v.bufferSize = v.typ.getBufferSize(v)
 	} else {
 		v.bufferSize = v.size
+	}
+	if v.bufferSize%2 > 0 {
+		v.bufferSize++
 	}
 
 	// allocate the data as long as it is small enough
@@ -224,18 +220,18 @@ func (v *Variable) allocateData() error {
 	v.dataFloats = nil
 	v.dataInts = nil
 	v.dataBytes = nil
-	// if v.typ.IsNumber() && !v.typ.isCharData {
-	// 	if v.typ.IsFloat() {
-	// 		v.dataFloats = make([]float64, v.allocatedElements)
-	// 		log.Printf("floats=%v", unsafe.Pointer(&v.dataFloats[0]))
-	// 	} else {
-	// 		v.dataInts = make([]int64, v.allocatedElements)
-	// 		log.Printf("ints=%v", unsafe.Pointer(&v.dataInts[0]))
-	// 	}
-	// } else {
-	v.dataBytes = make([]byte, dataLength)
-	log.Printf("bytes=%v", unsafe.Pointer(&v.dataBytes[0]))
-	// }
+	if v.typ.IsNumber() && !v.typ.isCharData {
+		if v.typ.IsFloat() {
+			v.dataFloats = make([]float64, v.allocatedElements)
+			log.Printf("floats=%v", unsafe.Pointer(&v.dataFloats[0]))
+		} else {
+			v.dataInts = make([]int64, v.allocatedElements)
+			log.Printf("ints=%v", unsafe.Pointer(&v.dataInts[0]))
+		}
+	} else {
+		v.dataBytes = make([]byte, dataLength)
+		log.Printf("bytes=%v", unsafe.Pointer(&v.dataBytes[0]))
+	}
 
 	return nil
 }
@@ -740,6 +736,7 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 			log.Printf("error getting data size: %+v", err)
 			return nil, err
 		}
+		log.Printf("size of %v @ %d: %d", param, position, sizeFromOracle)
 
 		// use the length from Oracle directly if available
 		if uint(sizeFromOracle) > 0 {
@@ -782,8 +779,8 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 	if err = cur.environment.CheckStatus(
 		C.OCIDefineByPos(cur.handle,
 			&v.defineHandle,
-			v.environment.errorHandle, C.ub4(position), *v.getDataArr(),
-			C.sb4(v.bufferSize), C.ub2(v.typ.oracleType),
+			v.environment.errorHandle, C.ub4(position), v.getDataArr(),
+			C.sb4(v.bufferSize), v.typ.oracleType,
 			unsafe.Pointer(&v.indicator[0]),
 			aL, rC, C.OCI_DEFAULT),
 		"define"); err != nil {
@@ -838,7 +835,7 @@ func (v *Variable) internalBind() (err error) {
 				&v.bindHandle,
 				v.environment.errorHandle,
 				(*C.OraText)(&bname[0]), C.sb4(len(bname)),
-				*v.getDataArr(), C.sb4(v.bufferSize),
+				v.getDataArr(), C.sb4(v.bufferSize),
 				v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
 				aL, rC,
 				C.ub4(v.allocatedElements),
@@ -849,7 +846,7 @@ func (v *Variable) internalBind() (err error) {
 				&v.bindHandle,
 				v.environment.errorHandle,
 				(*C.OraText)(&bname[0]), C.sb4(len(bname)),
-				*v.getDataArr(), C.sb4(v.bufferSize),
+				v.getDataArr(), C.sb4(v.bufferSize),
 				v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
 				aL, rC,
 				0, nil, C.OCI_DEFAULT)
@@ -858,7 +855,7 @@ func (v *Variable) internalBind() (err error) {
 		if v.isArray {
 			actElts := C.ub4(0)
 			status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
-				v.environment.errorHandle, C.ub4(v.boundPos), *v.getDataArr(),
+				v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
 				C.sb4(v.bufferSize), v.typ.oracleType,
 				unsafe.Pointer(&v.indicator[0]),
 				aL, rC,
@@ -866,7 +863,7 @@ func (v *Variable) internalBind() (err error) {
 			v.actualElements = uint(actElts)
 		} else {
 			status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
-				v.environment.errorHandle, C.ub4(v.boundPos), *v.getDataArr(),
+				v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
 				C.sb4(v.bufferSize), v.typ.oracleType,
 				unsafe.Pointer(&v.indicator[0]),
 				aL, rC,

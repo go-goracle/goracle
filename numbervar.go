@@ -249,8 +249,11 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 
 // Returns the value stored at the given array position.
 func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
-	switch v.typ {
-	case Int32VarType, Int64VarType, BooleanVarType:
+	if v.dataFloats != nil {
+		// log.Printf("getting pos=%d from %+v", pos, v.dataFloats)
+		return v.dataFloats[pos], nil
+	}
+	if v.dataInts != nil {
 		intVal := int64(0)
 		if err := v.environment.CheckStatus(
 			C.OCINumberToInt(v.environment.errorHandle,
@@ -263,7 +266,8 @@ func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 			return intVal > 0, nil
 		}
 		return intVal, nil
-	case NumberAsStringVarType:
+	}
+	if v.typ == NumberAsStringVarType {
 		buf := make([]byte, 200)
 		var size C.ub4
 		if err := v.environment.CheckStatus(
@@ -276,15 +280,46 @@ func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 			return 0, err
 		}
 		return v.environment.FromEncodedString(buf[:int(size)]), nil
-	case NativeFloatVarType:
-		// var floatVal float64
-		// if err := binary.Read(bytes.NewReader(v.data[pos:pos+C.sizeof_double]),
-		// 	binary.LittleEndian, &floatVal); err != nil {
-		// 	return nil, err
-		// }
-		// return floatVal, nil
-		return v.dataFloats[pos], nil
 	}
+	/*
+		switch v.typ {
+		case Int32VarType, Int64VarType, BooleanVarType:
+			intVal := int64(0)
+			if err := v.environment.CheckStatus(
+				C.OCINumberToInt(v.environment.errorHandle,
+					(*C.OCINumber)(unsafe.Pointer(&v.dataInts[pos])),
+					C.sizeof_long, C.OCI_NUMBER_SIGNED, unsafe.Pointer(&intVal)),
+				"numberToInt"); err != nil {
+				return -1, err
+			}
+			if v.typ == BooleanVarType {
+				return intVal > 0, nil
+			}
+			return intVal, nil
+		case NumberAsStringVarType:
+			buf := make([]byte, 200)
+			var size C.ub4
+			if err := v.environment.CheckStatus(
+				C.OCINumberToText(v.environment.errorHandle,
+					(*C.OCINumber)(unsafe.Pointer(&v.dataBytes[pos])),
+					(*C.oratext)(unsafe.Pointer(&v.environment.numberToStringFormatBuffer[0])),
+					C.ub4(len(v.environment.numberToStringFormatBuffer)), nil, 0,
+					&size, (*C.oratext)(&buf[0])),
+				"NumberToText"); err != nil {
+				return 0, err
+			}
+			return v.environment.FromEncodedString(buf[:int(size)]), nil
+		case NativeFloatVarType, FloatVarType:
+			// var floatVal float64
+			// if err := binary.Read(bytes.NewReader(v.data[pos:pos+C.sizeof_double]),
+			// 	binary.LittleEndian, &floatVal); err != nil {
+			// 	return nil, err
+			// }
+			// return floatVal, nil
+			log.Printf("getting pos=%d from %+v", pos, v.dataFloats)
+			return v.dataFloats[pos], nil
+		}
+	*/
 
 	return v.environment.numberToFloat(unsafe.Pointer(&v.dataBytes[pos]))
 }
