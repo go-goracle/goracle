@@ -140,7 +140,8 @@ func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
 		"numberVar_PreDefine(): precision"); err != nil {
 		return err
 	}
-	if v.typ == FloatVarType || v.typ == LongIntegerVarType {
+	log.Printf("numberVar_PreDefine typ=%s", v.typ)
+	if v.typ == nil || v.typ == FloatVarType || v.typ == LongIntegerVarType {
 		if scale == 0 || (scale == -127 && precision == 0) {
 			if precision > 0 && precision < 10 {
 				v.typ = Int32VarType

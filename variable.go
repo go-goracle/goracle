@@ -164,6 +164,11 @@ func (t *VariableType) NewVariable(cur *Cursor, numElements uint, size uint) (*V
 	return NewVariable(cur, numElements, t, size)
 }
 
+func (t *VariableType) String() string {
+	return fmt.Sprintf("<%d var?%s char?%s>", t.oracleType,
+		t.isVariableLength, t.isCharData)
+}
+
 func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableType, error) {
 	return nil, nil
 }

@@ -1286,7 +1286,7 @@ func (cur *Cursor) FetchMany(rowLimit int) ([][]interface{}, error) {
 }
 
 // Fetch all remaining rows from the cursor.
-func (cur *Cursor) fetchAll() ([][]interface{}, error) {
+func (cur *Cursor) FetchAll() ([][]interface{}, error) {
 	if err := cur.verifyFetch(); err != nil {
 		return nil, err
 	}
