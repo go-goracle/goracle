@@ -52,7 +52,7 @@ func TestCursor(t *testing.T) {
 	}
 	cur := conn.NewCursor()
 	defer cur.Close()
-	qry := "SELECT owner, object_name, object_id FROM all_objects WHERE ROWNUM < 20"
+	qry := "SELECT owner, object_name, object_id, object_id/2.0 FROM all_objects WHERE ROWNUM < 20 ORDER BY 3"
 	if err := cur.Execute(qry, nil, nil); err != nil {
 		t.Logf(`error with "%s": %s`, qry, err)
 		t.Fail()

@@ -20,10 +20,6 @@ import (
 	"unsafe"
 )
 
-type Stringer interface {
-	String() string
-}
-
 var (
 	FloatVarType, NativeFloatVarType               *VariableType
 	Int32VarType, Int64VarType, LongIntegerVarType *VariableType
@@ -32,6 +28,7 @@ var (
 
 func init() {
 	FloatVarType = &VariableType{
+		Name:             "Float",
 		preDefine:        numberVar_PreDefine,
 		setValue:         numberVar_SetValue,
 		getValue:         numberVar_GetValue,
@@ -45,6 +42,7 @@ func init() {
 	}
 
 	NativeFloatVarType = &VariableType{
+		Name:             "NativeFloat",
 		setValue:         numberVar_SetValue,
 		getValue:         numberVar_GetValue,
 		oracleType:       C.SQLT_BDOUBLE,   // Oracle type
@@ -68,6 +66,7 @@ func init() {
 	}
 
 	Int64VarType = &VariableType{
+		Name:         "Int64",
 		preDefine:    numberVar_PreDefine,
 		setValue:     numberVar_SetValue,
 		getValue:     numberVar_GetValue,
@@ -79,6 +78,7 @@ func init() {
 	}
 
 	LongIntegerVarType = &VariableType{
+		Name:         "LongInteger",
 		preDefine:    numberVar_PreDefine,
 		setValue:     numberVar_SetValue,
 		getValue:     numberVar_GetValue,
@@ -90,6 +90,7 @@ func init() {
 	}
 
 	NumberAsStringVarType = &VariableType{
+		Name:         "NumberAsString",
 		preDefine:    numberVar_PreDefine,
 		setValue:     numberVar_SetValue,
 		getValue:     numberVar_GetValue,
@@ -101,6 +102,7 @@ func init() {
 	}
 
 	BooleanVarType = &VariableType{
+		Name:         "Boolean",
 		preDefine:    numberVar_PreDefine,
 		setValue:     numberVar_SetValue,
 		getValue:     numberVar_GetValue,
@@ -124,6 +126,14 @@ func (t *VariableType) IsFloat() bool {
 	return t == NativeFloatVarType || t == FloatVarType
 }
 
+func (t *VariableType) IsInteger() bool {
+	switch t {
+	case BooleanVarType, NumberAsStringVarType, LongIntegerVarType, Int64VarType, Int32VarType:
+		return true
+	}
+	return false
+}
+
 // Set the type of value (integer, float or string) that will be returned
 // when values are fetched from this variable.
 func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
@@ -144,9 +154,10 @@ func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
 		"numberVar_PreDefine(): precision"); err != nil {
 		return err
 	}
-	log.Printf("numberVar_PreDefine typ=%s", v.typ)
-	if v.typ == nil || v.typ == FloatVarType || v.typ == LongIntegerVarType {
-		if scale == 0 || (scale == -127 && precision == 0) {
+	log.Printf("numberVar_PreDefine typ=%s scale=%d precision=%d", v.typ,
+		scale, precision)
+	if v.typ == nil || v.typ == FloatVarType {
+		if scale == -127 || (scale == 0 && precision > 0) { // int
 			if precision > 0 && precision < 10 {
 				v.typ = Int32VarType
 			} else if precision > 0 && precision < 19 {
@@ -206,15 +217,6 @@ func (env *Environment) numberFromText(value string, dst unsafe.Pointer) error {
 		"numberFromText")
 }
 
-func (env *Environment) numberToFloat(src unsafe.Pointer) (float64, error) {
-	var floatVal float64
-	err := env.CheckStatus(
-		C.OCINumberToReal(env.errorHandle, (*C.OCINumber)(src), C.sizeof_double,
-			unsafe.Pointer(&floatVal)),
-		"numberToFloat")
-	return floatVal, err
-}
-
 // Set the value of the variable.
 func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	var (
@@ -238,7 +240,7 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		return v.environment.numberFromText(x,
 			unsafe.Pointer(&v.dataBytes[pos]))
 	default:
-		if x, ok := value.(Stringer); ok {
+		if x, ok := value.(fmt.Stringer); ok {
 			return v.environment.numberFromText(x.String(),
 				unsafe.Pointer(&v.dataBytes[pos]))
 		}
@@ -254,18 +256,8 @@ func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 		return v.dataFloats[pos], nil
 	}
 	if v.dataInts != nil {
-		intVal := int64(0)
-		if err := v.environment.CheckStatus(
-			C.OCINumberToInt(v.environment.errorHandle,
-				(*C.OCINumber)(unsafe.Pointer(&v.dataInts[pos])),
-				C.sizeof_long, C.OCI_NUMBER_SIGNED, unsafe.Pointer(&intVal)),
-			"numberToInt"); err != nil {
-			return -1, err
-		}
-		if v.typ == BooleanVarType {
-			return intVal > 0, nil
-		}
-		return intVal, nil
+		// log.Printf("getting pos=%d from %+v", pos, v.dataInts)
+		return v.dataInts[pos], nil
 	}
 	if v.typ == NumberAsStringVarType {
 		buf := make([]byte, 200)
@@ -281,45 +273,27 @@ func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 		}
 		return v.environment.FromEncodedString(buf[:int(size)]), nil
 	}
-	/*
-		switch v.typ {
-		case Int32VarType, Int64VarType, BooleanVarType:
-			intVal := int64(0)
-			if err := v.environment.CheckStatus(
-				C.OCINumberToInt(v.environment.errorHandle,
-					(*C.OCINumber)(unsafe.Pointer(&v.dataInts[pos])),
-					C.sizeof_long, C.OCI_NUMBER_SIGNED, unsafe.Pointer(&intVal)),
-				"numberToInt"); err != nil {
-				return -1, err
-			}
-			if v.typ == BooleanVarType {
-				return intVal > 0, nil
-			}
-			return intVal, nil
-		case NumberAsStringVarType:
-			buf := make([]byte, 200)
-			var size C.ub4
-			if err := v.environment.CheckStatus(
-				C.OCINumberToText(v.environment.errorHandle,
-					(*C.OCINumber)(unsafe.Pointer(&v.dataBytes[pos])),
-					(*C.oratext)(unsafe.Pointer(&v.environment.numberToStringFormatBuffer[0])),
-					C.ub4(len(v.environment.numberToStringFormatBuffer)), nil, 0,
-					&size, (*C.oratext)(&buf[0])),
-				"NumberToText"); err != nil {
-				return 0, err
-			}
-			return v.environment.FromEncodedString(buf[:int(size)]), nil
-		case NativeFloatVarType, FloatVarType:
-			// var floatVal float64
-			// if err := binary.Read(bytes.NewReader(v.data[pos:pos+C.sizeof_double]),
-			// 	binary.LittleEndian, &floatVal); err != nil {
-			// 	return nil, err
-			// }
-			// return floatVal, nil
-			log.Printf("getting pos=%d from %+v", pos, v.dataFloats)
-			return v.dataFloats[pos], nil
+	log.Printf("v=%s IsInteger?%s", v.typ, v.typ.IsInteger())
+	if v.typ.IsInteger() {
+		intVal := int64(0)
+		if err := v.environment.CheckStatus(
+			C.OCINumberToInt(v.environment.errorHandle,
+				(*C.OCINumber)(unsafe.Pointer(&v.dataBytes[pos*v.size])),
+				C.sizeof_long, C.OCI_NUMBER_SIGNED, unsafe.Pointer(&intVal)),
+			"numberToInt"); err != nil {
+			return -1, err
 		}
-	*/
+		if v.typ == BooleanVarType {
+			return intVal > 0, nil
+		}
+		return intVal, nil
+	}
 
-	return v.environment.numberToFloat(unsafe.Pointer(&v.dataBytes[pos]))
+	floatVal := float64(0)
+	err := v.environment.CheckStatus(
+		C.OCINumberToReal(v.environment.errorHandle,
+			(*C.OCINumber)(unsafe.Pointer(&v.dataBytes[pos*v.size])),
+			C.sizeof_double, unsafe.Pointer(&floatVal)),
+		"numberToFloat")
+	return floatVal, err
 }

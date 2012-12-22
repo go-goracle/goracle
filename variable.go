@@ -96,7 +96,7 @@ type VariableDescription struct {
 }
 
 type VariableType struct {
-	// Id                        byte
+	Name                         string
 	isVariableLength, isCharData bool
 	size                         uint
 	canBeInArray, canBeCopied    bool
@@ -165,7 +165,7 @@ func (t *VariableType) NewVariable(cur *Cursor, numElements uint, size uint) (*V
 }
 
 func (t *VariableType) String() string {
-	return fmt.Sprintf("<%d var?%s char?%s>", t.oracleType,
+	return fmt.Sprintf("<%s %d var?%s char?%s>", t.Name, t.oracleType,
 		t.isVariableLength, t.isCharData)
 }
 
@@ -181,21 +181,16 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 		}
 	}()
 
-	// return (unsafe.Pointer(&v.dataBytes[0]))
-
-	if v.typ.IsNumber() && !v.typ.isCharData {
-		if v.dataFloats != nil && len(v.dataFloats) > 0 {
-			return (unsafe.Pointer(&v.dataFloats[0]))
-		}
-		if v.dataInts == nil || len(v.dataInts) == 0 {
-			log.Panicf("v=%+v but dataFloats + dataInts are nil!", v)
-		}
+	if v.dataBytes != nil {
+		return (unsafe.Pointer(&v.dataBytes[0]))
+	} else if v.dataInts != nil {
 		return (unsafe.Pointer(&v.dataInts[0]))
+	} else {
+		return (unsafe.Pointer(&v.dataFloats[0]))
+
 	}
-	if v.dataBytes == nil || len(v.dataBytes) == 0 {
-		log.Panicf("dataBytes is nil!")
-	}
-	return (unsafe.Pointer(&v.dataBytes[0]))
+	log.Panicf("everything is nil!")
+	return nil
 }
 
 // Allocate the data for the variable.
@@ -220,8 +215,9 @@ func (v *Variable) allocateData() error {
 	v.dataFloats = nil
 	v.dataInts = nil
 	v.dataBytes = nil
-	if v.typ.IsNumber() && !v.typ.isCharData {
-		if v.typ.IsFloat() {
+	if v.typ.IsNumber() && !v.typ.isCharData &&
+		(v.typ == NativeFloatVarType || v.typ.IsInteger()) {
+		if v.typ == NativeFloatVarType {
 			v.dataFloats = make([]float64, v.allocatedElements)
 			log.Printf("floats=%v", unsafe.Pointer(&v.dataFloats[0]))
 		} else {
