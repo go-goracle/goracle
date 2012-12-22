@@ -129,6 +129,7 @@ var (
 
 func init() {
 	StringVarType = &VariableType{
+		Name:             "String",
 		isVariableLength: true,
 		initialize:       stringVar_Initialize,
 		setValue:         stringVar_SetValue,
@@ -143,6 +144,7 @@ func init() {
 	}
 
 	FixedCharVarType = &VariableType{
+		Name:             "FixedChar",
 		initialize:       stringVar_Initialize,
 		setValue:         stringVar_SetValue,
 		getValue:         stringVar_GetValue,
@@ -157,6 +159,7 @@ func init() {
 	}
 
 	RowidVarType = &VariableType{
+		Name:             "Rowid",
 		initialize:       stringVar_Initialize,
 		setValue:         stringVar_SetValue,
 		getValue:         stringVar_GetValue,
@@ -171,6 +174,7 @@ func init() {
 	}
 
 	BinaryVarType = &VariableType{
+		Name:             "Binary",
 		initialize:       stringVar_Initialize,
 		setValue:         stringVar_SetValue,
 		getValue:         stringVar_GetValue,

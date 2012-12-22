@@ -16,7 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	// "time"
+	"time"
 	"unsafe"
 )
 
@@ -396,11 +396,11 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return Int64VarType, 0, 0, nil
 	case float32, float64:
 		return FloatVarType, 0, 0, nil
+	case time.Time:
+		return DateTimeVarType, 0, 0, nil
 		/* FIXME
 			case time.Duration:
 				return IntervarlVarType, 0, 0, nil
-			case time.Time:
-				return DateTimeVarType, 0, 0, nil
 		    case CursorType:
 		        return CursorVarType, 0, 0, nil
 		*/
@@ -431,17 +431,17 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 // data type does not have a corresponding variable type.
 func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableType, error) {
 	switch oracleDataType {
+	case C.SQLT_RDD:
+		return RowidVarType, nil
+	case C.SQLT_DAT, C.SQLT_ODT:
+		fallthrough
+	case C.SQLT_DATE, C.SQLT_TIMESTAMP, C.SQLT_TIMESTAMP_TZ, C.SQLT_TIMESTAMP_LTZ:
+		return DateTimeVarType, nil
 	/* FIXME
 	   	case C.SQLT_LNG:
 	   		return LongStringVarType, nil
-	       case C.SQLT_RDD:
-	           return RowidVarType, nil
 	       case C.SQLT_LBI:
 	           return LongBinaryVarType, nil
-	       case C.SQLT_DAT, C.SQLT_ODT:
-	           fallthrough
-	       case C.SQLT_DATE, C.SQLT_TIMESTAMP, C.SQLT_TIMESTAMP_TZ, C.SQLT_TIMESTAMP_LTZ:
-	           return DateTimeVarType, nil
 	       case C.SQLT_INTERVAL_DS:
 	           return IntervalVarType
 	       case C.SQLT_RSET:

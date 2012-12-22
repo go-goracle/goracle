@@ -98,6 +98,18 @@ func TestCursor(t *testing.T) {
 	for i, row := range rows {
 		t.Logf("%03d: %v", i, row)
 	}
+
+	qry = `SELECT SYSDATE FROM DUAL`
+	if err = cur.Execute(qry, nil, nil); err != nil {
+		t.Logf(`error with "%s": %s`, qry, err)
+		t.Fail()
+	}
+	if row, err = cur.FetchOne(); err != nil {
+		t.Logf("error fetching: %s", err)
+		t.Fail()
+	}
+	t.Logf("%03d: %v", 0, row)
+
 }
 
 var conn Connection
