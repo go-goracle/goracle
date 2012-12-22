@@ -219,30 +219,57 @@ func (env *Environment) numberFromText(value string, dst unsafe.Pointer) error {
 
 // Set the value of the variable.
 func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
-	var (
-		intval int64
-	)
+	log.Printf("numberVar_SetValue(%s, %d (%d), %+v (%T))", v.typ,
+		pos, len(v.dataBytes), value, value)
+	nfInt := func(intVal int64) error {
+		if v.dataInts != nil {
+			v.dataInts[pos] = intVal
+			return nil
+		}
+		return v.environment.numberFromInt(intVal,
+			unsafe.Pointer(&v.dataBytes[pos*C.sizeof_OCINumber]))
+	}
+	nfFloat := func(floatVal float64) error {
+		if v.dataFloats != nil {
+			v.dataFloats[pos] = floatVal
+			return nil
+		}
+		return v.environment.numberFromFloat(floatVal,
+			unsafe.Pointer(&v.dataBytes[pos*C.sizeof_OCINumber]))
+	}
 	switch x := value.(type) {
 	case bool:
 		if x {
-			intval = 1
+			return nfInt(1)
 		}
-		return v.environment.numberFromInt(intval,
-			unsafe.Pointer(&v.dataInts[pos]))
-	case int, int32, uint, uint32, uint64:
-		intval = int64(x.(int64))
-		return v.environment.numberFromInt(intval,
-			unsafe.Pointer(&v.dataInts[pos]))
-	case float32, float64:
-		return v.environment.numberFromFloat(x.(float64),
-			unsafe.Pointer(&v.dataFloats[pos]))
+		return nfInt(0)
+	case int16:
+		return nfInt(int64(x))
+	case uint16:
+		return nfInt(int64(x))
+	case int32:
+		return nfInt(int64(x))
+	case int:
+		return nfInt(int64(x))
+	case uint:
+		return nfInt(int64(x))
+	case uint32:
+		return nfInt(int64(x))
+	case uint64:
+		return nfInt(int64(x))
+	case int64:
+		return nfInt(int64(x))
+	case float32:
+		return nfFloat(float64(x))
+	case float64:
+		return nfFloat(x)
 	case string:
 		return v.environment.numberFromText(x,
-			unsafe.Pointer(&v.dataBytes[pos]))
+			unsafe.Pointer(&v.dataBytes[pos*C.sizeof_OCINumber]))
 	default:
 		if x, ok := value.(fmt.Stringer); ok {
 			return v.environment.numberFromText(x.String(),
-				unsafe.Pointer(&v.dataBytes[pos]))
+				unsafe.Pointer(&v.dataBytes[pos*C.sizeof_OCINumber]))
 		}
 		return fmt.Errorf("required some kind of int, got %T", value)
 	}

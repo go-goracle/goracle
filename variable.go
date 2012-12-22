@@ -215,7 +215,7 @@ func (v *Variable) allocateData() error {
 	v.dataFloats = nil
 	v.dataInts = nil
 	v.dataBytes = nil
-	if v.typ.IsNumber() && !v.typ.isCharData &&
+	if false && v.typ.IsNumber() && !v.typ.isCharData &&
 		(v.typ == NativeFloatVarType || v.typ.IsInteger()) {
 		if v.typ == NativeFloatVarType {
 			v.dataFloats = make([]float64, v.allocatedElements)
@@ -1034,6 +1034,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 			return v.setArrayValue(x)
 		}
 	}
+	log.Printf("calling %s.setValue(%d, %v (%T))", v.typ, arrayPos, value, value)
 	return v.setSingleValue(arrayPos, value)
 }
 

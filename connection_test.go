@@ -52,7 +52,10 @@ func TestCursor(t *testing.T) {
 	}
 	cur := conn.NewCursor()
 	defer cur.Close()
-	qry := "SELECT owner, object_name, object_id, object_id/2.0 FROM all_objects WHERE ROWNUM < 20 ORDER BY 3"
+	qry := `SELECT owner||'.'||object_name, object_id, object_id/EXP(1)
+	          FROM all_objects
+	          WHERE ROWNUM < 20
+	          ORDER BY 3`
 	if err := cur.Execute(qry, nil, nil); err != nil {
 		t.Logf(`error with "%s": %s`, qry, err)
 		t.Fail()
@@ -80,6 +83,21 @@ func TestCursor(t *testing.T) {
 		t.Logf("%03d: %v", i, row)
 	}
 
+	qry = `SELECT B.object_id, A.rn
+	         FROM all_objects B, (SELECT :1 rn FROM DUAL) A
+	         WHERE ROWNUM < GREATEST(2, A.rn)`
+	params := []interface{}{2}
+	if err = cur.Execute(qry, params, nil); err != nil {
+		t.Logf(`error with "%s" %v: %s`, qry, params, err)
+		t.Fail()
+	}
+	if rows, err = cur.FetchMany(3); err != nil {
+		t.Logf("error fetching many: %s", err)
+		t.Fail()
+	}
+	for i, row := range rows {
+		t.Logf("%03d: %v", i, row)
+	}
 }
 
 var conn Connection
