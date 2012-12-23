@@ -10,6 +10,7 @@ package goracle
 #include <stdlib.h>
 #include <oci.h>
 #include <orl.h>
+#include <ociap.h>
 
 const size_t sof_OCIIntervalp = sizeof(OCIInterval*);
 
@@ -93,6 +94,45 @@ func dateTimeVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 		&year, &month, &day, &hour, &minute, &second)
 	return time.Date(int(year), time.Month(month), int(day),
 		int(hour), int(minute), int(second), 0, time.Local), nil
+}
+
+//   Set the value of the variable.
+func internalVar_SetValue(v *Variable, pos uint, value interface{}) error {
+	var days, hours, minutes, seconds, microseconds C.sb4
+
+	x, ok := value.(time.Duration)
+	if !ok {
+		return fmt.Errorf("requires time.Duration, got %T", value)
+	}
+
+	days = C.sb4(x.Hours()) / 24
+	hours = C.sb4(x.Hours()) - days*24
+	minutes = C.sb4(x.Minutes() - x.Hours()*60)
+	seconds = C.sb4(x.Seconds()-x.Minutes()) * 60
+	microseconds = C.sb4(float64(x.Nanoseconds()/1000) - x.Seconds()*1000*1000)
+	return v.environment.CheckStatus(
+		C.OCIIntervalSetDaySecond(unsafe.Pointer(v.environment.handle),
+			v.environment.errorHandle, days, hours, minutes,
+			seconds, microseconds, (*C.OCIInterval)(unsafe.Pointer(&v.dataBytes[pos]))),
+		"IntervalSetDaySecond")
+}
+
+// Returns the value stored at the given array position.
+func internalVar_GetValue(v *Variable, pos uint) (interface{}, error) {
+	var days, hours, minutes, seconds, microseconds C.sb4
+
+	if err := v.environment.CheckStatus(
+		C.OCIIntervalGetDaySecond(unsafe.Pointer(v.environment.handle),
+			v.environment.errorHandle, &days, &hours, &minutes, &seconds,
+			&microseconds, (*C.OCIInterval)(unsafe.Pointer((&v.dataBytes[pos])))),
+		"internalVar_GetValue"); err != nil {
+		return nil, err
+	}
+	return (time.Duration(days)*24*time.Hour +
+		time.Duration(hours)*time.Hour +
+		time.Duration(minutes)*time.Minute +
+		time.Duration(seconds)*time.Second +
+		time.Duration(microseconds)*time.Microsecond), nil
 }
 
 func init() {

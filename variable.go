@@ -437,13 +437,13 @@ func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableTyp
 		fallthrough
 	case C.SQLT_DATE, C.SQLT_TIMESTAMP, C.SQLT_TIMESTAMP_TZ, C.SQLT_TIMESTAMP_LTZ:
 		return DateTimeVarType, nil
+	case C.SQLT_INTERVAL_DS:
+		return IntervalVarType, nil
 	/* FIXME
 	   	case C.SQLT_LNG:
 	   		return LongStringVarType, nil
 	       case C.SQLT_LBI:
 	           return LongBinaryVarType, nil
-	       case C.SQLT_INTERVAL_DS:
-	           return IntervalVarType
 	       case C.SQLT_RSET:
 	           return CursorVarType, nil
 	           // case C.SQLT_NTY:
