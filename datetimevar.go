@@ -46,6 +46,7 @@ import (
 )
 
 var (
+	IntervalWorks                    bool = false
 	DateTimeVarType, IntervalVarType *VariableType
 )
 

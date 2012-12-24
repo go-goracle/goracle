@@ -382,11 +382,9 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 	case *Variable:
 		return x.typ, x.typ.size, 0, nil
 	case string:
-		/* FIXME
 		if len(x) > MAX_STRING_CHARS {
-			return LongStringVarType, len(x), 0, nil
+			return LongStringVarType, uint(len(x)), 0, nil
 		}
-		*/
 		return StringVarType, uint(len(x)), 0, nil
 	case bool:
 		return BooleanVarType, 0, 0, nil
@@ -398,18 +396,16 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return FloatVarType, 0, 0, nil
 	case time.Time:
 		return DateTimeVarType, 0, 0, nil
+	case time.Duration:
+		return IntervalVarType, 0, 0, nil
 		/* FIXME
-			case time.Duration:
-				return IntervarlVarType, 0, 0, nil
-		    case CursorType:
-		        return CursorVarType, 0, 0, nil
+		   case CursorType:
+		       return CursorVarType, 0, 0, nil
 		*/
 	case []byte:
-		/* FIXME
 		if len(x) > MAX_BINARY_BYTES {
-			return LongBinaryVarType, len(x), 0, nil
+			return LongBinaryVarType, uint(len(x)), 0, nil
 		}
-		*/
 		return BinaryVarType, uint(len(x)), 0, nil
 	case []interface{}:
 		numElements = uint(len(x))
@@ -439,11 +435,11 @@ func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableTyp
 		return DateTimeVarType, nil
 	case C.SQLT_INTERVAL_DS:
 		return IntervalVarType, nil
+		return LongStringVarType, nil
+	case C.SQLT_LBI:
+		return LongBinaryVarType, nil
 	/* FIXME
 	   	case C.SQLT_LNG:
-	   		return LongStringVarType, nil
-	       case C.SQLT_LBI:
-	           return LongBinaryVarType, nil
 	       case C.SQLT_RSET:
 	           return CursorVarType, nil
 	           // case C.SQLT_NTY:
@@ -772,6 +768,8 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 
 	// perform the define
 	aL, rC := v.aLrC()
+	log.Printf("OCIDefineByPos(typ=%s, pos=%d, data=%v, size=%d, oracleType=%d, indicator=%v aL=%v rC=%v",
+		v.typ, position, v.getDataArr(), v.bufferSize, v.typ.oracleType, v.indicator, aL, rC)
 	if err = cur.environment.CheckStatus(
 		C.OCIDefineByPos(cur.handle,
 			&v.defineHandle,

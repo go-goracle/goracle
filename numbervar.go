@@ -26,94 +26,6 @@ var (
 	NumberAsStringVarType, BooleanVarType          *VariableType
 )
 
-func init() {
-	FloatVarType = &VariableType{
-		Name:             "Float",
-		preDefine:        numberVar_PreDefine,
-		setValue:         numberVar_SetValue,
-		getValue:         numberVar_GetValue,
-		oracleType:       C.SQLT_VNU,         // Oracle type
-		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
-		size:             C.sizeof_OCINumber, // element length
-		isCharData:       false,              // is character data
-		isVariableLength: false,              // is variable length
-		canBeCopied:      true,               // can be copied
-		canBeInArray:     true,               // can be in array
-	}
-
-	NativeFloatVarType = &VariableType{
-		Name:             "NativeFloat",
-		setValue:         numberVar_SetValue,
-		getValue:         numberVar_GetValue,
-		oracleType:       C.SQLT_BDOUBLE,   // Oracle type
-		charsetForm:      C.SQLCS_IMPLICIT, // charset form
-		size:             C.sizeof_double,  // element length
-		isCharData:       false,            // is character data
-		isVariableLength: false,            // is variable length
-		canBeCopied:      true,             // can be copied
-		canBeInArray:     true,             // can be in array
-	}
-
-	Int32VarType = &VariableType{
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
-		oracleType:   C.SQLT_VNU,         // Oracle type
-		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
-		size:         C.sizeof_OCINumber, // element length
-		canBeCopied:  true,               // can be copied
-		canBeInArray: true,               // can be in array
-	}
-
-	Int64VarType = &VariableType{
-		Name:         "Int64",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
-		oracleType:   C.SQLT_VNU,         // Oracle type
-		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
-		size:         C.sizeof_OCINumber, // element length
-		canBeCopied:  true,               // can be copied
-		canBeInArray: true,               // can be in array
-	}
-
-	LongIntegerVarType = &VariableType{
-		Name:         "LongInteger",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
-		oracleType:   C.SQLT_VNU,         // Oracle type
-		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
-		size:         C.sizeof_OCINumber, // element length
-		canBeCopied:  true,               // can be copied
-		canBeInArray: true,               // can be in array
-	}
-
-	NumberAsStringVarType = &VariableType{
-		Name:         "NumberAsString",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
-		oracleType:   C.SQLT_VNU,         // Oracle type
-		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
-		size:         C.sizeof_OCINumber, // element length
-		canBeCopied:  true,               // can be copied
-		canBeInArray: true,               // can be in array
-	}
-
-	BooleanVarType = &VariableType{
-		Name:         "Boolean",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
-		oracleType:   C.SQLT_VNU,         // Oracle type
-		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
-		size:         C.sizeof_OCINumber, // element length
-		canBeCopied:  true,               // can be copied
-		canBeInArray: true,               // can be in array
-	}
-}
-
 func (t *VariableType) IsNumber() bool {
 	switch t {
 	case BooleanVarType, NumberAsStringVarType, LongIntegerVarType, Int64VarType, Int32VarType, FloatVarType, NativeFloatVarType:
@@ -323,4 +235,92 @@ func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 			C.sizeof_double, unsafe.Pointer(&floatVal)),
 		"numberToFloat")
 	return floatVal, err
+}
+
+func init() {
+	FloatVarType = &VariableType{
+		Name:             "Float",
+		preDefine:        numberVar_PreDefine,
+		setValue:         numberVar_SetValue,
+		getValue:         numberVar_GetValue,
+		oracleType:       C.SQLT_VNU,         // Oracle type
+		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
+		size:             C.sizeof_OCINumber, // element length
+		isCharData:       false,              // is character data
+		isVariableLength: false,              // is variable length
+		canBeCopied:      true,               // can be copied
+		canBeInArray:     true,               // can be in array
+	}
+
+	NativeFloatVarType = &VariableType{
+		Name:             "NativeFloat",
+		setValue:         numberVar_SetValue,
+		getValue:         numberVar_GetValue,
+		oracleType:       C.SQLT_BDOUBLE,   // Oracle type
+		charsetForm:      C.SQLCS_IMPLICIT, // charset form
+		size:             C.sizeof_double,  // element length
+		isCharData:       false,            // is character data
+		isVariableLength: false,            // is variable length
+		canBeCopied:      true,             // can be copied
+		canBeInArray:     true,             // can be in array
+	}
+
+	Int32VarType = &VariableType{
+		preDefine:    numberVar_PreDefine,
+		setValue:     numberVar_SetValue,
+		getValue:     numberVar_GetValue,
+		oracleType:   C.SQLT_VNU,         // Oracle type
+		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
+		size:         C.sizeof_OCINumber, // element length
+		canBeCopied:  true,               // can be copied
+		canBeInArray: true,               // can be in array
+	}
+
+	Int64VarType = &VariableType{
+		Name:         "Int64",
+		preDefine:    numberVar_PreDefine,
+		setValue:     numberVar_SetValue,
+		getValue:     numberVar_GetValue,
+		oracleType:   C.SQLT_VNU,         // Oracle type
+		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
+		size:         C.sizeof_OCINumber, // element length
+		canBeCopied:  true,               // can be copied
+		canBeInArray: true,               // can be in array
+	}
+
+	LongIntegerVarType = &VariableType{
+		Name:         "LongInteger",
+		preDefine:    numberVar_PreDefine,
+		setValue:     numberVar_SetValue,
+		getValue:     numberVar_GetValue,
+		oracleType:   C.SQLT_VNU,         // Oracle type
+		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
+		size:         C.sizeof_OCINumber, // element length
+		canBeCopied:  true,               // can be copied
+		canBeInArray: true,               // can be in array
+	}
+
+	NumberAsStringVarType = &VariableType{
+		Name:         "NumberAsString",
+		preDefine:    numberVar_PreDefine,
+		setValue:     numberVar_SetValue,
+		getValue:     numberVar_GetValue,
+		oracleType:   C.SQLT_VNU,         // Oracle type
+		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
+		size:         C.sizeof_OCINumber, // element length
+		canBeCopied:  true,               // can be copied
+		canBeInArray: true,               // can be in array
+	}
+
+	BooleanVarType = &VariableType{
+		Name:         "Boolean",
+		preDefine:    numberVar_PreDefine,
+		setValue:     numberVar_SetValue,
+		getValue:     numberVar_GetValue,
+		oracleType:   C.SQLT_VNU,         // Oracle type
+		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
+		size:         C.sizeof_OCINumber, // element length
+		canBeCopied:  true,               // can be copied
+		canBeInArray: true,               // can be in array
+	}
 }

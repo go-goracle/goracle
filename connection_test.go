@@ -99,7 +99,7 @@ func TestCursor(t *testing.T) {
 		t.Logf("%03d: %v", i, row)
 	}
 
-	qry = `SELECT SYSDATE FROM DUAL`
+	qry = `SELECT TO_DATE('2006-01-02 15:04:05', 'YYYY-MM-DD HH24:MI:SS') FROM DUAL`
 	if err = cur.Execute(qry, nil, nil); err != nil {
 		t.Logf(`error with "%s": %s`, qry, err)
 		t.Fail()
@@ -110,16 +110,35 @@ func TestCursor(t *testing.T) {
 	}
 	t.Logf("%03d: %v", 0, row)
 
-	qry = `SELECT TO_DSINTERVAL('2 10:20:30.456') FROM DUAL`
-	if err = cur.Execute(qry, nil, nil); err != nil {
-		t.Logf(`error with "%s": %s`, qry, err)
-		t.Fail()
+	if IntervalWorks {
+		qry = `SELECT TO_DSINTERVAL('2 10:20:30.456') FROM DUAL`
+		if err = cur.Execute(qry, nil, nil); err != nil {
+			t.Logf(`error with "%s": %s`, qry, err)
+			t.Fail()
+		}
+		if row, err = cur.FetchOne(); err != nil {
+			t.Logf("error fetching: %s", err)
+			t.Fail()
+		}
+		t.Logf("%03d: %v", 0, row)
 	}
-	if row, err = cur.FetchOne(); err != nil {
-		t.Logf("error fetching: %s", err)
-		t.Fail()
+
+	if err = cur.Execute("CREATE TABLE w (x LONG)", nil, nil); err != nil {
+		t.Logf("cannot check LONG: %s", err)
+	} else {
+		cur.Execute("INSERT INTO w VALUES 'a'", nil, nil)
+		qry = `SELECT x FROM w`
+		if err = cur.Execute(qry, nil, nil); err != nil {
+			t.Logf(`error with "%s": %s`, qry, err)
+			t.Fail()
+		}
+		if row, err = cur.FetchOne(); err != nil {
+			t.Logf("error fetching: %s", err)
+			t.Fail()
+		}
+		t.Logf("row: %v", row)
+		cur.Execute("DROP TABLE w", nil, nil)
 	}
-	t.Logf("%03d: %v", 0, row)
 }
 
 var conn Connection

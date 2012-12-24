@@ -57,19 +57,18 @@ func NewEnvironment() (*Environment, error) {
 		setErrAt(err, "Unable to acquire Oracle environment handle")
 		return nil, err
 	}
-	/*
-		buffer := []byte("AL32UTF8\000")
-		csid := C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
-			(*C.oratext)(&buffer[0]))
-		log.Printf("csid=%d", csid)
-		if err = CheckStatus(C.OCIEnvNlsCreate(
-			&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
-			csid, 0),
-			"Unable to acquire Oracle environment handle with AL32UTF8 charset"); err != nil {
-			return nil, err
-		}
-	*/
-	// log.Printf("env=%+v err=%+v", env.handle, err)
+	buffer := []byte("AL32UTF8\000")
+	csid := C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
+		(*C.oratext)(&buffer[0]))
+	C.OCIHandleFree(unsafe.Pointer(&env.handle), C.OCI_HTYPE_ENV)
+	log.Printf("csid=%d", csid)
+	if err = checkStatus(C.OCIEnvNlsCreate(
+		&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
+		csid, csid), false); err != nil {
+		setErrAt(err, "Unable to acquire Oracle environment handle with AL32UTF8 charset")
+		return nil, err
+	}
+	log.Printf("env=%+v err=%+v", env.handle, err)
 
 	// create the error handle
 	if err = ociHandleAlloc(unsafe.Pointer(env.handle),
