@@ -182,6 +182,7 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 	}()
 
 	if v.dataBytes != nil {
+		log.Printf("getDataArr(%d) len=%d", v.typ.oracleType, len(v.dataBytes))
 		return (unsafe.Pointer(&v.dataBytes[0]))
 	} else if v.dataInts != nil {
 		return (unsafe.Pointer(&v.dataInts[0]))
@@ -210,8 +211,7 @@ func (v *Variable) allocateData() error {
 	if dataLength > 1<<31-1 {
 		return ArrayTooLarge
 	}
-	log.Printf("bufsize=%d dataLength=%d", v.bufferSize, dataLength)
-	log.Printf("IsNumber?%s isCharData?%s", v.typ.IsNumber(), v.typ.isCharData)
+	log.Printf("%s bufsize=%d dataLength=%d", v.typ, v.bufferSize, dataLength)
 	v.dataFloats = nil
 	v.dataInts = nil
 	v.dataBytes = nil
@@ -226,7 +226,7 @@ func (v *Variable) allocateData() error {
 		}
 	} else {
 		v.dataBytes = make([]byte, dataLength)
-		log.Printf("bytes=%v", unsafe.Pointer(&v.dataBytes[0]))
+		log.Printf("bytes=%v (%d)", unsafe.Pointer(&v.dataBytes[0]), len(v.dataBytes))
 	}
 
 	return nil

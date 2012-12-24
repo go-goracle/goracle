@@ -66,7 +66,7 @@ func dateTimeVar_SetValue(v *Variable, pos uint, value interface{}) error {
 				x.Hour(), x.Minute(), x.Second()),
 			"OCIDateSetTime")
 	*/
-	C.setDateTime((*C.OCIDate)(unsafe.Pointer(&v.dataBytes[pos*C.sizeof_OCIDate])),
+	C.setDateTime((*C.OCIDate)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size])),
 		C.sb2(x.Year()), C.ub1(x.Month()), C.ub1(x.Day()),
 		C.ub1(x.Hour()), C.ub1(x.Minute()), C.ub1(x.Second()))
 	return nil
@@ -90,7 +90,7 @@ func dateTimeVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 			return nil, err
 		}
 	*/
-	C.getDateTime((*C.OCIDate)(unsafe.Pointer(&v.dataBytes[pos*C.sizeof_OCIDate])),
+	C.getDateTime((*C.OCIDate)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size])),
 		&year, &month, &day, &hour, &minute, &second)
 	return time.Date(int(year), time.Month(month), int(day),
 		int(hour), int(minute), int(second), 0, time.Local), nil
@@ -112,8 +112,9 @@ func internalVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	microseconds = C.sb4(float64(x.Nanoseconds()/1000) - x.Seconds()*1000*1000)
 	return v.environment.CheckStatus(
 		C.OCIIntervalSetDaySecond(unsafe.Pointer(v.environment.handle),
-			v.environment.errorHandle, days, hours, minutes,
-			seconds, microseconds, (*C.OCIInterval)(unsafe.Pointer(&v.dataBytes[pos]))),
+			v.environment.errorHandle,
+			days, hours, minutes, seconds, microseconds,
+			(*C.OCIInterval)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size]))),
 		"IntervalSetDaySecond")
 }
 
@@ -123,8 +124,9 @@ func internalVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 
 	if err := v.environment.CheckStatus(
 		C.OCIIntervalGetDaySecond(unsafe.Pointer(v.environment.handle),
-			v.environment.errorHandle, &days, &hours, &minutes, &seconds,
-			&microseconds, (*C.OCIInterval)(unsafe.Pointer((&v.dataBytes[pos])))),
+			v.environment.errorHandle,
+			&days, &hours, &minutes, &seconds, &microseconds,
+			(*C.OCIInterval)(unsafe.Pointer((&v.dataBytes[pos*v.typ.size])))),
 		"internalVar_GetValue"); err != nil {
 		return nil, err
 	}
