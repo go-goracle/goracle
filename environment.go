@@ -22,7 +22,7 @@ type Environment struct {
 	handle                       *C.OCIEnv
 	errorHandle                  *C.OCIError
 	maxBytesPerCharacter         uint
-	fixedWidth                   uint
+	fixedWidth                   bool
 	encoding                     string
 	nencoding                    string
 	maxStringBytes               uint
@@ -37,34 +37,38 @@ const (
 	MAX_BINARY_BYTES = 4000
 )
 
+var CSID_AL32UTF8 C.ub2
+
 // Create and initialize a new environment object
 func NewEnvironment() (*Environment, error) {
 	var err error
 
 	// create a new object for the Oracle environment
 	env := new(Environment)
-	env.fixedWidth = 1
+	env.fixedWidth = false
 	env.maxBytesPerCharacter = 4
 	env.maxStringBytes = MAX_STRING_CHARS
 	env.numberToStringFormatBuffer = []byte("TM9")
 	env.numberFromStringFormatBuffer = []byte("999999999999999999999999999999999999999999999999999999999999999")
 	env.nlsNumericCharactersBuffer = []byte("NLS_NUMERIC_CHARACTERS='.,'")
 
-	// create the new environment handle
-	if err = checkStatus(C.OCIEnvNlsCreate(&env.handle,
-		C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0, 0),
-		false); err != nil { //, C.ub2(873), 0),
-		setErrAt(err, "Unable to acquire Oracle environment handle")
-		return nil, err
+	if CSID_AL32UTF8 == 0 {
+		// create the new environment handle
+		if err = checkStatus(C.OCIEnvNlsCreate(&env.handle,
+			C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0, 0),
+			false); err != nil { //, C.ub2(873), 0),
+			setErrAt(err, "Unable to acquire Oracle environment handle")
+			return nil, err
+		}
+		buffer := []byte("AL32UTF8\000")
+		CSID_AL32UTF8 = C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
+			(*C.oratext)(&buffer[0]))
+		C.OCIHandleFree(unsafe.Pointer(&env.handle), C.OCI_HTYPE_ENV)
+		log.Printf("csid=%d", CSID_AL32UTF8)
 	}
-	buffer := []byte("AL32UTF8\000")
-	csid := C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
-		(*C.oratext)(&buffer[0]))
-	C.OCIHandleFree(unsafe.Pointer(&env.handle), C.OCI_HTYPE_ENV)
-	log.Printf("csid=%d", csid)
 	if err = checkStatus(C.OCIEnvNlsCreate(
 		&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
-		csid, csid), false); err != nil {
+		CSID_AL32UTF8, CSID_AL32UTF8), false); err != nil {
 		setErrAt(err, "Unable to acquire Oracle environment handle with AL32UTF8 charset")
 		return nil, err
 	}
@@ -94,7 +98,7 @@ func NewEnvironment() (*Environment, error) {
 		"Environment_New(): determine if charset fixed width"); err != nil {
 		return nil, err
 	}
-	env.fixedWidth = uint(sb4)
+	env.fixedWidth = sb4 > 0
 
 	var e error
 	// determine encodings to use for Unicode values

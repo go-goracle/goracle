@@ -32,6 +32,7 @@ type Variable struct {
 	boundName         string
 	//PyObject*inConverter;
 	//PyObject*outConverter;
+	connection                        *Connection //for LOBs
 	typ                               *VariableType
 	allocatedElements, actualElements uint
 	boundPos, internalFetchNum        uint
@@ -438,22 +439,22 @@ func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableTyp
 		return LongStringVarType, nil
 	case C.SQLT_LBI:
 		return LongBinaryVarType, nil
-	/* FIXME
-	   	case C.SQLT_LNG:
-	       case C.SQLT_RSET:
-	           return CursorVarType, nil
-	           // case C.SQLT_NTY:
-	           //     return &vt_Object;
-	       case C.SQLT_CLOB:
-	           if charsetForm == C.SQLCS_NCHAR {
-	               return NClobVarType, nil
-	           }
-	           return ClobVarType, nil
-	       case C.SQLT_BLOB:
-	           return BlobVarType, nil
-	       case C.SQLT_BFILE:
-	           return BFileVarType, nil
-	*/
+		/* FIXME
+		   	case C.SQLT_LNG:
+		       case C.SQLT_RSET:
+		           return CursorVarType, nil
+		           // case C.SQLT_NTY:
+		           //     return &vt_Object;
+		*/
+	case C.SQLT_CLOB:
+		if charsetForm == C.SQLCS_NCHAR {
+			return NClobVarType, nil
+		}
+		return ClobVarType, nil
+	case C.SQLT_BLOB:
+		return BlobVarType, nil
+	case C.SQLT_BFILE:
+		return BFileVarType, nil
 	case C.SQLT_AFC:
 		return FixedCharVarType, nil
 	case C.SQLT_CHR:
