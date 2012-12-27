@@ -1,6 +1,3 @@
-// Copyright 2012-2013 Tamás Gulácsi
-// See LICENSE.txt
-// Translated from cx_Oracle ((c) Anthony Tuininga) by Tamás Gulácsi
 package goracle
 
 /*
