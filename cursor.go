@@ -1,6 +1,3 @@
-// Copyright 2012-2013 Tamás Gulácsi
-// See LICENSE.txt
-// Translated from cx_Oracle ((c) Anthony Tuininga) by Tamás Gulácsi
 package goracle
 
 /*
@@ -1126,7 +1123,6 @@ func (cur *Cursor) ExecuteMany(statement string, params []map[string]interface{}
 	return nil
 }
 
-//-----------------------------------------------------------------------------
 // Execute the prepared statement the number of times requested. At this
 // point, the statement must have been already prepared and the bind variables
 // must have their values set.

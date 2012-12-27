@@ -1,6 +1,3 @@
-// Copyright 2012-2013 Tamás Gulácsi
-// See LICENSE.txt
-// Translated from cx_Oracle ((c) Anthony Tuininga) by Tamás Gulácsi
 package goracle
 
 /*
@@ -281,90 +278,6 @@ func (v *Variable) resize(size uint) error {
 	return nil
 }
 
-/*
-//-----------------------------------------------------------------------------
-// Variable_TypeByPythonType()
-//   Return a variable type given a Python type object or NULL if the Python
-// type does not have a corresponding variable type.
-//-----------------------------------------------------------------------------
-static udt_VariableType *Variable_TypeByPythonType(
-    udt_Cursor* cursor,                 // cursor variable created for
-    PyObject* type)                     // Python type
-{
-    if (type == (PyObject*) &g_StringVarType)
-        return &vt_String;
-    if (type == (PyObject*) cxString_Type)
-        return &vt_String;
-    if (type == (PyObject*) &g_FixedCharVarType)
-        return &vt_FixedChar;
-#if PY_MAJOR_VERSION < 3
-    if (type == (PyObject*) &g_UnicodeVarType)
-        return &vt_NationalCharString;
-    if (type == (PyObject*) &PyUnicode_Type)
-        return &vt_NationalCharString;
-    if (type == (PyObject*) &g_FixedUnicodeVarType)
-        return &vt_FixedNationalChar;
-#endif
-    if (type == (PyObject*) &g_NCLOBVarType)
-        return &vt_NCLOB;
-    if (type == (PyObject*) &g_RowidVarType)
-        return &vt_Rowid;
-    if (type == (PyObject*) &g_BinaryVarType)
-        return &vt_Binary;
-    if (type == (PyObject*) &cxBinary_Type)
-        return &vt_Binary;
-    if (type == (PyObject*) &g_LongStringVarType)
-        return &vt_LongString;
-    if (type == (PyObject*) &g_LongBinaryVarType)
-        return &vt_LongBinary;
-    if (type == (PyObject*) &g_BFILEVarType)
-        return &vt_BFILE;
-    if (type == (PyObject*) &g_BLOBVarType)
-        return &vt_BLOB;
-    if (type == (PyObject*) &g_CLOBVarType)
-        return &vt_CLOB;
-    if (type == (PyObject*) &g_NumberVarType) {
-        if (cursor->numbersAsStrings)
-            return &vt_NumberAsString;
-        return &vt_Float;
-    }
-    if (type == (PyObject*) &PyFloat_Type)
-        return &vt_Float;
-#if PY_MAJOR_VERSION < 3
-    if (type == (PyObject*) &PyInt_Type)
-        return &vt_Integer;
-#endif
-    if (type == (PyObject*) &PyLong_Type)
-        return &vt_LongInteger;
-    if (type == (PyObject*) &PyBool_Type)
-        return &vt_Boolean;
-    if (type == (PyObject*) &g_DateTimeVarType)
-        return &vt_DateTime;
-    if (type == (PyObject*) PyDateTimeAPI->DateType)
-        return &vt_Date;
-    if (type == (PyObject*) PyDateTimeAPI->DateTimeType)
-        return &vt_DateTime;
-    if (type == (PyObject*) &g_IntervalVarType)
-        return &vt_Interval;
-    if (type == (PyObject*) PyDateTimeAPI->DeltaType)
-        return &vt_Interval;
-    if (type == (PyObject*) &g_TimestampVarType)
-        return &vt_Timestamp;
-    if (type == (PyObject*) &g_CursorVarType)
-        return &vt_Cursor;
-#ifdef SQLT_BFLOAT
-    if (type == (PyObject*) &g_NativeFloatVarType)
-        return &vt_NativeFloat;
-#endif
-    if (type == (PyObject*) &g_ObjectVarType)
-        return &vt_Object;
-
-    PyErr_SetString(g_NotSupportedErrorException,
-            "Variable_TypeByPythonType(): unhandled data type");
-    return NULL;
-}
-
-*/
 // Go => Oracle type conversion interface
 type OraTyper interface {
 	GetVarType() *VariableType
