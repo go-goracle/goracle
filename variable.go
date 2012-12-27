@@ -44,6 +44,7 @@ type Variable struct {
 	dataBytes                         []byte
 	dataInts                          []int64
 	dataFloats                        []float64
+	cursors                           []*Cursor
 }
 
 // allocate a new variable
@@ -239,6 +240,8 @@ func (v *Variable) Free() {
 		if v.typ.finalize != nil {
 			v.typ.finalize(v)
 		}
+		v.connection = nil
+		v.cursors = nil
 		v.indicator = nil
 		v.dataBytes = nil
 		v.dataInts = nil
@@ -399,10 +402,8 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return DateTimeVarType, 0, 0, nil
 	case time.Duration:
 		return IntervalVarType, 0, 0, nil
-		/* FIXME
-		   case CursorType:
-		       return CursorVarType, 0, 0, nil
-		*/
+	// case CursorVarType:
+	// 	return CursorVarType, 0, 0, nil
 	case []byte:
 		if len(x) > MAX_BINARY_BYTES {
 			return LongBinaryVarType, uint(len(x)), 0, nil
@@ -436,16 +437,14 @@ func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableTyp
 		return DateTimeVarType, nil
 	case C.SQLT_INTERVAL_DS:
 		return IntervalVarType, nil
+	case C.SQLT_LNG:
 		return LongStringVarType, nil
 	case C.SQLT_LBI:
 		return LongBinaryVarType, nil
-		/* FIXME
-		   	case C.SQLT_LNG:
-		       case C.SQLT_RSET:
-		           return CursorVarType, nil
-		           // case C.SQLT_NTY:
-		           //     return &vt_Object;
-		*/
+	case C.SQLT_RSET:
+		return CursorVarType, nil
+		// case C.SQLT_NTY:
+		//     return &vt_Object;
 	case C.SQLT_CLOB:
 		if charsetForm == C.SQLCS_NCHAR {
 			return NClobVarType, nil

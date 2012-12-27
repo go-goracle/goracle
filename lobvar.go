@@ -148,6 +148,11 @@ func lobVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 	return NewExternalLobVar(v, pos), nil
 }
 
+func lobVar_GetValueInto(v *Variable, pos uint, lv *ExternalLobVar) error {
+	*lv = *NewExternalLobVar(v, pos)
+	return nil
+}
+
 // Sets the value stored at the given array position.
 func lobVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	x, ok := value.([]byte)

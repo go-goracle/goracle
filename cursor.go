@@ -56,7 +56,7 @@ var (
 //statement // statementTag // rowFactory // inputTypeHandler // outputTypeHandler
 
 //   Allocate a new handle.
-func (cur *Cursor) allocateHandle(typ C.ub4) error {
+func (cur *Cursor) allocateHandle() error {
 	cur.isOwned = true
 	return ociHandleAlloc(unsafe.Pointer(cur.environment.handle),
 		C.OCI_HTYPE_STMT,
