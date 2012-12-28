@@ -1,7 +1,9 @@
 # goracle #
-Translate cx_Oracle (by Anthony Tuininga) from C (Python module) to Go.
+*goracle/oracle* is a package is a translated version of
+cx_Oracle (by Anthony Tuininga) converted from C (Python module) to Go.
 
-NOT database/sql compliant, but I hope someone will write the additional layer...
+*goracle/godrv* is a package which (will be) a database/sql/driver.Driver
+compliant wrapper for goracle/oracle.
 
 ## There ##
 CHAR, VARCHAR2, NUMBER, DATETIME simple (not array) bind/define.

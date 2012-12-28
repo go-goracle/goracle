@@ -1,7 +1,7 @@
 // Copyright 2012-2013 Tamás Gulácsi
 // See LICENSE.txt
 // Translated from cx_Oracle ((c) Anthony Tuininga) by Tamás Gulácsi
-package goracle
+package oracle
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64

@@ -1,4 +1,4 @@
-package goracle
+package oracle
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64

@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/tgulacsi/goracle"
+	"github.com/tgulacsi/goracle/oracle"
 	"log"
 	"os"
 	"os/signal"
@@ -53,9 +53,9 @@ func TestCursor(t *testing.T) {
 
 }
 
-var conn goracle.Connection
+var conn oracle.Connection
 
-func getConnection(t *testing.T) goracle.Connection {
+func getConnection(t *testing.T) oracle.Connection {
 	if conn.IsConnected() {
 		return conn
 	}
@@ -64,10 +64,10 @@ func getConnection(t *testing.T) goracle.Connection {
 		t.Logf("cannot test connection without dsn!")
 		return conn
 	}
-	user, passw, sid := goracle.SplitDsn(*dsn)
+	user, passw, sid := oracle.SplitDsn(*dsn)
 	var err error
 	log.Printf("connecting to %s", *dsn)
-	conn, err = goracle.NewConnection(user, passw, sid)
+	conn, err = oracle.NewConnection(user, passw, sid)
 	if err != nil {
 		t.Logf("error creating connection to %s: %s", *dsn, err)
 		t.Fail()

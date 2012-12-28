@@ -1,4 +1,4 @@
-package goracle
+package oracle
 
 import (
 	"fmt"
