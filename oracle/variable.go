@@ -112,6 +112,14 @@ type VariableType struct {
 	getBufferSize                func(*Variable) uint
 }
 
+// FIXME: proper Into, not just this dummy
+// fetches value into the dest pointer
+func (t *VariableType) getValueInto(dest *interface{}, v *Variable, pos uint) error {
+	var err error
+	*dest, err = t.getValue(v, pos)
+	return err
+}
+
 //   Returns a boolean indicating if the object is a variable.
 func isVariable(value interface{}) bool {
 	//FIXME
@@ -859,14 +867,43 @@ func (v *Variable) getSingleValue(arrayPos uint) (interface{}, error) {
 	*/
 }
 
+// Insert the value of the variable at the given position into the pointer
+func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
+	var isNull bool
+
+	// ensure we do not exceed the number of allocated elements
+	if arrayPos >= v.allocatedElements {
+		return errors.New("Variable_GetSingleValue: array size exceeded")
+	}
+
+	// check for a NULL value
+	if v.typ.isNull != nil {
+		isNull = v.typ.isNull(v, arrayPos)
+	} else {
+		isNull = v.indicator[arrayPos] == C.OCI_IND_NULL
+	}
+	if isNull {
+		*dest = nil
+		return nil
+	}
+
+	// check for truncation or other problems on retrieve
+	if err := v.verifyFetch(arrayPos); err != nil {
+		return err
+	}
+
+	// calculate value to return
+	return v.typ.getValueInto(dest, v, arrayPos)
+}
+
 // Return the value of the variable as an array.
 func (v *Variable) getArrayValue(numElements uint) (interface{}, error) {
 	value := make([]interface{}, numElements)
 	var singleValue interface{}
 	var err error
 
-	for i := 0; i < int(numElements); i++ {
-		if singleValue, err = v.getSingleValue(uint(i)); err != nil {
+	for i := uint(0); i < numElements; i++ {
+		if singleValue, err = v.getSingleValue(i); err != nil {
 			return nil, err
 		}
 		value[i] = singleValue
@@ -875,12 +912,47 @@ func (v *Variable) getArrayValue(numElements uint) (interface{}, error) {
 	return value, nil
 }
 
+// Insert the value of the variable as an array into the given pointer
+func (v *Variable) getArrayValueInto(dest interface{}, numElements uint) error {
+	var valp *[]interface{}
+	valp, ok := dest.(*[]interface{})
+	if !ok {
+		if val, ok := dest.([]interface{}); !ok {
+			return fmt.Errorf("getArrayValueInto requires *[]interface{}, got %T", dest)
+		} else {
+			valp = &val
+		}
+	}
+	*valp = (*valp)[:numElements]
+	if missnum := numElements-uint(cap(*valp)); missnum > 0 {
+		*valp = append(*valp, make([]interface{}, missnum)...)
+	}
+
+	var err error
+
+	for i := uint(0); i < numElements; i++ {
+		if err = v.getSingleValueInto(&(*valp)[i], i); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Return the value of the variable.
 func (v *Variable) GetValue(arrayPos uint) (interface{}, error) {
 	if v.isArray {
 		return v.getArrayValue(uint(v.actualElements))
 	}
 	return v.getSingleValue(arrayPos)
+}
+
+// Insert the value of the variable into the given pointer
+func (v *Variable) GetValueInto(dest *interface{}, arrayPos uint) error {
+	if v.isArray {
+		return v.getArrayValueInto(dest, uint(v.actualElements))
+	}
+	return v.getSingleValueInto(dest, arrayPos)
 }
 
 // Set a single value in the variable.

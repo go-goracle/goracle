@@ -247,6 +247,16 @@ func (cur *Cursor) setRowCount() error {
 	return nil
 }
 
+// returns the rowcount of the statement (0 for select, rows affected for DML)
+func (cur Cursor) GetRowCount() int {
+	return cur.rowCount
+}
+
+// returns the bind variables array and map
+func (cur Cursor) GetBindVars() ([]*Variable, map[string]*Variable) {
+	return cur.bindVarsArr, cur.bindVarsMap
+}
+
 // Get the error offset on the error object, if applicable.
 func (cur *Cursor) getErrorOffset() int {
 	var offset, x C.ub4
@@ -704,6 +714,29 @@ func (cur *Cursor) createRow() ([]interface{}, error) {
 	   return tuple;
 	*/
 	return row, nil
+}
+
+// Fetch current row's columns into the given pointers
+func (cur *Cursor) fetchInto(row ...interface{}) error {
+	var err error
+	// create a new tuple
+	numItems := len(cur.fetchVariables)
+	if numItems != len(row) {
+		return fmt.Errorf("colnum mismatch: got %d, have %d", len(row), numItems)
+	}
+
+	// acquire the value for each item
+	for pos, v := range cur.fetchVariables {
+		if err = v.GetValueInto(&row[pos], uint(cur.rowNum)); err != nil {
+			return err
+		}
+	}
+
+	// increment row counters
+	cur.rowNum++
+	cur.rowCount++
+
+	return nil
 }
 
 // Internal method for preparing a statement for execution.
@@ -1263,6 +1296,20 @@ func (cur *Cursor) FetchOne() (row []interface{}, err error) {
 		return
 	}
 	return cur.createRow()
+}
+
+// Fetch a single row from the cursor into the given column pointers
+func (cur *Cursor) FetchOneInto(row... interface{}) (err error) {
+	// verify fetch can be performed
+	if err = cur.verifyFetch(); err != nil {
+		return
+	}
+
+	// setup return value
+	if _, err = cur.moreRows(); err != nil {
+		return
+	}
+	return cur.fetchInto(row)
 }
 
 // Fetch multiple rows from the cursor based on the arraysize.

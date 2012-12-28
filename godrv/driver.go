@@ -5,76 +5,117 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"fmt"
+	// "fmt"
 	"github.com/tgulacsi/goracle/oracle"
 	// "io"
-	"math"
+	// "math"
 	// "net"
-	"reflect"
+	// "log"
+	// "reflect"
 	"strings"
-	"time"
+	// "time"
 	"unsafe"
 )
 
+var (
+	NotImplemented = errors.New("Not implemented")
+)
+
 type conn struct {
-	ora oracle.Connection
-}
-
-func (c conn) Prepare(query string) (driver.Stmt, error) {
-	st, err := c.ora.Prepare(query)
-	if err != nil {
-		return nil, err
-	}
-	return stmt{st}, nil
-}
-
-func (c conn) Close() error {
-	err := c.ora.Close()
-	c.ora = nil
-	return err
-}
-
-func (c conn) Begin() (driver.Tx, error) {
-	t, err := c.ora.Begin()
-	if err != nil {
-		return tx{nil}, err
-	}
-	return tx{t}, nil
-}
-
-type tx struct {
-	ora oracle.Connection //Transaction ?
-}
-
-func (t tx) Commit() error {
-	return t.ora.Commit()
-}
-
-func (t tx) Rollback() error {
-	return t.ora.Rollback()
+	cx *oracle.Connection
 }
 
 type stmt struct {
-	ora oracle.Cursor //Stmt ?
+	cu        *oracle.Cursor //Stmt ?
+	statement string
 }
 
-func (s stmt) Close() error {
-	err := s.ora.Delete()
-	s.ora = nil
-	return err
-}
-
-func (s stmt) NumInput() int {
-	return s.ora.NumParam()
-}
-
-func (s stmt) run(args []driver.Value) (*rowsRes, error) {
-	a := (*[]interface{})(unsafe.Pointer(&args))
-	res, err := s.ora.Run(*a...)
+// Prepare the query for execution, return a prepared statement and error
+func (c conn) Prepare(query string) (driver.Stmt, error) {
+	cu := c.cx.NewCursor()
+	err := cu.Prepare(query, "")
 	if err != nil {
 		return nil, err
 	}
-	return &rowsRes{res, res.MakeRow()}, nil
+	return stmt{cu: cu, statement: query}, nil
+}
+
+// closes the connection
+func (c conn) Close() error {
+	err := c.cx.Close()
+	c.cx = nil
+	return err
+}
+
+type tx struct {
+	cx *oracle.Connection //Transaction ?
+}
+
+// begins a transaction
+func (c conn) Begin() (driver.Tx, error) {
+	if !c.cx.IsConnected() {
+		if err := c.cx.Connect(0, false); err != nil {
+			return tx{cx: nil}, err
+		}
+	}
+	return tx{cx: c.cx}, nil
+}
+
+// commits currently opened transaction
+func (t tx) Commit() error {
+	return t.cx.NewCursor().Execute("COMMIT", nil, nil)
+}
+
+// rolls back current transaction
+func (t tx) Rollback() error {
+	return t.cx.Rollback()
+}
+
+// closes statement
+func (s stmt) Close() error {
+	if s.cu != nil {
+		s.cu.Close()
+		s.cu = nil
+	}
+	return nil
+}
+
+// number of input parameters
+func (s stmt) NumInput() int {
+	bva, bvm := s.cu.GetBindVars()
+	if bva != nil {
+		return len(bva)
+	} else if bvm != nil {
+		return len(bvm)
+	}
+	return 0
+}
+
+type rowsRes struct {
+	cu   *oracle.Cursor
+	cols []oracle.VariableDescription
+}
+
+// executes the statement
+func (s stmt) run(args []driver.Value) (*rowsRes, error) {
+	//A driver Value is a value that drivers must be able to handle.
+	//A Value is either nil or an instance of one of these types:
+	//int64
+	//float64
+	//bool
+	//[]byte
+	//string   [*] everywhere except from Rows.Next.
+	//time.Time
+
+	a := (*[]interface{})(unsafe.Pointer(&args))
+	if err := s.cu.Execute(s.statement, *a, nil); err != nil {
+		return nil, err
+	}
+	cols, err := s.cu.GetDescription()
+	if err != nil {
+		return nil, err
+	}
+	return &rowsRes{cu: s.cu, cols: cols}, nil
 }
 
 func (s stmt) Exec(args []driver.Value) (driver.Result, error) {
@@ -85,145 +126,76 @@ func (s stmt) Query(args []driver.Value) (driver.Rows, error) {
 	return s.run(args)
 }
 
-type rowsRes struct {
-	ora oracle.Result
-	row oracle.Row
-}
-
 func (r rowsRes) LastInsertId() (int64, error) {
-	return int64(r.ora.InsertId()), nil
+	return -1, NotImplemented
 }
 
 func (r rowsRes) RowsAffected() (int64, error) {
-	return int64(r.ora.AffectedRows()), nil
+	return int64(r.cu.GetRowCount()), nil
 }
 
+// resultset column names
 func (r rowsRes) Columns() []string {
-	flds := r.ora.Fields()
-	cls := make([]string, len(flds))
-	for i, f := range flds {
-		cls[i] = f.Name
+	cls := make([]string, len(r.cols))
+	for i, c := range r.cols {
+		cls[i] = c.Name
 	}
 	return cls
 }
 
+// closes the resultset
 func (r rowsRes) Close() error {
-	err := r.ora.End()
-	r.ora = nil
-	r.row = nil
-	if err != oracle.READ_AFTER_EOR_ERROR {
-		return err
+	if r.cu != nil {
+		r.cu.Close()
+		r.cu = nil
 	}
 	return nil
 }
 
 // DATE, DATETIME, TIMESTAMP are treated as they are in Local time zone
 func (r rowsRes) Next(dest []driver.Value) error {
-	err := r.ora.ScanRow(r.row)
-	if err != nil {
-		return err
-	}
-	for i, col := range r.row {
-		if col == nil {
-			dest[i] = nil
-			continue
-		}
-		switch c := col.(type) {
-		case time.Time:
-			dest[i] = c
-			continue
-		case oracle.Timestamp:
-			dest[i] = c.Time
-			continue
-		case oracle.Date:
-			dest[i] = c.Localtime()
-			continue
-		}
-		v := reflect.ValueOf(col)
-		switch v.Kind() {
-		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			// this contains time.Duration to
-			dest[i] = v.Int()
-		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			u := v.Uint()
-			if u > math.MaxInt64 {
-				panic("Value to large for int64 type")
-			}
-			dest[i] = int64(u)
-		case reflect.Float32, reflect.Float64:
-			dest[i] = v.Float()
-		case reflect.Slice:
-			if v.Type().Elem().Kind() == reflect.Uint8 {
-				dest[i] = v.Interface().([]byte)
-				break
-			}
-			fallthrough
-		default:
-			panic(fmt.Sprint("Unknown type of column: ", v.Type()))
-		}
-	}
-	return nil
+	a := (*[]interface{})(unsafe.Pointer(&dest))
+	return r.cu.FetchOneInto(*a...)
 }
 
 type Driver struct {
 	// Defaults
-	proto, laddr, raddr, user, passwd, db string
+	user, passwd, db string
 
 	initCmds []string
 }
 
 // Open new connection. The uri need to have the following syntax:
 //
-//   [PROTOCOL_SPECFIIC*]DBNAME/USER/PASSWD
+//   USER/PASSWD@SID
 //
-// where protocol spercific part may be empty (this means connection to
-// local server using default protocol). Currently possible forms:
-//   DBNAME/USER/PASSWD
-//   unix:SOCKPATH*DBNAME/USER/PASSWD
-//   tcp:ADDR*DBNAME/USER/PASSWD
+// SID (database identifier) can be a DSN (see goracle/oracle.MakeDSN)
 func (d *Driver) Open(uri string) (driver.Conn, error) {
-	pd := strings.SplitN(uri, "*", 2)
-	if len(pd) == 2 {
-		// Parse protocol part of URI
-		p := strings.SplitN(pd[0], ":", 2)
-		if len(p) != 2 {
-			return nil, errors.New("Wrong protocol part of URI")
-		}
-		d.proto = p[0]
-		d.raddr = p[1]
-		// Remove protocol part
-		pd = pd[1:]
+	p := strings.Index(uri, "/")
+	d.user = uri[:p]
+	q := strings.Index(uri[p+1:], "@")
+	if q < 0 {
+		q = len(uri) - 1
+	} else {
+		q += p + 1
 	}
-	// Parse database part of URI
-	dup := strings.SplitN(pd[0], "/", 3)
-	if len(dup) != 3 {
-		return nil, errors.New("Wrong database part of URI")
-	}
-	d.db = dup[0]
-	d.user = dup[1]
-	d.passwd = dup[2]
+	d.passwd = uri[p+1 : q]
+	d.db = uri[q+1:]
 
 	// Establish the connection
-	c := conn{oracle.New(d.proto, d.laddr, d.raddr, d.user, d.passwd, d.db)}
-	for _, q := range d.initCmds {
-		c.ora.Register(q) // Register initialisation commands
+	cx, err := oracle.NewConnection(d.user, d.passwd, d.db)
+	if err == nil {
+		err = cx.Connect(0, false)
 	}
-	if err := c.my.Connect(); err != nil {
+	if err != nil {
 		return nil, err
 	}
-	return &c, nil
+	return &conn{cx: &cx}, nil
 }
 
 // Driver automatically registered in database/sql
-var d = Driver{proto: "tcp", raddr: "127.0.0.1:1521"}
-
-// Registers initialisation commands.
-// This is workaround, see http://codereview.appspot.com/5706047
-func Register(query string) {
-	d.initCmds = append(d.initCmds, query)
-}
+var d = Driver{}
 
 func init() {
-	Register("SET NAMES utf8")
 	sql.Register("goracle", &d)
 }

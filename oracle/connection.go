@@ -107,13 +107,16 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	defer func() {
 		if err != nil {
 			if conn.sessionHandle != nil {
-				C.OCIHandleFree(unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION)
+				C.OCIHandleFree(unsafe.Pointer(conn.sessionHandle),
+					C.OCI_HTYPE_SESSION)
 			}
 			if conn.handle != nil {
-				C.OCIHandleFree(unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX)
+				C.OCIHandleFree(unsafe.Pointer(conn.handle),
+					C.OCI_HTYPE_SVCCTX)
 			}
 			if conn.serverHandle != nil {
-				C.OCIHandleFree(unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER)
+				C.OCIHandleFree(unsafe.Pointer(conn.serverHandle),
+					C.OCI_HTYPE_SERVER)
 			}
 		}
 	}()
@@ -265,7 +268,8 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 func (conn *Connection) Rollback() error {
 	conn.srvMtx.Lock()
 	defer conn.srvMtx.Unlock()
-	return conn.environment.CheckStatus(C.OCITransRollback(conn.handle, conn.environment.errorHandle,
+	return conn.environment.CheckStatus(
+		C.OCITransRollback(conn.handle, conn.environment.errorHandle,
 		C.OCI_DEFAULT), "Rollback")
 }
 
