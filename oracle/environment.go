@@ -8,6 +8,18 @@ package oracle
 #cgo LDFLAGS: -lclntsh -L/usr/lib/oracle/11.2/client64/lib
 
 #include <oci.h>
+#include <ociap.h>
+
+sword AttrGetName(const dvoid *mypard,
+				  ub4 parType,
+				  dvoid *name,
+				  ub4 *name_len,
+				  ub4 key,
+                  OCIError *errhp) {
+	return OCIAttrGet((dvoid*)mypard, (ub4)parType,
+       (dvoid**)&name, (ub4*)name_len,
+       (ub4)key, (OCIError*)errhp);
+}
 */
 import "C"
 
@@ -265,6 +277,20 @@ func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 		log.Printf("error gettint attr: %s", err)
 		return -1, err
 	}
+	return int(osize), nil
+}
+
+func (env *Environment) AttrGetName(parent unsafe.Pointer, parentType, key int,
+	dst []byte, errText string) (int, error) {
+	var osize C.ub4
+	if err := env.CheckStatus(
+		C.AttrGetName(parent, C.ub4(parentType),
+			unsafe.Pointer(&dst[0]), &osize, C.ub4(key),
+			env.errorHandle), errText); err != nil {
+		log.Printf("error gettint attr: %s", err)
+		return -1, err
+	}
+	log.Printf("osize=%d dst=%v", osize, dst)
 	return int(osize), nil
 }
 

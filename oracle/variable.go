@@ -158,12 +158,15 @@ func isVariable(value interface{}) bool {
 }
 
 func (t VariableType) IsBinary() bool {
+	//FIXME
 	return false
 }
 func (t VariableType) IsString() bool {
+	//FIXME
 	return false
 }
 func (t VariableType) IsDate() bool {
+	//FIXME
 	return false
 }
 
@@ -177,6 +180,7 @@ func (t *VariableType) String() string {
 }
 
 func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableType, error) {
+	//FIXME
 	return nil, nil
 }
 
@@ -924,7 +928,7 @@ func (v *Variable) getArrayValueInto(dest interface{}, numElements uint) error {
 		}
 	}
 	*valp = (*valp)[:numElements]
-	if missnum := numElements-uint(cap(*valp)); missnum > 0 {
+	if missnum := numElements - uint(cap(*valp)); missnum > 0 {
 		*valp = append(*valp, make([]interface{}, missnum)...)
 	}
 

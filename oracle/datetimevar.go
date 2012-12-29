@@ -12,7 +12,7 @@ package oracle
 const size_t sof_OCIIntervalp = sizeof(OCIInterval*);
 
 void getDateTime(const OCIDate *date, sb2 *year, ub1 *month,
-				                      ub1 *day, ub1 *hour, ub1 *min, ub1 *sec) {
+				 ub1 *day, ub1 *hour, ub1 *min, ub1 *sec) {
      *year = (date)->OCIDateYYYY;
      *month = (date)->OCIDateMM;
      *day = (date)->OCIDateDD;

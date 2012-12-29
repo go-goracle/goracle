@@ -270,7 +270,7 @@ func (conn *Connection) Rollback() error {
 	defer conn.srvMtx.Unlock()
 	return conn.environment.CheckStatus(
 		C.OCITransRollback(conn.handle, conn.environment.errorHandle,
-		C.OCI_DEFAULT), "Rollback")
+			C.OCI_DEFAULT), "Rollback")
 }
 
 // Deallocate the connection, disconnecting from the database if necessary.

@@ -12,6 +12,7 @@ const int sizeof_OraText = sizeof(OraText);
 import "C"
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -346,12 +347,16 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 		nullOk                  C.ub1
 		scale                   C.ub1
 	)
-	name := make([]byte, 100)
 
+	logPrefix := fmt.Sprintf("iDH(%d, %v) ", pos, param)
+	logg := func(format string, args ...interface{}) {
+		log.Printf(logPrefix+format, args...)
+	}
 	// acquire usable type of item
 	if varType, err = cur.environment.varTypeByOracleDescriptor(param); err != nil {
 		return
 	}
+	logg("varType=%s", varType)
 
 	// acquire internal size of item
 	if _, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
@@ -359,6 +364,7 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 		"itemDescription: internal size"); err != nil {
 		return
 	}
+	logg("internalSize=%d", internalSize)
 
 	// acquire character size of item
 	if _, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
@@ -366,13 +372,21 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 		"itemDescription(): character size"); err != nil {
 		return
 	}
+	logg("charSize=%d", charSize)
 
+	name := make([]byte, 100)
 	// aquire name of item
-	if nameLength, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
-		C.OCI_ATTR_NAME, unsafe.Pointer(&name[0]),
-		"itemDescription(): name"); err != nil {
+	if nameLength, err = cur.environment.AttrGetName(
+		unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+		C.OCI_ATTR_NAME, name, "itemDescription(): name"); err != nil {
 		return
 	}
+	logg("nameLength=%d name=%v", nameLength, name)
+	name = name[:nameLength]
+	if nameLength = bytes.IndexByte(name, 0); nameLength >= 0 && nameLength < len(name) {
+		name = name[:nameLength]
+	}
+	logg("name=%s", name)
 
 	// lookup precision and scale
 	if varType.IsNumber() {
@@ -381,11 +395,13 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 			"itemDescription(): scale"); err != nil {
 			return
 		}
+		logg("scale=%d", scale)
 		if _, err = cur.environment.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 			C.OCI_ATTR_PRECISION, unsafe.Pointer(&precision),
 			"itemDescription(): precision"); err != nil {
 			return
 		}
+		logg("precision=%d", precision)
 	}
 
 	// lookup whether null is permitted for the attribute
@@ -394,6 +410,7 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 		"itemDescription(): nullable"); err != nil {
 		return
 	}
+	logg("nullOk=%d", nullOk)
 
 	// set display size based on data type
 	switch {
@@ -417,9 +434,11 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 		displaySize = -1
 	}
 
+	logg("name=%s env=%v", name, cur.environment)
+	logg("name2=%s", cur.environment.FromEncodedString(name))
 	desc = VariableDescription{
-		Name:        cur.environment.FromEncodedString(name[:nameLength]),
-		Type:        -1,                        //FIXME
+		Name:        cur.environment.FromEncodedString(name),
+		Type:        int(varType.oracleType),
 		DisplaySize: displaySize, InternalSize: int(internalSize),
 		Precision: int(precision), Scale: int(scale),
 		NullOk: nullOk != 0,
@@ -1299,7 +1318,7 @@ func (cur *Cursor) FetchOne() (row []interface{}, err error) {
 }
 
 // Fetch a single row from the cursor into the given column pointers
-func (cur *Cursor) FetchOneInto(row... interface{}) (err error) {
+func (cur *Cursor) FetchOneInto(row ...interface{}) (err error) {
 	// verify fetch can be performed
 	if err = cur.verifyFetch(); err != nil {
 		return
