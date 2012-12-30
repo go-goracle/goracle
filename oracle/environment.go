@@ -7,18 +7,23 @@ package oracle
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
 #cgo LDFLAGS: -lclntsh -L/usr/lib/oracle/11.2/client64/lib
 
+//#include <stdio.h>
 #include <oci.h>
 #include <ociap.h>
 
-sword AttrGetName(const dvoid *mypard,
+char* AttrGetName(const dvoid *mypard,
 				  ub4 parType,
-				  dvoid *name,
-				  ub4 *name_len,
 				  ub4 key,
-                  OCIError *errhp) {
-	return OCIAttrGet((dvoid*)mypard, (ub4)parType,
-       (dvoid**)&name, (ub4*)name_len,
-       (ub4)key, (OCIError*)errhp);
+                  OCIError *errhp,
+                  sword *status,
+                  ub4 *name_len) {
+	char *name;
+
+	*status = OCIAttrGet(mypard, parType,
+       (dvoid*)&name, name_len,
+       key, errhp);
+    //fprintf(stderr, "%d %s\n", *name_len, (char*)name);
+    return name;
 }
 */
 import "C"
@@ -281,17 +286,22 @@ func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 }
 
 func (env *Environment) AttrGetName(parent unsafe.Pointer, parentType, key int,
-	dst []byte, errText string) (int, error) {
-	var osize C.ub4
-	if err := env.CheckStatus(
-		C.AttrGetName(parent, C.ub4(parentType),
-			unsafe.Pointer(&dst[0]), &osize, C.ub4(key),
-			env.errorHandle), errText); err != nil {
-		log.Printf("error gettint attr: %s", err)
-		return -1, err
+	errText string) ([]byte, error) {
+	var (
+		name_len C.ub4
+		status   C.sword
+	)
+	name := C.AttrGetName(parent, C.ub4(parentType),
+		C.ub4(key), env.errorHandle,
+		&status, &name_len)
+	if err := env.CheckStatus(status, errText); err != nil {
+		log.Printf("error getting char attr: %s", err)
+		return nil, err
 	}
-	log.Printf("osize=%d dst=%v", osize, dst)
-	return int(osize), nil
+	// log.Printf("name_len=%d name=%v", name_len, name)
+	result := C.GoBytes(unsafe.Pointer(name), C.int(name_len))
+	// log.Printf("dst=%s = %v", result, result)
+	return result, nil
 }
 
 func (env *Environment) FromEncodedString(text []byte) string {

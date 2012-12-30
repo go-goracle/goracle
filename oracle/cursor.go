@@ -12,7 +12,7 @@ const int sizeof_OraText = sizeof(OraText);
 import "C"
 
 import (
-	"bytes"
+	// "bytes"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -340,12 +340,12 @@ func (cur *Cursor) fixupBoundCursor() error {
 // constantly free the descriptor when an error takes place.
 func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc VariableDescription, err error) {
 	var (
-		internalSize, charSize  C.ub2
-		varType                 *VariableType
-		nameLength, displaySize int
-		precision               C.sb2
-		nullOk                  C.ub1
-		scale                   C.ub1
+		internalSize, charSize C.ub2
+		varType                *VariableType
+		displaySize int
+		precision   C.sb2
+		nullOk      C.ub1
+		scale       C.ub1
 	)
 
 	logPrefix := fmt.Sprintf("iDH(%d, %v) ", pos, param)
@@ -374,17 +374,12 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 	}
 	logg("charSize=%d", charSize)
 
-	name := make([]byte, 100)
+	var name []byte
 	// aquire name of item
-	if nameLength, err = cur.environment.AttrGetName(
+	if name, err = cur.environment.AttrGetName(
 		unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
-		C.OCI_ATTR_NAME, name, "itemDescription(): name"); err != nil {
+		C.OCI_ATTR_NAME, "itemDescription(): name"); err != nil {
 		return
-	}
-	logg("nameLength=%d name=%v", nameLength, name)
-	name = name[:nameLength]
-	if nameLength = bytes.IndexByte(name, 0); nameLength >= 0 && nameLength < len(name) {
-		name = name[:nameLength]
 	}
 	logg("name=%s", name)
 
