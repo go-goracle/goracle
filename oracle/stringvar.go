@@ -15,6 +15,25 @@ import (
 	"fmt"
 )
 
+var (
+	StringVarType, FixedCharVarType *VariableType
+	BinaryVarType, RowidVarType     *VariableType
+)
+
+func (t *VariableType) IsString() bool {
+	if t == StringVarType || t == FixedCharVarType {
+		return true
+	}
+	return false
+}
+
+func (t *VariableType) IsBinary() bool {
+	if t == BinaryVarType {
+		return true
+	}
+	return false
+}
+
 // Initialize the variable.
 func stringVar_Initialize(v *Variable, cur *Cursor) error {
 	v.actualLength = make([]C.ub2, v.allocatedElements)
@@ -118,11 +137,6 @@ func stringVar_GetBufferSize(v *Variable) uint {
 	}
 	return uint(v.size)
 }
-
-var (
-	StringVarType, FixedCharVarType *VariableType
-	BinaryVarType, RowidVarType     *VariableType
-)
 
 func init() {
 	StringVarType = &VariableType{

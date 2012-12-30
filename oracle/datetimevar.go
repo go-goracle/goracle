@@ -47,6 +47,13 @@ var (
 	DateTimeVarType, IntervalVarType *VariableType
 )
 
+func (t *VariableType) IsDate() bool {
+	if t == DateTimeVarType || t == IntervalVarType {
+		return true
+	}
+	return false
+}
+
 func dateTimeVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	x, ok := value.(time.Time)
 	if !ok {

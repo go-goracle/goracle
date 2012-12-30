@@ -342,10 +342,10 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 	var (
 		internalSize, charSize C.ub2
 		varType                *VariableType
-		displaySize int
-		precision   C.sb2
-		nullOk      C.ub1
-		scale       C.ub1
+		displaySize            int
+		precision              C.sb2
+		nullOk                 C.ub1
+		scale                  C.ub1
 	)
 
 	logPrefix := fmt.Sprintf("iDH(%d, %v) ", pos, param)

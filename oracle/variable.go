@@ -130,44 +130,6 @@ func isVariable(value interface{}) bool {
 		return true
 	}
 	return false
-	/*
-		    return (Py_TYPE(object) == &g_CursorVarType ||
-		            Py_TYPE(object) == &g_DateTimeVarType ||
-		            Py_TYPE(object) == &g_BFILEVarType ||
-		            Py_TYPE(object) == &g_BLOBVarType ||
-		            Py_TYPE(object) == &g_CLOBVarType ||
-		            Py_TYPE(object) == &g_LongStringVarType ||
-		            Py_TYPE(object) == &g_LongBinaryVarType ||
-		            Py_TYPE(object) == &g_NumberVarType ||
-		            Py_TYPE(object) == &g_StringVarType ||
-		            Py_TYPE(object) == &g_FixedCharVarType ||
-		            Py_TYPE(object) == &g_NCLOBVarType ||
-		#if PY_MAJOR_VERSION < 3
-		            Py_TYPE(object) == &g_UnicodeVarType ||
-		            Py_TYPE(object) == &g_FixedUnicodeVarType ||
-		#endif
-		            Py_TYPE(object) == &g_RowidVarType ||
-		            Py_TYPE(object) == &g_BinaryVarType ||
-		            Py_TYPE(object) == &g_TimestampVarType ||
-		            Py_TYPE(object) == &g_IntervalVarType
-		#ifdef SQLT_BFLOAT
-		            || Py_TYPE(object) == &g_NativeFloatVarType
-		#endif
-		            );
-	*/
-}
-
-func (t VariableType) IsBinary() bool {
-	//FIXME
-	return false
-}
-func (t VariableType) IsString() bool {
-	//FIXME
-	return false
-}
-func (t VariableType) IsDate() bool {
-	//FIXME
-	return false
 }
 
 func (t *VariableType) NewVariable(cur *Cursor, numElements uint, size uint) (*Variable, error) {
@@ -180,8 +142,31 @@ func (t *VariableType) String() string {
 }
 
 func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableType, error) {
-	//FIXME
-	return nil, nil
+	var (
+		charsetForm C.ub1
+		dataType    C.ub2
+	)
+
+	// retrieve datatype of the parameter
+	if _, err := env.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+		C.OCI_ATTR_DATA_TYPE, unsafe.Pointer(&dataType),
+		"param dataType"); err != nil {
+		return nil, err
+	}
+
+	// retrieve character set form of the parameter
+	if dataType != C.SQLT_CHR && dataType != C.SQLT_AFC &&
+		dataType != C.SQLT_CLOB {
+		charsetForm = C.SQLCS_IMPLICIT
+	} else {
+		if _, err := env.AttrGet(unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
+			C.OCI_ATTR_CHARSET_FORM, unsafe.Pointer(&charsetForm),
+			"param charsetForm"); err != nil {
+			return nil, err
+		}
+	}
+
+	return varTypeByOraDataType(dataType, charsetForm)
 }
 
 func (v *Variable) getDataArr() (p unsafe.Pointer) {
