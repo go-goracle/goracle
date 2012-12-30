@@ -348,11 +348,11 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 		scale                  C.ub1
 	)
 
-	logPrefix := fmt.Sprintf("iDH(%d, %v) ", pos, param)
+	// logPrefix := fmt.Sprintf("iDH(%d, %v) ", pos, param)
 	logg := func(format string, args ...interface{}) {
-		log.Printf(logPrefix+format, args...)
+		// log.Printf(logPrefix+format, args...)
 	}
-	// acquire usable type of item
+	// acquire usable type of intem
 	if varType, err = cur.environment.varTypeByOracleDescriptor(param); err != nil {
 		return
 	}
@@ -740,15 +740,24 @@ func (cur *Cursor) fetchInto(row ...interface{}) error {
 	}
 
 	// acquire the value for each item
+	var (
+		x  *interface{}
+		ok bool
+	)
 	for pos, v := range cur.fetchVariables {
-		if err = v.GetValueInto(&row[pos], uint(cur.rowNum)); err != nil {
+		if x, ok = row[pos].(*interface{}); !ok {
+			return fmt.Errorf("awaited *interface{}, got %T at pos %d", row[pos], pos)
+		}
+		if err = v.GetValueInto(x, uint(cur.rowNum)); err != nil {
 			return err
 		}
+		log.Printf("row=%+v", row)
 	}
 
 	// increment row counters
 	cur.rowNum++
 	cur.rowCount++
+	log.Printf("fetchInto rn=%d rc=%d row=%+v", cur.rowNum, cur.rowCount, row)
 
 	return nil
 }
@@ -1087,7 +1096,7 @@ func (cur *Cursor) Execute(statement string,
 		return err
 	}
 
-	log.Printf("internalPrepare done, performing binds")
+	// log.Printf("internalPrepare done, performing binds")
 	// perform binds
 	if listArgs != nil && len(listArgs) > 0 {
 		if err = cur.setBindVariablesByPos(listArgs, 1, 0, false); err != nil {
@@ -1101,7 +1110,7 @@ func (cur *Cursor) Execute(statement string,
 	if err = cur.performBind(); err != nil {
 		return err
 	}
-	log.Printf("bind done, executing statement")
+	// log.Printf("bind done, executing statement")
 
 	// execute the statement
 	isQuery := cur.statementType == C.OCI_STMT_SELECT
@@ -1112,7 +1121,7 @@ func (cur *Cursor) Execute(statement string,
 	if err = cur.internalExecute(numIters); err != nil {
 		return err
 	}
-	log.Printf("executed, calling performDefine")
+	// log.Printf("executed, calling performDefine")
 
 	// perform defines, if necessary
 	if isQuery && cur.fetchVariables == nil {
@@ -1260,7 +1269,7 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 // Returns an integer indicating if more rows can be retrieved from the
 // cursor.
 func (cur *Cursor) moreRows() (bool, error) {
-	log.Printf("moreRows rowNum=%d actualRows=%d", cur.rowNum, cur.actualRows)
+	// log.Printf("moreRows rowNum=%d actualRows=%d", cur.rowNum, cur.actualRows)
 	if cur.rowNum >= cur.actualRows {
 		if cur.actualRows < 0 || uint(cur.actualRows) == cur.fetchArraySize {
 			if err := cur.internalFetch(cur.fetchArraySize); err != nil {
@@ -1320,8 +1329,11 @@ func (cur *Cursor) FetchOneInto(row ...interface{}) (err error) {
 	}
 
 	// setup return value
-	if _, err = cur.moreRows(); err != nil {
+	var ok bool
+	if ok, err = cur.moreRows(); err != nil {
 		return
+	} else if !ok {
+		return io.EOF
 	}
 	return cur.fetchInto(row)
 }

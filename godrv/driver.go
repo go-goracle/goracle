@@ -10,8 +10,9 @@ import (
 	// "io"
 	// "math"
 	// "net"
-	// "log"
+	"log"
 	// "reflect"
+	"strconv"
 	"strings"
 	// "time"
 	"unsafe"
@@ -106,9 +107,16 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 	//[]byte
 	//string   [*] everywhere except from Rows.Next.
 	//time.Time
+	statement := s.statement
+	if len(args) > 0 && strings.Index(statement, "?") > -1 && strings.Index(statement, ":1") < 0 {
+		for i := 0; i < len(args); i++ {
+			statement = strings.Replace(statement, "?", ":"+strconv.Itoa(i+1), 1)
+		}
+		log.Printf("replaced ?s: %s", statement)
+	}
 
 	a := (*[]interface{})(unsafe.Pointer(&args))
-	if err := s.cu.Execute(s.statement, *a, nil); err != nil {
+	if err := s.cu.Execute(statement, *a, nil); err != nil {
 		return nil, err
 	}
 	cols, err := s.cu.GetDescription()
@@ -155,6 +163,7 @@ func (r rowsRes) Close() error {
 // DATE, DATETIME, TIMESTAMP are treated as they are in Local time zone
 func (r rowsRes) Next(dest []driver.Value) error {
 	a := (*[]interface{})(unsafe.Pointer(&dest))
+	log.Printf("rows.Next")
 	return r.cu.FetchOneInto(*a...)
 }
 

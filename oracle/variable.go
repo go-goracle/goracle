@@ -117,6 +117,7 @@ type VariableType struct {
 func (t *VariableType) getValueInto(dest *interface{}, v *Variable, pos uint) error {
 	var err error
 	*dest, err = t.getValue(v, pos)
+	log.Printf("%s.getValueInto dest=%+v err=%s", t, *dest, err)
 	return err
 }
 
@@ -882,7 +883,9 @@ func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 	}
 
 	// calculate value to return
-	return v.typ.getValueInto(dest, v, arrayPos)
+	err := v.typ.getValueInto(dest, v, arrayPos)
+	log.Printf("%s.GetValueInto dest=%+v err=%s", v.typ, *dest, err)
+	return err
 }
 
 // Return the value of the variable as an array.

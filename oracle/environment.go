@@ -235,7 +235,7 @@ func checkStatus(status C.sword, justSpecific bool) error {
 // retrieve the error message from the database environment
 func (env *Environment) CheckStatus(status C.sword, at string) error {
 	// if status != C.OCI_SUCCESS {
-	log.Printf("CheckStatus(%d (%s), %s)", status, status == C.OCI_SUCCESS, at)
+	// log.Printf("CheckStatus(%d (%s), %s)", status, status == C.OCI_SUCCESS, at)
 	// }
 	if status == C.OCI_SUCCESS || status == C.OCI_SUCCESS_WITH_INFO {
 		// log.Printf("CheckStatus(%d): OK", status)
