@@ -12,7 +12,6 @@ import (
 	// "net"
 	"log"
 	// "reflect"
-	"strconv"
 	"strings"
 	// "time"
 	"unsafe"
@@ -34,6 +33,7 @@ type stmt struct {
 // Prepare the query for execution, return a prepared statement and error
 func (c conn) Prepare(query string) (driver.Stmt, error) {
 	cu := c.cx.NewCursor()
+	log.Printf("%p.Prepare(%s)", cu, query)
 	err := cu.Prepare(query, "")
 	if err != nil {
 		return nil, err
@@ -64,7 +64,10 @@ func (c conn) Begin() (driver.Tx, error) {
 
 // commits currently opened transaction
 func (t tx) Commit() error {
-	return t.cx.NewCursor().Execute("COMMIT", nil, nil)
+	if t.cx != nil && t.cx.IsConnected() {
+		return t.cx.NewCursor().Execute("COMMIT", nil, nil)
+	}
+	return nil
 }
 
 // rolls back current transaction
@@ -75,6 +78,7 @@ func (t tx) Rollback() error {
 // closes statement
 func (s stmt) Close() error {
 	if s.cu != nil {
+		log.Printf("CLOSEing statement %p (%s)", s.cu, s.statement)
 		s.cu.Close()
 		s.cu = nil
 	}
@@ -83,13 +87,12 @@ func (s stmt) Close() error {
 
 // number of input parameters
 func (s stmt) NumInput() int {
-	bva, bvm := s.cu.GetBindVars()
-	if bva != nil {
-		return len(bva)
-	} else if bvm != nil {
-		return len(bvm)
+	names, err := s.cu.GetBindNames()
+	if err != nil {
+		log.Printf("error getting bind names of %p: %s", s.cu, err)
+		return -1
 	}
-	return 0
+	return len(names)
 }
 
 type rowsRes struct {
@@ -107,21 +110,21 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 	//[]byte
 	//string   [*] everywhere except from Rows.Next.
 	//time.Time
-	statement := s.statement
-	if len(args) > 0 && strings.Index(statement, "?") > -1 && strings.Index(statement, ":1") < 0 {
-		for i := 0; i < len(args); i++ {
-			statement = strings.Replace(statement, "?", ":"+strconv.Itoa(i+1), 1)
-		}
-		log.Printf("replaced ?s: %s", statement)
+
+	var err error
+	a := (*[]interface{})(unsafe.Pointer(&args))
+	log.Printf("%p.run(%s, %v)", s.cu, s.statement, *a)
+	if err = s.cu.Execute(s.statement, *a, nil); err != nil {
+		return nil, err
 	}
 
-	a := (*[]interface{})(unsafe.Pointer(&args))
-	if err := s.cu.Execute(statement, *a, nil); err != nil {
-		return nil, err
-	}
-	cols, err := s.cu.GetDescription()
-	if err != nil {
-		return nil, err
+	var cols []oracle.VariableDescription
+	if !s.cu.IsDDL() {
+		cols, err = s.cu.GetDescription()
+		log.Printf("cols: %+v err: %s", cols, err)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &rowsRes{cu: s.cu, cols: cols}, nil
 }
@@ -154,7 +157,8 @@ func (r rowsRes) Columns() []string {
 // closes the resultset
 func (r rowsRes) Close() error {
 	if r.cu != nil {
-		r.cu.Close()
+		log.Printf("CLOSEing result %p", r.cu)
+		// r.cu.Close() // FIXME
 		r.cu = nil
 	}
 	return nil
@@ -162,9 +166,11 @@ func (r rowsRes) Close() error {
 
 // DATE, DATETIME, TIMESTAMP are treated as they are in Local time zone
 func (r rowsRes) Next(dest []driver.Value) error {
-	a := (*[]interface{})(unsafe.Pointer(&dest))
-	log.Printf("rows.Next")
-	return r.cu.FetchOneInto(*a...)
+	row := (*[]interface{})(unsafe.Pointer(&dest))
+	// log.Printf("FetcOneInto(%p %+v len=%d) %T", row, *row, len(*row), *row)
+	err := r.cu.FetchOneInto(*row...)
+	log.Printf("fetched row=%p %+v (len=%d) err=%s", row, *row, len(*row), err)
+	return err
 }
 
 type Driver struct {

@@ -61,13 +61,14 @@ func NewEnvironment() (*Environment, error) {
 	var err error
 
 	// create a new object for the Oracle environment
-	env := new(Environment)
-	env.fixedWidth = false
-	env.maxBytesPerCharacter = 4
-	env.maxStringBytes = MAX_STRING_CHARS
-	env.numberToStringFormatBuffer = []byte("TM9")
-	env.numberFromStringFormatBuffer = []byte("999999999999999999999999999999999999999999999999999999999999999")
-	env.nlsNumericCharactersBuffer = []byte("NLS_NUMERIC_CHARACTERS='.,'")
+	env := &Environment{
+		fixedWidth:                   false,
+		maxBytesPerCharacter:         4,
+		maxStringBytes:               MAX_STRING_CHARS,
+		numberToStringFormatBuffer:   []byte("TM9"),
+		numberFromStringFormatBuffer: []byte("999999999999999999999999999999999999999999999999999999999999999"),
+		nlsNumericCharactersBuffer:   []byte("NLS_NUMERIC_CHARACTERS='.,'"),
+	}
 
 	if CSID_AL32UTF8 == 0 {
 		// create the new environment handle
@@ -81,7 +82,7 @@ func NewEnvironment() (*Environment, error) {
 		CSID_AL32UTF8 = C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
 			(*C.oratext)(&buffer[0]))
 		C.OCIHandleFree(unsafe.Pointer(&env.handle), C.OCI_HTYPE_ENV)
-		log.Printf("csid=%d", CSID_AL32UTF8)
+		// log.Printf("csid=%d", CSID_AL32UTF8)
 	}
 	if err = checkStatus(C.OCIEnvNlsCreate(
 		&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
@@ -89,7 +90,7 @@ func NewEnvironment() (*Environment, error) {
 		setErrAt(err, "Unable to acquire Oracle environment handle with AL32UTF8 charset")
 		return nil, err
 	}
-	log.Printf("env=%+v err=%+v", env.handle, err)
+	// log.Printf("env=%+v err=%+v", env.handle, err)
 
 	// create the error handle
 	if err = ociHandleAlloc(unsafe.Pointer(env.handle),
@@ -107,7 +108,7 @@ func NewEnvironment() (*Environment, error) {
 	}
 	env.maxBytesPerCharacter = uint(sb4)
 	env.maxStringBytes = MAX_STRING_CHARS * env.maxBytesPerCharacter
-	log.Printf("maxBytesPerCharacter=%d", env.maxBytesPerCharacter)
+	// log.Printf("maxBytesPerCharacter=%d", env.maxBytesPerCharacter)
 
 	// acquire whether character set is fixed width
 	if err = env.CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),

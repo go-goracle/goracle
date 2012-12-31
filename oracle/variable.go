@@ -69,7 +69,7 @@ func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size uint
 	}
 
 	// allocate the data for the variable
-	log.Printf("allocate data for the variable")
+	// log.Printf("allocate data for the variable")
 	if err = v.allocateData(); err != nil {
 		return
 	}
@@ -117,7 +117,7 @@ type VariableType struct {
 func (t *VariableType) getValueInto(dest *interface{}, v *Variable, pos uint) error {
 	var err error
 	*dest, err = t.getValue(v, pos)
-	log.Printf("%s.getValueInto dest=%+v err=%s", t, *dest, err)
+	// log.Printf("%s.getValueInto dest=%+v err=%s", t, *dest, err)
 	return err
 }
 
@@ -172,14 +172,14 @@ func (env *Environment) varTypeByOracleDescriptor(param *C.OCIParam) (*VariableT
 
 func (v *Variable) getDataArr() (p unsafe.Pointer) {
 	defer func() {
-		log.Printf("getDataArr(%d): %v", v.typ.oracleType, p)
+		// log.Printf("getDataArr(%d): %v", v.typ.oracleType, p)
 		if p == nil {
 			log.Panicf("getDataArr(%+v) returns nil pointer!", v)
 		}
 	}()
 
 	if v.dataBytes != nil {
-		log.Printf("getDataArr(%d) len=%d", v.typ.oracleType, len(v.dataBytes))
+		// log.Printf("getDataArr(%d) len=%d", v.typ.oracleType, len(v.dataBytes))
 		return (unsafe.Pointer(&v.dataBytes[0]))
 	} else if v.dataInts != nil {
 		return (unsafe.Pointer(&v.dataInts[0]))
@@ -223,7 +223,7 @@ func (v *Variable) allocateData() error {
 		}
 	} else {
 		v.dataBytes = make([]byte, dataLength)
-		log.Printf("bytes=%v (%d)", unsafe.Pointer(&v.dataBytes[0]), len(v.dataBytes))
+		// log.Printf("bytes=%v (%d)", unsafe.Pointer(&v.dataBytes[0]), len(v.dataBytes))
 	}
 
 	return nil
@@ -639,7 +639,7 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 			log.Printf("error getting data size: %+v", err)
 			return nil, err
 		}
-		log.Printf("size of %v @ %d: %d", param, position, sizeFromOracle)
+		// log.Printf("size of %v @ %d: %d", param, position, sizeFromOracle)
 
 		// use the length from Oracle directly if available
 		if uint(sizeFromOracle) > 0 {
@@ -679,8 +679,8 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 
 	// perform the define
 	aL, rC := v.aLrC()
-	log.Printf("OCIDefineByPos(typ=%s, pos=%d, data=%v, size=%d, oracleType=%d, indicator=%v aL=%v rC=%v",
-		v.typ, position, v.getDataArr(), v.bufferSize, v.typ.oracleType, v.indicator, aL, rC)
+	// log.Printf("OCIDefineByPos(typ=%s, pos=%d, data=%v, size=%d, oracleType=%d, indicator=%v aL=%v rC=%v",
+	// 	v.typ, position, v.getDataArr(), v.bufferSize, v.typ.oracleType, v.indicator, aL, rC)
 	if err = cur.environment.CheckStatus(
 		C.OCIDefineByPos(cur.handle,
 			&v.defineHandle,
@@ -709,7 +709,7 @@ func varDefine(cur *Cursor, numElements, position uint) (*Variable, error) {
 	if cur.handle == nil {
 		log.Printf("WARN: nil cursor handle in varDefine!")
 	}
-	log.Printf("retrieve parameter descriptor cur.handle=%s pos=%d", cur.handle, position)
+	// log.Printf("retrieve parameter descriptor cur.handle=%s pos=%d", cur.handle, position)
 	if err := cur.environment.CheckStatus(
 		C.OCIParamGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 			cur.environment.errorHandle,
@@ -718,7 +718,7 @@ func varDefine(cur *Cursor, numElements, position uint) (*Variable, error) {
 		log.Printf("NO PARAM! %s", err)
 		return nil, err
 	}
-	log.Printf("got param handle")
+	// log.Printf("got param handle")
 
 	// call the helper to do the actual work
 	v, err := variableDefineHelper(cur, param, position, numElements)
@@ -884,7 +884,9 @@ func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 
 	// calculate value to return
 	err := v.typ.getValueInto(dest, v, arrayPos)
-	log.Printf("%s.GetValueInto dest=%+v err=%s", v.typ, *dest, err)
+	if err != nil {
+		log.Printf("%s.getSingleValueInto dest=%+v err=%s", v.typ, *dest, err)
+	}
 	return err
 }
 

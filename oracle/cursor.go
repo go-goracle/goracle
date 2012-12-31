@@ -67,7 +67,7 @@ func (cur *Cursor) freeHandle() error {
 	if cur.handle == nil {
 		return nil
 	}
-	log.Printf("freeing cursor handle %v", cur.handle)
+	// log.Printf("freeing cursor handle %v", cur.handle)
 	if cur.isOwned {
 		return cur.environment.CheckStatus(
 			C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
@@ -197,7 +197,7 @@ func (cur *Cursor) performDefine() error {
 		"PerformDefine"); err != nil {
 		return err
 	}
-	log.Printf("performDefine param count = %d", numParams)
+	// log.Printf("performDefine param count = %d", numParams)
 
 	// create a list corresponding to the number of items
 	cur.fetchVariables = make([]*Variable, numParams)
@@ -253,10 +253,10 @@ func (cur Cursor) GetRowCount() int {
 	return cur.rowCount
 }
 
-// returns the bind variables array and map
-func (cur Cursor) GetBindVars() ([]*Variable, map[string]*Variable) {
-	return cur.bindVarsArr, cur.bindVarsMap
-}
+// // returns the bind variables array and map
+// func (cur Cursor) GetBindVars() ([]*Variable, map[string]*Variable) {
+// 	return cur.bindVarsArr, cur.bindVarsMap
+// }
 
 // Get the error offset on the error object, if applicable.
 func (cur *Cursor) getErrorOffset() int {
@@ -285,6 +285,8 @@ func (cur *Cursor) internalExecute(numIters uint) error {
 	}
 
 	// Py_BEGIN_ALLOW_THREADS
+	log.Printf("%p.StmtExecute(%s, mode=%d) in internalExecute", cur,
+		cur.statement, mode)
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtExecute(cur.connection.handle,
 			cur.handle, cur.environment.errorHandle,
@@ -741,25 +743,35 @@ func (cur *Cursor) fetchInto(row ...interface{}) error {
 
 	// acquire the value for each item
 	var (
-		x  *interface{}
 		ok bool
+		x  *interface{}
+		v  *Variable
 	)
-	for pos, v := range cur.fetchVariables {
+	for pos := 0; pos < len(row); pos++ {
 		if x, ok = row[pos].(*interface{}); !ok {
-			return fmt.Errorf("awaited *interface{}, got %T at pos %d", row[pos], pos)
+			// return fmt.Errorf("awaited *interface{}, got %T (%+v) at pos %d (row=%+v)",
+			// 	dst, dst, pos, row)
+			x = &row[pos]
 		}
+		v = cur.fetchVariables[pos]
 		if err = v.GetValueInto(x, uint(cur.rowNum)); err != nil {
 			return err
 		}
-		log.Printf("row=%+v", row)
+		// row[pos] = *x
 	}
 
 	// increment row counters
 	cur.rowNum++
 	cur.rowCount++
-	log.Printf("fetchInto rn=%d rc=%d row=%+v", cur.rowNum, cur.rowCount, row)
+	// log.Printf("fetchInto rn=%d rc=%d row=%+v", cur.rowNum, cur.rowCount, row)
 
 	return nil
+}
+
+func (cur *Cursor) IsDDL() bool {
+	return cur.statementType == C.OCI_STMT_CREATE ||
+		cur.statementType == C.OCI_STMT_DROP ||
+		cur.statementType == C.OCI_STMT_ALTER
 }
 
 // Internal method for preparing a statement for execution.
@@ -769,15 +781,18 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 		return ProgrammingError("no statement specified and no prior statement prepared")
 	}
 
-	// nothing to do if the statement is identical to the one already stored
 	// but go ahead and prepare anyway for create, alter and drop statments
 	if statement == "" || statement == string(cur.statement) {
-		if cur.statementType != C.OCI_STMT_CREATE &&
-			cur.statementType != C.OCI_STMT_DROP &&
-			cur.statementType != C.OCI_STMT_ALTER {
+		// FIXME why would double prepare be good??
+		if statementTag == "" || statementTag == string(cur.statementTag) {
 			return nil
 		}
-		statement = string(cur.statement)
+		if !cur.IsDDL() {
+			return nil
+		}
+		if statement == "" {
+			statement = string(cur.statement)
+		}
 	}
 	// keep track of the statement
 	cur.statement = []byte(statement)
@@ -793,7 +808,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 
 	// prepare statement
 	cur.isOwned = false
-	log.Printf("Prepare2 for %s", cur.statement)
+	log.Printf(`%p.Prepare2 for "%s" [%x]`, cur, cur.statement, cur.statementTag)
 	// Py_BEGIN_ALLOW_THREADS
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtPrepare2(cur.connection.handle, &cur.handle,
@@ -809,7 +824,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 		cur.handle = nil
 		return err
 	}
-	log.Printf("prepared")
+	// log.Printf("prepared")
 
 	// clear bind variables, if applicable
 	if cur.setInputSizes < 0 {
@@ -830,7 +845,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 
 // Parse the statement without executing it. This also retrieves information
 // about the select list for select statements.
-func (cur *Cursor) parse(statement string) error {
+func (cur *Cursor) Parse(statement string) error {
 	var mode C.ub4
 
 	// statement text is expected
@@ -855,6 +870,7 @@ func (cur *Cursor) parse(statement string) error {
 		mode = C.OCI_PARSE_ONLY
 	}
 	// Py_BEGIN_ALLOW_THREADS
+	log.Printf("%p.StmtExecute(%s, mode=%d) in Parse", cur, cur.statement, mode)
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtExecute(cur.connection.handle, cur.handle,
 			cur.environment.errorHandle,
@@ -1245,7 +1261,7 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 			}
 		}
 	}
-	log.Printf("StmtFetch numRows=%d", numRows)
+	// log.Printf("StmtFetch numRows=%d", numRows)
 	// Py_BEGIN_ALLOW_THREADS
 	if err = cur.environment.CheckStatus(
 		C.OCIStmtFetch(cur.handle, cur.environment.errorHandle,
@@ -1253,7 +1269,7 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 		"internalFetch(): fetch"); err != nil && err != NoDataFound {
 		return err
 	}
-	log.Printf("fetched, getting row count")
+	// log.Printf("fetched, getting row count")
 	var rowCount int
 	if _, err = cur.environment.AttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 		C.OCI_ATTR_ROW_COUNT, unsafe.Pointer(&rowCount),
@@ -1335,7 +1351,9 @@ func (cur *Cursor) FetchOneInto(row ...interface{}) (err error) {
 	} else if !ok {
 		return io.EOF
 	}
-	return cur.fetchInto(row)
+	err = cur.fetchInto(row...)
+	log.Printf("FetchOneInto result row=%v", row)
+	return
 }
 
 // Fetch multiple rows from the cursor based on the arraysize.
@@ -1507,7 +1525,7 @@ func (cur *Cursor) ArrayVar(varType *VariableType, values []interface{}, size ui
 }
 
 // Return a list of bind variable names.
-func (cur *Cursor) bindNames() ([]string, error) {
+func (cur *Cursor) GetBindNames() ([]string, error) {
 	// make sure the cursor is open
 	if !cur.isOpen {
 		return nil, CursorIsClosed

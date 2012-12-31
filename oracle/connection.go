@@ -11,7 +11,7 @@ import "C"
 
 import (
 	"fmt"
-	"log"
+	// "log"
 	"strings"
 	"sync"
 	"unsafe"
@@ -143,7 +143,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	// defer C.free(unsafe.Pointer(dsn))
 	// Py_BEGIN_ALLOW_THREADS
 	conn.srvMtx.Lock()
-	log.Printf("buffer=%s", buffer)
+	// log.Printf("buffer=%s", buffer)
 	status = C.OCIServerAttach(conn.serverHandle,
 		conn.environment.errorHandle, (*C.OraText)(&buffer[0]),
 		C.sb4(len(buffer)), C.OCI_DEFAULT)
@@ -153,7 +153,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	if err = conn.environment.CheckStatus(status, "Connect[server attach]"); err != nil {
 		return err
 	}
-	log.Printf("attached to server %s", conn.serverHandle)
+	// log.Printf("attached to server %s", conn.serverHandle)
 
 	// allocate the service context handle
 	if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
@@ -161,7 +161,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		"Connect[allocate service context handle]"); err != nil {
 		return err
 	}
-	log.Printf("allocated service context handle")
+	// log.Printf("allocated service context handle")
 
 	// set attribute for server handle
 	if err = conn.AttrSet(C.OCI_ATTR_SERVER, unsafe.Pointer(conn.serverHandle), 0); err != nil {
@@ -195,7 +195,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		"Connect[allocate session handle]"); err != nil {
 		return err
 	}
-	log.Printf("allocated session handle")
+	// log.Printf("allocated session handle")
 
 	// set user name in session handle
 	if conn.username != "" {
