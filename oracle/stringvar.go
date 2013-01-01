@@ -13,6 +13,7 @@ import (
 	// "unsafe"
 	"errors"
 	"fmt"
+	"log"
 )
 
 var (
@@ -92,6 +93,7 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) error {
 // Returns the value stored at the given array position.
 func stringVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 	buf := v.dataBytes[int(v.bufferSize*pos) : int(v.bufferSize*pos)+int(v.actualLength[pos])]
+	log.Printf("stringVar_GetValue(pos=%d length=%d): %v (%s)\n%v", pos, v.actualLength[pos], buf, buf, v.dataBytes)
 	if v.typ == BinaryVarType {
 		return buf, nil
 	}
@@ -133,7 +135,7 @@ static int StringVar_PostDefine(
 // Returns the buffer size to use for the variable.
 func stringVar_GetBufferSize(v *Variable) uint {
 	if v.typ.isCharData {
-		return v.size * v.environment.maxBytesPerCharacter
+		return v.size * v.environment.MaxBytesPerCharacter
 	}
 	return uint(v.size)
 }

@@ -100,5 +100,5 @@ func longVar_GetBufferSize(v *Variable) uint {
 	if v.typ.isCharData {
 		return v.size + C.sizeof_ub4
 	}
-	return C.sizeof_ub4 + v.size*v.environment.maxBytesPerCharacter
+	return C.sizeof_ub4 + v.size*v.environment.MaxBytesPerCharacter
 }

@@ -122,7 +122,7 @@ func (lv *ExternalLobVar) Size(inChars bool) (int64, error) {
 	length, err := lv.internalSize()
 	if inChars {
 		if lv.lobVar.typ == ClobVarType {
-			length /= C.ub4(lv.lobVar.environment.maxBytesPerCharacter)
+			length /= C.ub4(lv.lobVar.environment.MaxBytesPerCharacter)
 		} else if lv.lobVar.typ == NClobVarType {
 			length /= 2
 		}

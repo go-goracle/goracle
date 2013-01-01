@@ -110,8 +110,8 @@ func (v *Variable) lobVar_Write(data []byte, pos uint, off int64) (amount int, e
 			#endif
 		*/
 	} else {
-		if v.environment.fixedWidth && (v.environment.maxBytesPerCharacter > 1) {
-			amount /= int(v.environment.maxBytesPerCharacter)
+		if v.environment.FixedWidth && (v.environment.MaxBytesPerCharacter > 1) {
+			amount /= int(v.environment.MaxBytesPerCharacter)
 		} else {
 			// amount = len(p)
 		}

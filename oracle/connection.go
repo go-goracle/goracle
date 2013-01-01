@@ -64,6 +64,11 @@ func (conn Connection) IsConnected() bool {
 	return conn.handle != nil
 }
 
+// returns a (non-modifiable) Environment of the connection
+func (conn Connection) GetEnvironment() Environment {
+	return *conn.environment
+}
+
 func (conn *Connection) AttrSet(key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX,

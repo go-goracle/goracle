@@ -10,7 +10,6 @@ package oracle
 //#include <stdio.h>
 #include <oci.h>
 #include <ociap.h>
-
 char* AttrGetName(const dvoid *mypard,
 				  ub4 parType,
 				  ub4 key,
@@ -38,10 +37,9 @@ import (
 type Environment struct {
 	handle                       *C.OCIEnv
 	errorHandle                  *C.OCIError
-	maxBytesPerCharacter         uint
-	fixedWidth                   bool
-	encoding                     string
-	nencoding                    string
+	MaxBytesPerCharacter         uint
+	FixedWidth                   bool
+	Encoding, Nencoding          string
 	maxStringBytes               uint
 	numberToStringFormatBuffer   []byte
 	numberFromStringFormatBuffer []byte
@@ -62,8 +60,8 @@ func NewEnvironment() (*Environment, error) {
 
 	// create a new object for the Oracle environment
 	env := &Environment{
-		fixedWidth:                   false,
-		maxBytesPerCharacter:         4,
+		FixedWidth:                   false,
+		MaxBytesPerCharacter:         4,
 		maxStringBytes:               MAX_STRING_CHARS,
 		numberToStringFormatBuffer:   []byte("TM9"),
 		numberFromStringFormatBuffer: []byte("999999999999999999999999999999999999999999999999999999999999999"),
@@ -73,7 +71,7 @@ func NewEnvironment() (*Environment, error) {
 	if CSID_AL32UTF8 == 0 {
 		// create the new environment handle
 		if err = checkStatus(C.OCIEnvNlsCreate(&env.handle,
-			C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0, 0),
+			C.OCI_DEFAULT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0, 0),
 			false); err != nil { //, C.ub2(873), 0),
 			setErrAt(err, "Unable to acquire Oracle environment handle")
 			return nil, err
@@ -85,7 +83,7 @@ func NewEnvironment() (*Environment, error) {
 		// log.Printf("csid=%d", CSID_AL32UTF8)
 	}
 	if err = checkStatus(C.OCIEnvNlsCreate(
-		&env.handle, C.OCI_OBJECT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
+		&env.handle, C.OCI_DEFAULT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
 		CSID_AL32UTF8, CSID_AL32UTF8), false); err != nil {
 		setErrAt(err, "Unable to acquire Oracle environment handle with AL32UTF8 charset")
 		return nil, err
@@ -106,8 +104,8 @@ func NewEnvironment() (*Environment, error) {
 		"Environment_New(): get max bytes per character"); err != nil {
 		return nil, err
 	}
-	env.maxBytesPerCharacter = uint(sb4)
-	env.maxStringBytes = MAX_STRING_CHARS * env.maxBytesPerCharacter
+	env.MaxBytesPerCharacter = uint(sb4)
+	env.maxStringBytes = MAX_STRING_CHARS * env.MaxBytesPerCharacter
 	// log.Printf("maxBytesPerCharacter=%d", env.maxBytesPerCharacter)
 
 	// acquire whether character set is fixed width
@@ -116,14 +114,14 @@ func NewEnvironment() (*Environment, error) {
 		"Environment_New(): determine if charset fixed width"); err != nil {
 		return nil, err
 	}
-	env.fixedWidth = sb4 > 0
+	env.FixedWidth = sb4 > 0
 
 	var e error
 	// determine encodings to use for Unicode values
-	if env.encoding, e = env.GetCharacterSetName(C.OCI_ATTR_ENV_CHARSET_ID); e != nil {
+	if env.Encoding, e = env.GetCharacterSetName(C.OCI_ATTR_ENV_CHARSET_ID); e != nil {
 		return nil, e
 	}
-	if env.nencoding, e = env.GetCharacterSetName(C.OCI_ATTR_ENV_NCHARSET_ID); e != nil {
+	if env.Nencoding, e = env.GetCharacterSetName(C.OCI_ATTR_ENV_NCHARSET_ID); e != nil {
 		return nil, e
 	}
 
@@ -306,5 +304,6 @@ func (env *Environment) AttrGetName(parent unsafe.Pointer, parentType, key int,
 }
 
 func (env *Environment) FromEncodedString(text []byte) string {
+	log.Printf("FromEncodedString(%v=%s)", text, text)
 	return string(text)
 }

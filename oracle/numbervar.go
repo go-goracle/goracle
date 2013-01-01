@@ -37,7 +37,7 @@ func (t *VariableType) IsFloat() bool {
 
 func (t *VariableType) IsInteger() bool {
 	switch t {
-	case BooleanVarType, NumberAsStringVarType, LongIntegerVarType, Int64VarType, Int32VarType:
+	case BooleanVarType, LongIntegerVarType, Int64VarType, Int32VarType:
 		return true
 	}
 	return false
@@ -65,8 +65,11 @@ func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
 	}
 	log.Printf("numberVar_PreDefine typ=%s scale=%d precision=%d", v.typ,
 		scale, precision)
-	if v.typ == nil || v.typ == FloatVarType {
-		if scale == -127 || (scale == 0 && precision > 0) { // int
+	if v.typ == nil {
+		v.typ = FloatVarType
+	}
+	if v.typ == FloatVarType {
+		if precision > 0 && (scale == -127 || scale == 0) { // int
 			if precision > 0 && precision < 10 {
 				v.typ = Int32VarType
 			} else if precision > 0 && precision < 19 {

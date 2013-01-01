@@ -28,7 +28,7 @@ func TestMakeDSN(t *testing.T) {
 }
 
 func TestClientVersion(t *testing.T) {
-	t.Logf("%+v", ClientVersion())
+	t.Logf("ClientVersion=%+v", ClientVersion())
 }
 
 func TestIsConnected(t *testing.T) {
@@ -126,7 +126,7 @@ func TestCursor(t *testing.T) {
 	if err = cur.Execute("CREATE TABLE w (x LONG)", nil, nil); err != nil {
 		t.Logf("cannot check LONG: %s", err)
 	} else {
-		cur.Execute("INSERT INTO w VALUES 'a'", nil, nil)
+		cur.Execute("INSERT INTO w VALUES ('a')", nil, nil)
 		qry = `SELECT x FROM w`
 		if err = cur.Execute(qry, nil, nil); err != nil {
 			t.Logf(`error with "%s": %s`, qry, err)
