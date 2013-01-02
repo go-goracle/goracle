@@ -396,3 +396,39 @@ func SplitDsn(dsn string) (username, password, sid string) {
 	sid = dsn
 	return
 }
+
+// retrieve NLS parameters: OCI charset, client NLS_LANG and database NLS_LANG
+// cur can be nil (in this case it allocates one)
+func (conn *Connection) NlsSettings(cur *Cursor) (oci, client, database string, err error) {
+	oci = conn.environment.Encoding
+	if cur == nil {
+		cur = conn.NewCursor()
+		defer cur.Close()
+	}
+	if err = cur.Execute("SELECT USERENV('language') FROM DUAL", nil, nil); err != nil {
+		err = fmt.Errorf("cannot get session language!?!: %s", err)
+		return
+	}
+	var row []interface{}
+	if row, err = cur.FetchOne(); err != nil {
+		err = fmt.Errorf("no userenv('language')? %s", err)
+		return
+	}
+	client = row[0].(string)
+
+	if err = cur.Execute(`SELECT parameter, value FROM nls_database_parameters
+			WHERE parameter IN ('NLS_TERRITORY', 'NLS_LANGUAGE', 'NLS_CHARACTERSET')`,
+		nil, nil); err != nil {
+		err = fmt.Errorf("error selecting from nls_database_parameters: %s", err)
+		return
+	}
+	params := make(map[string]string, 3)
+	for err == nil {
+		if row, err = cur.FetchOne(); err == nil {
+			params[row[0].(string)] = row[1].(string)
+		}
+	}
+	err = nil
+	database = params["NLS_LANGUAGE"] + "_" + params["NLS_TERRITORY"] + "." + params["NLS_CHARACTERSET"]
+	return
+}

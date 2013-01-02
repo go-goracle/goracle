@@ -16,7 +16,7 @@ var dataTypesTests = []struct {
 		"2011-12-13 14:15:16 +0100 CET"},
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
-	{"SELECT HEXTORAW('00') FROM DUAL", "00"},
+	{"SELECT HEXTORAW('00') FROM DUAL", "\x00"},
 	{"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
 }
 
@@ -25,17 +25,22 @@ func TestSimpleTypes(t *testing.T) {
 	if !conn.IsConnected() {
 		t.FailNow()
 	}
-	{
-		env := conn.GetEnvironment()
-		t.Logf("Encoding=%s fixedWidth? %b b/c=%d", env.Encoding, env.FixedWidth, env.MaxBytesPerCharacter)
-	}
+	var (
+		row []interface{}
+	)
 	cur := conn.NewCursor()
 	defer cur.Close()
+	{
+		if oci, client, db, err := conn.NlsSettings(cur); err != nil {
+			t.Logf("NlsSettings: %s", err)
+		} else {
+			t.Logf("NLS oci=%s client=%s database=%s", oci, client, db)
+		}
+	}
 
 	var (
-		err  error
-		row  []interface{}
 		repr string
+		err  error
 	)
 	for i, tt := range dataTypesTests {
 		if err = cur.Execute(tt.in, nil, nil); err != nil {
