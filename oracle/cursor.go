@@ -208,7 +208,7 @@ func (cur *Cursor) performDefine() error {
 	cur.fetchArraySize = cur.arraySize
 	for pos := uint(1); pos <= numParams; pos++ {
 		v, e = varDefine(cur, cur.fetchArraySize, pos)
-		log.Printf("varDefine[%d]: %s nil?%s", pos, e, e == nil)
+		// log.Printf("varDefine[%d]: %s nil?%s", pos, e, e == nil)
 		if e != nil {
 			return fmt.Errorf("error defining variable %d: %s", pos, e)
 		}
@@ -218,7 +218,7 @@ func (cur *Cursor) performDefine() error {
 		// log.Printf("var %d=%v", pos, v)
 		cur.fetchVariables[pos-1] = v
 	}
-	log.Printf("len(cur.fetchVariables)=%d", len(cur.fetchVariables))
+	// log.Printf("len(cur.fetchVariables)=%d", len(cur.fetchVariables))
 	return nil
 }
 
@@ -1286,7 +1286,7 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 		"internalFetch(): row count"); err != nil {
 		return err
 	}
-	log.Printf("row count = %d", rowCount)
+	// log.Printf("row count = %d", rowCount)
 	cur.actualRows = rowCount - cur.rowCount
 	cur.rowNum = 0
 	return nil
@@ -1577,5 +1577,10 @@ func (cur *Cursor) getNext() error {
 var statementTagHash = fnv.New64a()
 
 func hashTag(tag []byte) []byte {
-	return statementTagHash.Sum(tag)
+	statementTagHash.Reset()
+	statementTagHash.Write(tag)
+	// hsh := statementTagHash.Sum(nil)
+	// log.Printf("hashTag(%s[%d])=%s[%d]", tag, len(tag), hsh, len(hsh))
+	// return hsh
+	return statementTagHash.Sum(nil)
 }

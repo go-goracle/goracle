@@ -63,8 +63,8 @@ func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
 		"numberVar_PreDefine(): precision"); err != nil {
 		return err
 	}
-	log.Printf("numberVar_PreDefine typ=%s scale=%d precision=%d", v.typ,
-		scale, precision)
+	// log.Printf("numberVar_PreDefine typ=%s scale=%d precision=%d", v.typ,
+	// 	scale, precision)
 	if v.typ == nil {
 		v.typ = FloatVarType
 	}
@@ -79,7 +79,7 @@ func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
 			}
 		}
 	}
-	log.Printf("numberVar_PreDefine ok")
+	// log.Printf("numberVar_PreDefine ok")
 
 	return nil
 }
@@ -212,7 +212,7 @@ func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 		}
 		return v.environment.FromEncodedString(buf[:int(size)]), nil
 	}
-	log.Printf("v=%s IsInteger?%s", v.typ, v.typ.IsInteger())
+	// log.Printf("v=%s IsInteger?%s", v.typ, v.typ.IsInteger())
 	if v.typ.IsInteger() {
 		intVal := int64(0)
 		if err := v.environment.CheckStatus(
@@ -266,6 +266,7 @@ func init() {
 	}
 
 	Int32VarType = &VariableType{
+		Name:         "Int32",
 		preDefine:    numberVar_PreDefine,
 		setValue:     numberVar_SetValue,
 		getValue:     numberVar_GetValue,

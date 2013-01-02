@@ -241,7 +241,9 @@ func (env *Environment) CheckStatus(status C.sword, at string) error {
 		return nil
 	}
 	if err := checkStatus(status, true); err != nil {
-		log.Printf("CheckStatus(%d): ERR=%s", status, err)
+		if err != NoDataFound {
+			log.Printf("CheckStatus(%d): ERR=%s", status, err)
+		}
 		return err
 	}
 	var (

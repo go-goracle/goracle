@@ -731,7 +731,7 @@ func varDefine(cur *Cursor, numElements, position uint) (*Variable, error) {
 
 	// call the helper to do the actual work
 	v, err := variableDefineHelper(cur, param, position, numElements)
-	log.Printf("variable defined err=%s nil?%s", err, err == nil)
+	// log.Printf("variable defined err=%s nil?%s", err, err == nil)
 	C.OCIDescriptorFree(unsafe.Pointer(param), C.OCI_DTYPE_PARAM)
 	return v, err
 }

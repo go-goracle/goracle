@@ -18,7 +18,7 @@ var dataTypesTests = []struct {
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
 	{"SELECT HEXTORAW('00') FROM DUAL", "\x00"},
-	{"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
+	// {"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
 }
 
 func TestSimpleTypes(t *testing.T) {
@@ -64,8 +64,11 @@ var bindsTests = []struct {
 	out string
 }{
 	{1, "Typ=2 Len=2: c1,2"},
+	{1.0 / 2, "Typ=2 Len=2: c0,33"},
+	{-1.25, "Typ=2 Len=4: 3e,64,4c,66"},
 	{"SELECT", "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
 	{"árvíztűrő tükörfúrógép", "Typ=1 Len=31 CharacterSet=AL32UTF8: c3,a1,72,76,c3,ad,7a,74,c5,b1,72,c5,91,20,74,c3,bc,6b,c3,b6,72,66,c3,ba,72,c3,b3,67,c3,a9,70"},
+	{[]byte{0, 1, 2, 3, 5, 7, 11, 13}, "Typ=23 Len=8: 0,1,2,3,5,7,b,d"},
 	{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
 		"Typ=12 Len=7: 78,71,1,2,b,7,32"},
 }
