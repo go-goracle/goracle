@@ -3,6 +3,7 @@ package oracle
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 var dataTypesTests = []struct {
@@ -62,9 +63,11 @@ var bindsTests = []struct {
 	in  interface{}
 	out string
 }{
-	{1, "1"},
-	{"SELECT", "SELECT"},
-	{"árvíztűrő tükörfúrógép", "árvíztűrő tükörfúrógép"},
+	{1, "Typ=2 Len=2: c1,2"},
+	{"SELECT", "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
+	{"árvíztűrő tükörfúrógép", "Typ=1 Len=31 CharacterSet=AL32UTF8: c3,a1,72,76,c3,ad,7a,74,c5,b1,72,c5,91,20,74,c3,bc,6b,c3,b6,72,66,c3,ba,72,c3,b3,67,c3,a9,70"},
+	{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
+		"Typ=12 Len=7: 78,71,1,2,b,7,32"},
 }
 
 func TestSimpleBinds(t *testing.T) {
@@ -81,7 +84,7 @@ func TestSimpleBinds(t *testing.T) {
 		repr string
 	)
 	for i, tt := range bindsTests {
-		if err = cur.Execute("SELECT TO_CHAR(:1) FROM DUAL", []interface{}{tt.in}, nil); err != nil {
+		if err = cur.Execute("SELECT DUMP(:1, 1016) FROM DUAL", []interface{}{tt.in}, nil); err != nil {
 			t.Errorf("error executing `%s`: %s", tt.in, err)
 		} else {
 			if row, err = cur.FetchOne(); err != nil {
