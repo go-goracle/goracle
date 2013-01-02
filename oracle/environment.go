@@ -304,6 +304,6 @@ func (env *Environment) AttrGetName(parent unsafe.Pointer, parentType, key int,
 }
 
 func (env *Environment) FromEncodedString(text []byte) string {
-	log.Printf("FromEncodedString(%v=%s)", text, text)
+	// log.Printf("FromEncodedString(%v=%s)", text, text)
 	return string(text)
 }

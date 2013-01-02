@@ -540,35 +540,45 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 			// if the number of elements has changed, create a new variable
 			// this is only necessary for executemany() since execute() always
 			// passes a value of 1 for the number of elements
-		} else if numElements > origVar.allocatedElements {
-			if newVar, err = NewVariable(cur, numElements, origVar.typ,
-				origVar.size); err != nil {
+		} else {
+			newTyp, _, _, e := VarTypeByValue(value)
+			if e != nil {
+				err = e
 				return
 			}
-			if err = newVar.SetValue(arrayPos, value); err != nil {
-				return
+			if newTyp != origVar.typ {
+				origVar = nil
+			} else {
+				if numElements > origVar.allocatedElements {
+					if newVar, err = NewVariable(cur, numElements, origVar.typ,
+						origVar.size); err != nil {
+						return
+					}
+					if err = newVar.SetValue(arrayPos, value); err != nil {
+						return
+					}
+
+					// otherwise, attempt to set the value
+				} else if origVar.SetValue(arrayPos, value); err != nil {
+
+					// executemany() should simply fail after the first element
+					if arrayPos > 0 {
+						return
+					}
+
+					// anything other than index error or type error should fail
+					/*
+					   if (!PyErr_ExceptionMatches(PyExc_IndexError) &&
+					           !PyErr_ExceptionMatches(PyExc_TypeError))
+					       return -1;
+					*/
+					// return
+
+					// clear the exception and try to create a new variable
+					origVar = nil
+				}
 			}
-
-			// otherwise, attempt to set the value
-		} else if origVar.SetValue(arrayPos, value); err != nil {
-
-			// executemany() should simply fail after the first element
-			if arrayPos > 0 {
-				return
-			}
-
-			// anything other than index error or type error should fail
-			/*
-			   if (!PyErr_ExceptionMatches(PyExc_IndexError) &&
-			           !PyErr_ExceptionMatches(PyExc_TypeError))
-			       return -1;
-			*/
-			return
-
-			// clear the exception and try to create a new variable
-			origVar = nil
 		}
-
 	}
 
 	// if no original variable used, create a new one

@@ -59,6 +59,8 @@ func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size uint
 		// actualLength: make([]C.ub2, numElements),
 	}
 
+	// log.Printf("NewVariable(elts=%d typ=%s)", numElements, varType)
+
 	// set the maximum length of the variable, ensure that a minimum of
 	// 2 bytes is allocated to ensure that the array size check works
 	if v.typ.isVariableLength {
@@ -258,14 +260,17 @@ func (v *Variable) resize(size uint) error {
 	}
 
 	nsize := v.allocatedElements * size
-	if len(v.dataBytes) == int(nsize) {
+	olen := len(v.dataBytes)
+	if olen == int(nsize) {
 		return nil
 	}
 	v.bufferSize = size
-	if len(v.dataBytes) < int(nsize) {
+	if olen > int(nsize) {
+		// log.Printf("olen=%d > nsize=%d", olen, nsize)
 		v.dataBytes = v.dataBytes[:nsize]
 	} else {
-		v.dataBytes = append(v.dataBytes, make([]byte, nsize-uint(len(v.dataBytes)))...)
+		// log.Printf("olen=%d < nsize=%d", olen, nsize)
+		v.dataBytes = append(v.dataBytes, make([]byte, nsize-uint(olen))...)
 	}
 
 	// force rebinding
@@ -284,6 +289,10 @@ type OraTyper interface {
 // Return a variable type given a Go object or error if the Go
 // value does not have a corresponding variable type.
 func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements uint, err error) {
+	// defer func() {
+	// 	log.Printf("VarTypeByValue(%T) => %s", data, vt)
+	// }()
+
 	if data == nil {
 		return StringVarType, 1, 0, nil
 	}

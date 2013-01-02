@@ -62,8 +62,8 @@ var bindsTests = []struct {
 	in  interface{}
 	out string
 }{
-	{1, "%!s(float64=1)"},
-	{"SELECT", "%!s(float64=1)"},
+	{1, "1"},
+	{"SELECT", "SELECT"},
 	{"árvíztűrő tükörfúrógép", "árvíztűrő tükörfúrógép"},
 }
 
