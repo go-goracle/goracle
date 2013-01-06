@@ -300,35 +300,96 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 	case VariableType:
 		return &x, x.size, 0, nil
 	case *VariableType:
+		if x == nil {
+			return StringVarType, 1, 0, nil
+		}
 		return x, x.size, 0, nil
 	case Variable:
 		return x.typ, x.typ.size, 0, nil
 	case *Variable:
+		if x == nil {
+			return StringVarType, 1, 0, nil
+		}
 		return x.typ, x.typ.size, 0, nil
+
 	case string:
 		if len(x) > MAX_STRING_CHARS {
 			return LongStringVarType, uint(len(x)), 0, nil
 		}
 		return StringVarType, uint(len(x)), 0, nil
+	case []string:
+		numElements = uint(len(x))
+		if numElements == 0 {
+			return nil, 0, 0, ListIsEmpty
+		}
+		vt, size, _, err = VarTypeByValue(x[0])
+		return
 	case bool:
 		return BooleanVarType, 0, 0, nil
+
 	case int8, uint8, int16, uint16, int, uint, int32, uint32:
 		return Int32VarType, 0, 0, nil
+	case []int32:
+		numElements = uint(len(x))
+		if numElements == 0 {
+			return nil, 0, 0, ListIsEmpty
+		}
+		vt, size, _, err = VarTypeByValue(x[0])
+		return
+
 	case int64, uint64:
 		return Int64VarType, 0, 0, nil
+	case []int64:
+		numElements = uint(len(x))
+		if numElements == 0 {
+			return nil, 0, 0, ListIsEmpty
+		}
+		vt, size, _, err = VarTypeByValue(x[0])
+		return
+
 	case float32, float64:
 		return FloatVarType, 0, 0, nil
+	case []float32:
+		numElements = uint(len(x))
+		if numElements == 0 {
+			return nil, 0, 0, ListIsEmpty
+		}
+		vt, size, _, err = VarTypeByValue(x[0])
+		return
+	case []float64:
+		numElements = uint(len(x))
+		if numElements == 0 {
+			return nil, 0, 0, ListIsEmpty
+		}
+		vt, size, _, err = VarTypeByValue(x[0])
+		return
+
 	case time.Time:
 		return DateTimeVarType, 0, 0, nil
+	case []time.Time:
+		numElements = uint(len(x))
+		if numElements == 0 {
+			return nil, 0, 0, ListIsEmpty
+		}
+		vt, size, _, err = VarTypeByValue(x[0])
+		return
+
 	case time.Duration:
 		return IntervalVarType, 0, 0, nil
-	// case CursorVarType:
-	// 	return CursorVarType, 0, 0, nil
+
 	case []byte:
 		if len(x) > MAX_BINARY_BYTES {
 			return LongBinaryVarType, uint(len(x)), 0, nil
 		}
 		return BinaryVarType, uint(len(x)), 0, nil
+	case [][]byte:
+		numElements = uint(len(x))
+		if numElements == 0 {
+			return nil, 0, 0, ListIsEmpty
+		}
+		vt, size, _, err = VarTypeByValue(x[0])
+		return
+
 	case []interface{}:
 		numElements = uint(len(x))
 		if numElements == 0 {

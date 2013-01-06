@@ -149,6 +149,7 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		return v.environment.numberFromFloat(floatVal,
 			unsafe.Pointer(&v.dataBytes[pos*C.sizeof_OCINumber]))
 	}
+	var err error
 	switch x := value.(type) {
 	case bool:
 		if x {
@@ -161,6 +162,14 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		return nfInt(int64(x))
 	case int32:
 		return nfInt(int64(x))
+	case []int32:
+		for i := range x {
+			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+				return err
+			}
+		}
+		return err
+
 	case int:
 		return nfInt(int64(x))
 	case uint:
@@ -171,13 +180,45 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		return nfInt(int64(x))
 	case int64:
 		return nfInt(int64(x))
+	case []int64:
+		for i := range x {
+			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+				return err
+			}
+		}
+		return err
+
 	case float32:
 		return nfFloat(float64(x))
+	case []float32:
+		for i := range x {
+			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+				return err
+			}
+		}
+		return err
+
 	case float64:
 		return nfFloat(x)
+	case []float64:
+		for i := range x {
+			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+				return err
+			}
+		}
+		return err
+
 	case string:
 		return v.environment.numberFromText(x,
 			unsafe.Pointer(&v.dataBytes[pos*C.sizeof_OCINumber]))
+	case []string:
+		for i := range x {
+			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+				return err
+			}
+		}
+		return err
+
 	default:
 		if x, ok := value.(fmt.Stringer); ok {
 			return v.environment.numberFromText(x.String(),

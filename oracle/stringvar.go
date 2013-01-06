@@ -42,7 +42,7 @@ func stringVar_Initialize(v *Variable, cur *Cursor) error {
 }
 
 // Set the value of the variable.
-func stringVar_SetValue(v *Variable, pos uint, value interface{}) error {
+func stringVar_SetValue(v *Variable, pos uint, value interface{}) (err error) {
 	var (
 		text   string
 		buf    []byte
@@ -51,6 +51,21 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	)
 	if text, ok = value.(string); !ok {
 		if buf, ok = value.([]byte); !ok {
+			if arr, ok := value.([]string); ok {
+				for i := range arr {
+					if err = stringVar_SetValue(v, pos+uint(i), arr[i]); err != nil {
+						return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
+					}
+				}
+				return nil
+			} else if arr, ok := value.([]byte); ok {
+				for i := range arr {
+					if err = stringVar_SetValue(v, pos+uint(i), arr[i]); err != nil {
+						return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
+					}
+				}
+				return nil
+			}
 			return fmt.Errorf("string or []byte required, got %T", value)
 		} else {
 			if v.typ.isCharData {

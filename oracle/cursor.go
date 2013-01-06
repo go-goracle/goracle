@@ -529,6 +529,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 	isValueVar = isVariable(value) //FIXME
 
 	// handle case where variable is already bound
+	// log.Printf("origVar=%s value=%s (%T)", origVar, value, value)
 	if origVar != nil {
 
 		// if the value is a variable object, rebind it if necessary
@@ -583,10 +584,13 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 
 	// if no original variable used, create a new one
 	if origVar == nil {
+		log.Printf("origVar is Nil, isValueVar? %b", isValueVar)
 
 		// if the value is a variable object, bind it directly
-		if isValueVar {
+		if isValueVar && value != nil && value.(*Variable) != nil {
+			log.Printf("A")
 			newVar = value.(*Variable)
+			log.Printf("newVar=%v %T", newVar, newVar)
 			newVar.boundPos = 0
 			newVar.boundName = ""
 
@@ -1582,5 +1586,5 @@ func hashTag(tag []byte) []byte {
 	// hsh := statementTagHash.Sum(nil)
 	// log.Printf("hashTag(%s[%d])=%s[%d]", tag, len(tag), hsh, len(hsh))
 	// return hsh
-	return statementTagHash.Sum(nil)
+	return statementTagHash.Sum(make([]byte, 0, 8))
 }
