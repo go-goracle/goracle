@@ -13,7 +13,7 @@ import (
 	// "unsafe"
 	"errors"
 	"fmt"
-	// "log"
+	"log"
 )
 
 var (
@@ -66,7 +66,8 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) (err error) {
 				}
 				return nil
 			}
-			return fmt.Errorf("string or []byte required, got %T", value)
+			// return fmt.Errorf("string or []byte required, got %T", value)
+			log.Panicf("string or []byte required, got %T", value)
 		} else {
 			if v.typ.isCharData {
 				text = string(buf)
