@@ -2,6 +2,7 @@ package oracle
 
 import (
 	"flag"
+	"log"
 	"testing"
 )
 
@@ -156,12 +157,10 @@ func getConnection(t *testing.T) Connection {
 	var err error
 	conn, err = NewConnection(user, passw, sid)
 	if err != nil {
-		t.Logf("error creating connection to %s: %s", *dsn, err)
-		t.Fail()
+		log.Panicf("error creating connection to %s: %s", *dsn, err)
 	}
 	if err = conn.Connect(0, false); err != nil {
-		t.Logf("error connecting: %s", err)
-		t.Fail()
+		log.Panicf("error connecting: %s", err)
 	}
 	return conn
 }
