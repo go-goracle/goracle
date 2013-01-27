@@ -156,12 +156,12 @@ var inOutBindsTests = []struct {
 	out    string
 }{
 	{"INTEGER(3)", int32(1), "Typ=2 Len=2: 193,2"},
-	// {"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "Typ=2 Len=2: c0,33"},
-	// {"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"}, "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
+	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "Typ=2 Len=2: c0,33"},
+	{"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"}, "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
 	// {"RAW(4)", [][]byte{[]byte{0, 1, 2, 3}, []byte{5, 7, 11, 13}}, "Typ=23 Len=8: 0,1,2,3,5,7,b,d"},
-	// {"DATE", []time.Time{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
-	// 	time.Date(2012, 1, 2, 10, 6, 49, 0, time.Local)},
-	// 	"Typ=12 Len=7: 78,71,1,2,b,7,32"},
+	{"DATE", []time.Time{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
+		time.Date(2012, 1, 2, 10, 6, 49, 0, time.Local)},
+		"Typ=12 Len=7: 78,71,1,2,b,7,32"},
 }
 
 func TestInOutBinds(t *testing.T) {
@@ -216,7 +216,7 @@ var arrBindsTests = []struct {
 	in      interface{}
 	out     string
 }{
-	{"INTEGER(3)", []int32{1, 3}, "Typ=2 Len=2: c1,2"},
+	{"INTEGER(3)", []int32{1, 3, 5}, "Typ=2 Len=2: c1,2"},
 	// {"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "Typ=2 Len=2: c0,33"},
 	// {"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"}, "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
 	// {"RAW(4)", [][]byte{[]byte{0, 1, 2, 3}, []byte{5, 7, 11, 13}}, "Typ=23 Len=8: 0,1,2,3,5,7,b,d"},
@@ -239,23 +239,28 @@ func TestArrayBinds(t *testing.T) {
 		out *Variable
 		val interface{}
 	)
+	if out, err = cur.NewVar(""); err != nil {
+		t.Errorf("cannot create out variable: %s", err)
+		t.FailNow()
+	}
 	for i, tt := range arrBindsTests {
 		qry = `DECLARE
-	tab_typ TABLE OF ` + tt.tab_typ + ` INDEX BY PLS_INTEGER;
-	tab tab_typ := :1;
+	TYPE tab_typ IS TABLE OF ` + tt.tab_typ + ` INDEX BY PLS_INTEGER;
+	tab tab_typ;
 	v_idx PLS_INTEGER;
-	out VARCHAR2(1000);
+	v_out VARCHAR2(1000);
 BEGIN
+	SELECT DUMP(:1) INTO v_out FROM DUAL;
+	--tab := :1;
 	v_idx := tab.FIRST;
-	IF v_idx IS NULL THEN
-		out := 'EMPTY';
-	ELSE
+	IF FALSE and v_idx IS NULL THEN
+		v_out := 'EMPTY';
 	END IF;
 	WHILE v_idx IS NOT NULL LOOP
-		out := out||v_idx||'. '||DUMP(tab(v_idx))||CHR(10);
+	    SELECT v_out||v_idx||'. '||DUMP(tab(v_idx))||CHR(10) INTO v_out FROM DUAL;
 		v_idx := tab.NEXT(v_idx);
 	END LOOP;
-	:2 := out;
+	:2 := v_out;
 END;`
 		if err = cur.Execute(qry, []interface{}{tt.in, out}, nil); err != nil {
 			t.Errorf("error executing `%s`: %s", qry, err)
@@ -265,7 +270,7 @@ END;`
 			t.Errorf("%d. error getting value: %s", i, err)
 			continue
 		}
-		t.Logf("%d. out:%s %v", i, out, val)
+		t.Logf("%d. out:%s => %v", i, out, val)
 		// if out != tt.out {
 		// 	t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out, tt.out)
 		// }
