@@ -590,7 +590,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 		if isValueVar && value != nil && value.(*Variable) != nil {
 			log.Printf("A")
 			newVar = value.(*Variable)
-			log.Printf("newVar=%v %T", newVar, newVar)
+			log.Printf("newVar=%v %T", newVar, newVar.typ.Name)
 			newVar.boundPos = 0
 			newVar.boundName = ""
 
@@ -1476,9 +1476,14 @@ func (cur *Cursor) SetOutputSize(outputSize, outputSizeColumn int) {
 }
 
 // Create a bind variable and return it.
-func (cur *Cursor) NewVar(varType *VariableType, size uint, arraySize uint /*inconverter, outconverter, typename*/) (v *Variable, err error) {
+func (cur *Cursor) NewVar(value interface{}, /*inconverter, outconverter, typename*/
+) (v *Variable, err error) {
 	// determine the type of variable
 	// varType = Variable_TypeByPythonType(self, type);
+	varType, size, numElements, err := VarTypeByValue(value)
+	if err != nil {
+		return nil, err
+	}
 	if varType.isVariableLength && size == 0 {
 		size = varType.size
 	}
@@ -1491,7 +1496,7 @@ func (cur *Cursor) NewVar(varType *VariableType, size uint, arraySize uint /*inc
 	*/
 
 	// create the variable
-	v, err = NewVariable(cur, uint(arraySize), varType, size)
+	v, err = NewVariable(cur, numElements, varType, size)
 	/*
 	   var->inConverter = inConverter;
 	   var->outConverter = outConverter;
@@ -1514,7 +1519,7 @@ func (cur *Cursor) NewVar(varType *VariableType, size uint, arraySize uint /*inc
 }
 
 // Create an array bind variable and return it.
-func (cur *Cursor) ArrayVar(varType *VariableType, values []interface{}, size uint) (v *Variable, err error) {
+func (cur *Cursor) NewArrayVar(varType *VariableType, values []interface{}, size uint) (v *Variable, err error) {
 	if varType.isVariableLength && size == 0 {
 		size = varType.size
 	}
