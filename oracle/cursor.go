@@ -25,7 +25,7 @@ import (
 )
 
 // func init() {
-// log.Printf("bindInfo_elementSize=%d", C.bindInfo_elementSize)
+// debug("bindInfo_elementSize=%d", C.bindInfo_elementSize)
 // }
 
 type Cursor struct {
@@ -67,7 +67,7 @@ func (cur *Cursor) freeHandle() error {
 	if cur.handle == nil {
 		return nil
 	}
-	// log.Printf("freeing cursor handle %v", cur.handle)
+	// debug("freeing cursor handle %v", cur.handle)
 	if cur.isOwned {
 		return cur.environment.CheckStatus(
 			C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
@@ -197,7 +197,7 @@ func (cur *Cursor) performDefine() error {
 		"PerformDefine"); err != nil {
 		return err
 	}
-	// log.Printf("performDefine param count = %d", numParams)
+	// debug("performDefine param count = %d", numParams)
 
 	// create a list corresponding to the number of items
 	cur.fetchVariables = make([]*Variable, numParams)
@@ -208,17 +208,17 @@ func (cur *Cursor) performDefine() error {
 	cur.fetchArraySize = cur.arraySize
 	for pos := uint(1); pos <= numParams; pos++ {
 		v, e = varDefine(cur, cur.fetchArraySize, pos)
-		// log.Printf("varDefine[%d]: %s nil?%s", pos, e, e == nil)
+		// debug("varDefine[%d]: %s nil?%s", pos, e, e == nil)
 		if e != nil {
 			return fmt.Errorf("error defining variable %d: %s", pos, e)
 		}
 		if v == nil {
 			return fmt.Errorf("empty variable on pos %d!", pos)
 		}
-		// log.Printf("var %d=%v", pos, v)
+		// debug("var %d=%v", pos, v)
 		cur.fetchVariables[pos-1] = v
 	}
-	// log.Printf("len(cur.fetchVariables)=%d", len(cur.fetchVariables))
+	// debug("len(cur.fetchVariables)=%d", len(cur.fetchVariables))
 	return nil
 }
 
@@ -352,7 +352,7 @@ func (cur *Cursor) itemDescriptionHelper(pos uint, param *C.OCIParam) (desc Vari
 
 	// logPrefix := fmt.Sprintf("iDH(%d, %v) ", pos, param)
 	logg := func(format string, args ...interface{}) {
-		// log.Printf(logPrefix+format, args...)
+		// debug(logPrefix+format, args...)
 	}
 	// acquire usable type of intem
 	if varType, err = cur.environment.varTypeByOracleDescriptor(param); err != nil {
@@ -529,7 +529,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 	isValueVar = isVariable(value) //FIXME
 
 	// handle case where variable is already bound
-	// log.Printf("origVar=%s value=%s (%T)", origVar, value, value)
+	// debug("origVar=%s value=%s (%T)", origVar, value, value)
 	if origVar != nil {
 
 		// if the value is a variable object, rebind it if necessary
@@ -584,13 +584,13 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 
 	// if no original variable used, create a new one
 	if origVar == nil {
-		log.Printf("origVar is Nil, isValueVar? %b", isValueVar)
+		debug("origVar is Nil, isValueVar? %b", isValueVar)
 
 		// if the value is a variable object, bind it directly
 		if isValueVar && value != nil && value.(*Variable) != nil {
-			log.Printf("A")
+			debug("A")
 			newVar = value.(*Variable)
-			log.Printf("newVar=%v %T", newVar, newVar.typ.Name)
+			debug("newVar=%v %T", newVar, newVar.typ.Name)
 			newVar.boundPos = 0
 			newVar.boundName = ""
 
@@ -777,7 +777,7 @@ func (cur *Cursor) fetchInto(row ...interface{}) error {
 	// increment row counters
 	cur.rowNum++
 	cur.rowCount++
-	// log.Printf("fetchInto rn=%d rc=%d row=%+v", cur.rowNum, cur.rowCount, row)
+	// debug("fetchInto rn=%d rc=%d row=%+v", cur.rowNum, cur.rowCount, row)
 
 	return nil
 }
@@ -838,7 +838,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 		cur.handle = nil
 		return err
 	}
-	// log.Printf("prepared")
+	// debug("prepared")
 
 	// clear bind variables, if applicable
 	if cur.setInputSizes < 0 {
@@ -1126,7 +1126,7 @@ func (cur *Cursor) Execute(statement string,
 		return err
 	}
 
-	// log.Printf("internalPrepare done, performing binds")
+	// debug("internalPrepare done, performing binds")
 	// perform binds
 	if listArgs != nil && len(listArgs) > 0 {
 		if err = cur.setBindVariablesByPos(listArgs, 1, 0, false); err != nil {
@@ -1140,7 +1140,7 @@ func (cur *Cursor) Execute(statement string,
 	if err = cur.performBind(); err != nil {
 		return err
 	}
-	// log.Printf("bind done, executing statement")
+	// debug("bind done, executing statement")
 
 	// execute the statement
 	isQuery := cur.statementType == C.OCI_STMT_SELECT
@@ -1151,7 +1151,7 @@ func (cur *Cursor) Execute(statement string,
 	if err = cur.internalExecute(numIters); err != nil {
 		return err
 	}
-	// log.Printf("executed, calling performDefine")
+	// debug("executed, calling performDefine")
 
 	// perform defines, if necessary
 	if isQuery && cur.fetchVariables == nil {
@@ -1262,20 +1262,20 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 	if cur.fetchVariables == nil {
 		return errors.New("query not executed")
 	}
-	// log.Printf("fetchVars=%v", cur.fetchVariables)
+	// debug("fetchVars=%v", cur.fetchVariables)
 	var err error
 	for _, v := range cur.fetchVariables {
-		// log.Printf("fetchvar %d=%s", v.internalFetchNum, v)
+		// debug("fetchvar %d=%s", v.internalFetchNum, v)
 		v.internalFetchNum++
-		// log.Printf("typ=%s", v.typ)
-		// log.Printf("preFetch=%s", v.typ.preFetch)
+		// debug("typ=%s", v.typ)
+		// debug("preFetch=%s", v.typ.preFetch)
 		if v.typ.preFetch != nil {
 			if err = v.typ.preFetch(v); err != nil {
 				return err
 			}
 		}
 	}
-	// log.Printf("StmtFetch numRows=%d", numRows)
+	// debug("StmtFetch numRows=%d", numRows)
 	// Py_BEGIN_ALLOW_THREADS
 	if err = cur.environment.CheckStatus(
 		C.OCIStmtFetch(cur.handle, cur.environment.errorHandle,
@@ -1283,14 +1283,14 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 		"internalFetch(): fetch"); err != nil && err != NoDataFound {
 		return err
 	}
-	// log.Printf("fetched, getting row count")
+	// debug("fetched, getting row count")
 	var rowCount int
 	if _, err = cur.environment.AttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 		C.OCI_ATTR_ROW_COUNT, unsafe.Pointer(&rowCount),
 		"internalFetch(): row count"); err != nil {
 		return err
 	}
-	// log.Printf("row count = %d", rowCount)
+	// debug("row count = %d", rowCount)
 	cur.actualRows = rowCount - cur.rowCount
 	cur.rowNum = 0
 	return nil
@@ -1299,7 +1299,7 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 // Returns an integer indicating if more rows can be retrieved from the
 // cursor.
 func (cur *Cursor) moreRows() (bool, error) {
-	// log.Printf("moreRows rowNum=%d actualRows=%d", cur.rowNum, cur.actualRows)
+	// debug("moreRows rowNum=%d actualRows=%d", cur.rowNum, cur.actualRows)
 	if cur.rowNum >= cur.actualRows {
 		if cur.actualRows < 0 || uint(cur.actualRows) == cur.fetchArraySize {
 			if err := cur.internalFetch(cur.fetchArraySize); err != nil {
@@ -1366,7 +1366,7 @@ func (cur *Cursor) FetchOneInto(row ...interface{}) (err error) {
 		return io.EOF
 	}
 	err = cur.fetchInto(row...)
-	log.Printf("FetchOneInto result row=%v", row)
+	debug("FetchOneInto result row=%v", row)
 	return
 }
 
@@ -1589,7 +1589,7 @@ func hashTag(tag []byte) []byte {
 	statementTagHash.Reset()
 	statementTagHash.Write(tag)
 	// hsh := statementTagHash.Sum(nil)
-	// log.Printf("hashTag(%s[%d])=%s[%d]", tag, len(tag), hsh, len(hsh))
+	// debug("hashTag(%s[%d])=%s[%d]", tag, len(tag), hsh, len(hsh))
 	// return hsh
 	return statementTagHash.Sum(make([]byte, 0, 8))
 }

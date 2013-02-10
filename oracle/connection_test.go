@@ -7,9 +7,11 @@ import (
 )
 
 var dsn = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
+var dbg = flag.Bool("debug", false, "print debug messages?")
 
 func init() {
 	flag.Parse()
+	IsDebug = *dbg
 }
 
 func TestMakeDSN(t *testing.T) {

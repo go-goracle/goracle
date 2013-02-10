@@ -2,6 +2,7 @@ package oracle
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 )
 
@@ -45,5 +46,15 @@ func ProgrammingError(text string) error {
 func setErrAt(err error, at string) {
 	if x, ok := err.(*Error); ok {
 		x.At = at
+	}
+}
+
+// print debug messages?
+var IsDebug bool
+
+// print with log.Printf if IsDebug
+func debug(format string, args ...interface{}) {
+	if IsDebug {
+		log.Printf(format, args...)
 	}
 }

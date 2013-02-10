@@ -57,7 +57,17 @@ func (t *VariableType) IsDate() bool {
 func dateTimeVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	x, ok := value.(time.Time)
 	if !ok {
-		return fmt.Errorf("awaited time.Time, got %T", value)
+		if a, ok := value.([]time.Time); !ok {
+			return fmt.Errorf("awaited time.Time or []time.Time, got %T", value)
+		} else {
+			var err error
+			for i, x := range a {
+				if err = dateTimeVar_SetValue(v, pos+uint(i), x); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 	}
 	/*
 		if err := v.environment.CheckStatus(

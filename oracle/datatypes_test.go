@@ -156,12 +156,11 @@ var inOutBindsTests = []struct {
 	out    string
 }{
 	{"INTEGER(3)", int32(1), "Typ=2 Len=2: 193,2"},
-	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "Typ=2 Len=2: c0,33"},
-	{"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"}, "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
-	// {"RAW(4)", [][]byte{[]byte{0, 1, 2, 3}, []byte{5, 7, 11, 13}}, "Typ=23 Len=8: 0,1,2,3,5,7,b,d"},
-	{"DATE", []time.Time{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
-		time.Date(2012, 1, 2, 10, 6, 49, 0, time.Local)},
-		"Typ=12 Len=7: 78,71,1,2,b,7,32"},
+	{"NUMBER(5,3)", float32(1.0 / 2), "Typ=2 Len=2: 192,51"},
+	{"VARCHAR2(40)", "árvíztűrő tükörfúrógép",
+		"Typ=1 Len=31: 195,161,114,118,195,173,122,116,197,177,114,197,145,32,116,195,188,107,195,182,114,102,195,186,114,195,179,103,195,169,112"},
+	{"DATE", time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
+		"Typ=12 Len=7: 120,113,1,2,11,7,50"},
 }
 
 func TestInOutBinds(t *testing.T) {
@@ -180,10 +179,6 @@ func TestInOutBinds(t *testing.T) {
 		val     interface{}
 		out_str string
 	)
-	if out, err = cur.NewVar(""); err != nil {
-		t.Errorf("error creating output variable: %s", err)
-		t.FailNow()
-	}
 
 	for i, tt := range inOutBindsTests {
 		qry = `DECLARE
@@ -193,6 +188,10 @@ BEGIN
 	SELECT DUMP(v_in) INTO v_out FROM DUAL;
 	:2 := v_out;
 END;`
+		if out, err = cur.NewVar(""); err != nil {
+			t.Errorf("error creating output variable: %s", err)
+			t.FailNow()
+		}
 		if err = cur.Execute(qry, []interface{}{tt.in, out}, nil); err != nil {
 			t.Errorf("error executing `%s`: %s", qry, err)
 			continue
@@ -204,7 +203,7 @@ END;`
 		if out_str, ok = val.(string); !ok {
 			t.Logf("output is not string!?!, but %T (%v)", val, val)
 		}
-		t.Logf("%d. out:%s %v", i, out_str, val)
+		//t.Logf("%d. out:%s =?= %s", i, out_str, tt.out)
 		if out_str != tt.out {
 			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out_str, tt.out)
 		}
@@ -251,7 +250,7 @@ func TestArrayBinds(t *testing.T) {
 	v_out VARCHAR2(1000);
 BEGIN
 	SELECT DUMP(:1) INTO v_out FROM DUAL;
-	--tab := :1;
+	--tab := :--1;
 	v_idx := tab.FIRST;
 	IF FALSE and v_idx IS NULL THEN
 		v_out := 'EMPTY';
