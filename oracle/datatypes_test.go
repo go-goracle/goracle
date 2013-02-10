@@ -238,19 +238,19 @@ func TestArrayBinds(t *testing.T) {
 		out *Variable
 		val interface{}
 	)
-	if out, err = cur.NewVar(""); err != nil {
-		t.Errorf("cannot create out variable: %s", err)
-		t.FailNow()
-	}
 	for i, tt := range arrBindsTests {
+		if out, err = cur.NewVar(""); err != nil {
+			t.Errorf("cannot create out variable: %s", err)
+			t.FailNow()
+		}
 		qry = `DECLARE
 	TYPE tab_typ IS TABLE OF ` + tt.tab_typ + ` INDEX BY PLS_INTEGER;
 	tab tab_typ;
 	v_idx PLS_INTEGER;
 	v_out VARCHAR2(1000);
 BEGIN
-	SELECT DUMP(:1) INTO v_out FROM DUAL;
-	--tab := :--1;
+	--SELECT DUMP(:1) INTO v_out FROM DUAL;
+	tab := :1;
 	v_idx := tab.FIRST;
 	IF FALSE and v_idx IS NULL THEN
 		v_out := 'EMPTY';
@@ -270,8 +270,8 @@ END;`
 			continue
 		}
 		t.Logf("%d. out:%s => %v", i, out, val)
-		// if out != tt.out {
-		// 	t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out, tt.out)
-		// }
+		if val != tt.out {
+			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out, tt.out)
+		}
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"time"
 	"unsafe"
 )
@@ -502,7 +503,8 @@ func NewVariableByValue(cur *Cursor, value interface{}, numElements uint) (v *Va
 	if v, err = NewVariable(cur, numElements, varType, size); err != nil {
 		return
 	}
-	if _, ok := value.([]interface{}); ok {
+	if reflect.TypeOf(value).Kind() == reflect.Slice {
+		//if _, ok := value.([]interface{}); ok {
 		err = v.makeArray()
 	}
 	return
@@ -1069,16 +1071,40 @@ func (v *Variable) setArrayValue(value []interface{}) error {
 	return nil
 }
 
+func (v *Variable) setArrayReflectValue(value reflect.Value) error {
+	if value.Kind() != reflect.Slice {
+		return fmt.Errorf("Variable_setArrayReflectValue needs slice, not %s!", value.Kind())
+	}
+	numElements := uint(value.Len())
+	if numElements > v.allocatedElements {
+		return errors.New("Variable_setArrayReflectValue: array size exceeded")
+	}
+
+	// set all of the values
+	v.actualElements = numElements
+	var err error
+	for i := uint(0); i < numElements; i++ {
+		//for i, elt := range value {
+		if err = v.setSingleValue(i,
+			value.Index(int(i)).Interface()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Set the value of the variable.
 func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	if v.isArray {
 		if arrayPos > 0 {
 			return errors.New("arrays of arrays are not supported by the OCI")
 		}
-		if x, ok := value.([]interface{}); !ok {
-			return errors.New("array required!")
-		} else {
+		//if reflect.TypeOf(value).Kind == reflect.Slice {
+		if x, ok := value.([]interface{}); ok {
 			return v.setArrayValue(x)
+		} else {
+			return v.setArrayReflectValue(reflect.ValueOf(value))
+			//return fmt.Errorf("%v is %T, not array!", value, value)
 		}
 	}
 	log.Printf("calling %s.setValue(%d, %v (%T))", v.typ, arrayPos, value, value)
