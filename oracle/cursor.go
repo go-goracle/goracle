@@ -12,7 +12,7 @@ const int sizeof_OraText = sizeof(OraText);
 import "C"
 
 import (
-	// "bytes"
+	"bytes"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -69,11 +69,18 @@ func (cur *Cursor) freeHandle() error {
 	}
 	// debug("freeing cursor handle %v", cur.handle)
 	if cur.isOwned {
+		if CTrace {
+			ctrace("OCIHandleFree", cur.handle, "htype_stmt")
+		}
 		return cur.environment.CheckStatus(
 			C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
 			"freeCursor")
 	} else if cur.connection.handle != nil &&
 		cur.statementTag != nil && len(cur.statementTag) > 0 {
+		if CTrace {
+			ctrace("OCIStmtRelease", cur.handle, cur.environment.errorHandle,
+				cur.statementTag, len(cur.statementTag), "OCI_DEFAULT")
+		}
 		return cur.environment.CheckStatus(C.OCIStmtRelease(cur.handle,
 			cur.environment.errorHandle, (*C.OraText)(&cur.statementTag[0]),
 			C.ub4(len(cur.statementTag)), C.OCI_DEFAULT),
@@ -155,6 +162,12 @@ func (cur *Cursor) getBindInfo(numElements int) ([]string, error) {
 	bindHandles := make([](*C.OCIBind), numElements)
 
 	// get the bind information
+	if CTrace {
+		ctrace("OCIStmtGetBindInfo", cur.handle, cur.environment.errorHandle,
+			numElements, 1, &foundElements, bindNames, bindNameLengths,
+			indicatorNames, indicatorNameLengths,
+			duplicate, bindHandles)
+	}
 	status := C.OCIStmtGetBindInfo(cur.handle,
 		cur.environment.errorHandle, C.ub4(numElements), 1, &foundElements,
 		(**C.OraText)(unsafe.Pointer(&bindNames[0])),
@@ -189,6 +202,10 @@ func (cur *Cursor) performDefine() error {
 	var x C.ub4 = 0
 
 	// determine number of items in select-list
+	if CTrace {
+		ctrace("OCIAttrGet", cur.handle, "HTYPE_STMT", &numParams, &x,
+			"PARAM_COUNT", cur.environment.errorHandle)
+	}
 	if err := cur.environment.CheckStatus(
 		C.OCIAttrGet(unsafe.Pointer(cur.handle),
 			C.OCI_HTYPE_STMT,
@@ -233,6 +250,10 @@ func (cur *Cursor) setRowCount() error {
 	} else if cur.statementType == C.OCI_STMT_INSERT ||
 		cur.statementType == C.OCI_STMT_UPDATE ||
 		cur.statementType == C.OCI_STMT_DELETE {
+		if CTrace {
+			ctrace("OCIAttrGet", cur.handle, "HTYPE_STMT", &rowCount, &x,
+				"ATTR_ROW_COUNT", cur.environment.errorHandle)
+		}
 		if err := cur.environment.CheckStatus(
 			C.OCIAttrGet(unsafe.Pointer(cur.handle),
 				C.OCI_HTYPE_STMT, unsafe.Pointer(&rowCount), &x,
@@ -261,6 +282,10 @@ func (cur Cursor) GetRowCount() int {
 // Get the error offset on the error object, if applicable.
 func (cur *Cursor) getErrorOffset() int {
 	var offset, x C.ub4
+	if CTrace {
+		ctrace("OCIAttrGet", cur.handle, "HTYPE_STMT", &offset, &x,
+			"ATTR_PARSE_ERROR_OFFSET", cur.environment.errorHandle)
+	}
 	C.OCIAttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 		unsafe.Pointer(&offset), &x,
 		C.OCI_ATTR_PARSE_ERROR_OFFSET, cur.environment.errorHandle)
@@ -287,6 +312,10 @@ func (cur *Cursor) internalExecute(numIters uint) error {
 	// Py_BEGIN_ALLOW_THREADS
 	log.Printf("%p.StmtExecute(%s, mode=%d) in internalExecute", cur,
 		cur.statement, mode)
+	if CTrace {
+		ctrace("OCIStmtExecute", cur.connection.handle, cur.handle,
+			cur.environment.errorHandle, numIters, 0, nil, nil, mode)
+	}
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtExecute(cur.connection.handle,
 			cur.handle, cur.environment.errorHandle,
@@ -304,6 +333,10 @@ func (cur *Cursor) internalExecute(numIters uint) error {
 func (cur *Cursor) getStatementType() error {
 	var statementType C.ub2
 	var vsize C.ub4
+	if CTrace {
+		ctrace("OCIAttrGet", cur.handle, "HTYPE_STMT", &statementType, &vsize,
+			"ATTR_STMT_TYPE", cur.environment.errorHandle)
+	}
 	if err := cur.environment.CheckStatus(
 		C.OCIAttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 			unsafe.Pointer(&statementType), &vsize, C.OCI_ATTR_STMT_TYPE,
@@ -448,6 +481,10 @@ func (cur *Cursor) itemDescription(pos uint) (desc VariableDescription, err erro
 	var param *C.OCIParam
 
 	// acquire parameter descriptor
+	if CTrace {
+		ctrace("OCIParamGet", cur.handle, "HTYPE_STMT", cur.environment.errorHandle,
+			&param, pos)
+	}
 	if err = cur.environment.CheckStatus(
 		C.OCIParamGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 			cur.environment.errorHandle,
@@ -458,6 +495,9 @@ func (cur *Cursor) itemDescription(pos uint) (desc VariableDescription, err erro
 
 	// use helper routine to get tuple
 	desc, err = cur.itemDescriptionHelper(pos, param)
+	if CTrace {
+		ctrace("OCIDescriptorFree", param, "DTYPE_PARAM")
+	}
 	C.OCIDescriptorFree(unsafe.Pointer(param), C.OCI_DTYPE_PARAM)
 	return
 }
@@ -824,6 +864,12 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 	cur.isOwned = false
 	log.Printf(`%p.Prepare2 for "%s" [%x]`, cur, cur.statement, cur.statementTag)
 	// Py_BEGIN_ALLOW_THREADS
+	if CTrace {
+		ctrace("OCIStmtPrepare2", cur.connection.handle, &cur.handle, cur.environment.errorHandle,
+			string(bytes.Replace(cur.statement, []byte{'\n'}, []byte("\\n"), -1)),
+			len(cur.statement), cur.statementTag, len(cur.statementTag),
+			"NTV_SYNTAX", "DEFAULT")
+	}
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtPrepare2(cur.connection.handle, &cur.handle,
 			cur.environment.errorHandle,
@@ -885,6 +931,10 @@ func (cur *Cursor) Parse(statement string) error {
 	}
 	// Py_BEGIN_ALLOW_THREADS
 	log.Printf("%p.StmtExecute(%s, mode=%d) in Parse", cur, cur.statement, mode)
+	if CTrace {
+		ctrace("OCIStmtExecute", cur.connection.handle, cur.handle,
+			cur.environment.errorHandle, 0, 0, nil, nil, mode)
+	}
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtExecute(cur.connection.handle, cur.handle,
 			cur.environment.errorHandle,
@@ -1277,6 +1327,10 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 	}
 	// debug("StmtFetch numRows=%d", numRows)
 	// Py_BEGIN_ALLOW_THREADS
+	if CTrace {
+		ctrace("OCIStmtFetch", cur.handle, cur.environment.errorHandle,
+			numRows, "FETCH_NEXT", "DEFAULT")
+	}
 	if err = cur.environment.CheckStatus(
 		C.OCIStmtFetch(cur.handle, cur.environment.errorHandle,
 			C.ub4(numRows), C.OCI_FETCH_NEXT, C.OCI_DEFAULT),

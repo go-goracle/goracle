@@ -753,6 +753,11 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 	aL, rC := v.aLrC()
 	// log.Printf("OCIDefineByPos(typ=%s, pos=%d, data=%v, size=%d, oracleType=%d, indicator=%v aL=%v rC=%v",
 	// 	v.typ, position, v.getDataArr(), v.bufferSize, v.typ.oracleType, v.indicator, aL, rC)
+	if CTrace {
+		ctrace("OCIDefineByPos", cur.handle, &v.defineHandle, v.environment.errorHandle,
+			position, v.getDataArr(), v.bufferSize, v.typ.oracleType, v.indicator,
+			aL, rC, "DEFAULT")
+	}
 	if err = cur.environment.CheckStatus(
 		C.OCIDefineByPos(cur.handle,
 			&v.defineHandle,
@@ -782,6 +787,10 @@ func varDefine(cur *Cursor, numElements, position uint) (*Variable, error) {
 		log.Printf("WARN: nil cursor handle in varDefine!")
 	}
 	// log.Printf("retrieve parameter descriptor cur.handle=%s pos=%d", cur.handle, position)
+	if CTrace {
+		ctrace("OCIParamGet", cur.handle, "HTYPE_STMT", cur.environment.errorHandle,
+			&param, position)
+	}
 	if err := cur.environment.CheckStatus(
 		C.OCIParamGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 			cur.environment.errorHandle,
@@ -795,6 +804,9 @@ func varDefine(cur *Cursor, numElements, position uint) (*Variable, error) {
 	// call the helper to do the actual work
 	v, err := variableDefineHelper(cur, param, position, numElements)
 	// log.Printf("variable defined err=%s nil?%s", err, err == nil)
+	if CTrace {
+		ctrace("OCIDescriptorFree", param, "DTYPE_PARAM")
+	}
 	C.OCIDescriptorFree(unsafe.Pointer(param), C.OCI_DTYPE_PARAM)
 	return v, err
 }
@@ -804,51 +816,47 @@ func (v *Variable) internalBind() (err error) {
 	var status C.sword
 	// perform the bind
 	aL, rC := v.aLrC()
+	allElts := C.ub4(0)
+	actElts := C.ub4(0)
+	if v.isArray {
+		allElts = C.ub4(v.allocatedElements)
+	}
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
-		if v.isArray {
-			actElts := C.ub4(0)
-			status = C.OCIBindByName(v.boundCursorHandle,
-				&v.bindHandle,
-				v.environment.errorHandle,
-				(*C.OraText)(&bname[0]), C.sb4(len(bname)),
-				v.getDataArr(), C.sb4(v.bufferSize),
-				v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
-				aL, rC,
-				C.ub4(v.allocatedElements),
-				&actElts, C.OCI_DEFAULT)
-			v.actualElements = uint(actElts)
-		} else {
-			status = C.OCIBindByName(v.boundCursorHandle,
-				&v.bindHandle,
-				v.environment.errorHandle,
-				(*C.OraText)(&bname[0]), C.sb4(len(bname)),
-				v.getDataArr(), C.sb4(v.bufferSize),
-				v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
-				aL, rC,
-				0, nil, C.OCI_DEFAULT)
+		if CTrace {
+			ctrace("OCIBindByName", v.boundCursorHandle, &v.bindHandle,
+				v.environment.errorHandle, "name="+string(bname), len(bname),
+				v.getDataArr(),
+				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
+				allElts, &actElts, "DEFAULT")
 		}
+		status = C.OCIBindByName(v.boundCursorHandle,
+			&v.bindHandle,
+			v.environment.errorHandle,
+			(*C.OraText)(&bname[0]), C.sb4(len(bname)),
+			v.getDataArr(), C.sb4(v.bufferSize),
+			v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
+			aL, rC,
+			allElts, &actElts, C.OCI_DEFAULT)
 	} else {
-		if v.isArray {
-			actElts := C.ub4(0)
-			status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
-				v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
-				C.sb4(v.bufferSize), v.typ.oracleType,
-				unsafe.Pointer(&v.indicator[0]),
-				aL, rC,
-				C.ub4(v.allocatedElements), &actElts, C.OCI_DEFAULT)
-			v.actualElements = uint(actElts)
-		} else {
-			status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
-				v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
-				C.sb4(v.bufferSize), v.typ.oracleType,
-				unsafe.Pointer(&v.indicator[0]),
-				aL, rC,
-				0, nil, C.OCI_DEFAULT)
+		if CTrace {
+			ctrace("OCIBindByPos", v.boundCursorHandle, &v.bindHandle,
+				v.environment.errorHandle, fmt.Sprintf("pos=%d", v.boundPos),
+				v.getDataArr(),
+				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
+				allElts, &actElts, "DEFAULT")
 		}
+		status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
+			v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
+			C.sb4(v.bufferSize), v.typ.oracleType,
+			unsafe.Pointer(&v.indicator[0]), aL, rC,
+			allElts, &actElts, C.OCI_DEFAULT)
 	}
 	if err = v.environment.CheckStatus(status, "BindBy"); err != nil {
 		return
+	}
+	if v.isArray {
+		v.actualElements = uint(actElts)
 	}
 
 	// set the max data size for strings

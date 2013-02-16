@@ -245,15 +245,14 @@ func TestArrayBinds(t *testing.T) {
 		}
 		qry = `DECLARE
 	TYPE tab_typ IS TABLE OF ` + tt.tab_typ + ` INDEX BY PLS_INTEGER;
-	tab tab_typ;
+	tab tab_typ := :1;
 	v_idx PLS_INTEGER;
-	v_out VARCHAR2(1000);
+	v_out VARCHAR2(1000) := '!';
 BEGIN
-	--SELECT DUMP(:1) INTO v_out FROM DUAL;
-	tab := :1;
+    v_out := v_out||tab.COUNT||'!';
 	v_idx := tab.FIRST;
 	IF FALSE and v_idx IS NULL THEN
-		v_out := 'EMPTY';
+		v_out := v_out||'EMPTY';
 	END IF;
 	WHILE v_idx IS NOT NULL LOOP
 	    SELECT v_out||v_idx||'. '||DUMP(tab(v_idx))||CHR(10) INTO v_out FROM DUAL;
@@ -269,7 +268,7 @@ END;`
 			t.Errorf("%d. error getting value: %s", i, err)
 			continue
 		}
-		t.Logf("%d. out:%s => %v", i, out, val)
+		t.Logf("%d. in:%s => out:%v", i, out, val)
 		if val != tt.out {
 			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out, tt.out)
 		}

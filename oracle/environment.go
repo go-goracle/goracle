@@ -277,6 +277,9 @@ func (env *Environment) CheckStatus(status C.sword, at string) error {
 func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 	dst unsafe.Pointer, errText string) (int, error) {
 	var osize C.ub4
+	if CTrace {
+		ctrace("OCIAttrGet", parent, C.ub4(parentType), dst, &osize, C.ub4(key), env.errorHandle)
+	}
 	if err := env.CheckStatus(
 		C.OCIAttrGet(parent, C.ub4(parentType), dst, &osize, C.ub4(key),
 			env.errorHandle), errText); err != nil {
@@ -292,6 +295,11 @@ func (env *Environment) AttrGetName(parent unsafe.Pointer, parentType, key int,
 		name_len C.ub4
 		status   C.sword
 	)
+	if CTrace {
+		ctrace("OCIAttrGetName", parent, C.ub4(parentType),
+			C.ub4(key), env.errorHandle,
+			&status, &name_len)
+	}
 	name := C.AttrGetName(parent, C.ub4(parentType),
 		C.ub4(key), env.errorHandle,
 		&status, &name_len)
