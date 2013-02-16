@@ -194,6 +194,11 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 	return nil
 }
 
+// returns the number of allocated elements (array length for arrays)
+func (v Variable) ArrayLength() uint {
+	return v.allocatedElements
+}
+
 // Allocate the data for the variable.
 func (v *Variable) allocateData() error {
 	// set the buffer size for the variable
