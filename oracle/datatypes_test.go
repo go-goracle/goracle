@@ -210,21 +210,23 @@ END;`
 	}
 }
 
-var arrBindsTests = []struct {
+var arrInBindsTests = []struct {
 	tab_typ string
 	in      interface{}
 	out     string
 }{
-	{"INTEGER(3)", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=2: 193,4\n3. Typ=2 Len=2: 193,6\nTyp=2 Len=2: c1,2\n"},
-	// {"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "Typ=2 Len=2: c0,33"},
-	// {"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"}, "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
-	// {"RAW(4)", [][]byte{[]byte{0, 1, 2, 3}, []byte{5, 7, 11, 13}}, "Typ=23 Len=8: 0,1,2,3,5,7,b,d"},
-	// {"DATE", []time.Time{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
-	// 	time.Date(2012, 1, 2, 10, 6, 49, 0, time.Local)},
-	// 	"Typ=12 Len=7: 78,71,1,2,b,7,32"},
+	{"INTEGER(3)", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=2: 193,4\n3. Typ=2 Len=2: 193,6\n"},
+	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "!2!1. Typ=2 Len=2: 192,51\n2. Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102\n"},
+	{"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"},
+		"!2!1. Typ=1 Len=6: 83,69,76,69,67,84\n2. Typ=1 Len=31: 195,161,114,118,195,173,122,116,197,177,114,197,145,32,116,195,188,107,195,182,114,102,195,186,114,195,179,103,195,169,112\n"},
+	{"RAW(4)", [][]byte{[]byte{0, 1, 2, 3}, []byte{5, 7, 11, 13}},
+		"!2!1. Typ=23 Len=4: 0,1,2,3\n2. Typ=23 Len=4: 5,7,11,13\n"},
+	{"DATE", []time.Time{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
+		time.Date(2012, 1, 2, 10, 6, 49, 0, time.Local)},
+		"!2!1. Typ=12 Len=7: 120,113,1,2,11,7,50\n2. Typ=12 Len=7: 120,112,1,2,11,7,50\n"},
 }
 
-func TestArrayBinds(t *testing.T) {
+func TestArrayInBinds(t *testing.T) {
 	conn := getConnection(t)
 	if !conn.IsConnected() {
 		t.FailNow()
@@ -233,12 +235,14 @@ func TestArrayBinds(t *testing.T) {
 	defer cur.Close()
 
 	var (
-		err error
-		qry string
-		out *Variable
-		val interface{}
+		err     error
+		qry     string
+		out     *Variable
+		val     interface{}
+		out_str string
+		ok      bool
 	)
-	for i, tt := range arrBindsTests {
+	for i, tt := range arrInBindsTests {
 		if out, err = cur.NewVar(""); err != nil {
 			t.Errorf("cannot create out variable: %s", err)
 			t.FailNow()
@@ -268,9 +272,12 @@ END;`
 			t.Errorf("%d. error getting value: %s", i, err)
 			continue
 		}
-		t.Logf("%d. in:%s => out:%v", i, out, val)
-		if val != tt.out {
-			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out, tt.out)
+		if out_str, ok = val.(string); !ok {
+			t.Logf("output is not string!?!, but %T (%v)", val, val)
+		}
+		//t.Logf("%d. in:%s => out:%v", i, out, out_str)
+		if out_str != tt.out {
+			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out_str, tt.out)
 		}
 	}
 }
