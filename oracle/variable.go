@@ -817,9 +817,12 @@ func (v *Variable) internalBind() (err error) {
 	// perform the bind
 	aL, rC := v.aLrC()
 	allElts := C.ub4(0)
-	actElts := C.ub4(0)
+	actElts := C.ub4(v.actualElements)
+	pActElts := &actElts
 	if v.isArray {
 		allElts = C.ub4(v.allocatedElements)
+	} else {
+		pActElts = nil
 	}
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
@@ -828,7 +831,7 @@ func (v *Variable) internalBind() (err error) {
 				v.environment.errorHandle, "name="+string(bname), len(bname),
 				v.getDataArr(),
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
-				allElts, &actElts, "DEFAULT")
+				allElts, pActElts, "DEFAULT")
 		}
 		status = C.OCIBindByName(v.boundCursorHandle,
 			&v.bindHandle,
@@ -836,21 +839,20 @@ func (v *Variable) internalBind() (err error) {
 			(*C.OraText)(&bname[0]), C.sb4(len(bname)),
 			v.getDataArr(), C.sb4(v.bufferSize),
 			v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
-			aL, rC,
-			allElts, &actElts, C.OCI_DEFAULT)
+			aL, rC, allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
 			ctrace("OCIBindByPos", v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, fmt.Sprintf("pos=%d", v.boundPos),
 				v.getDataArr(),
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
-				allElts, &actElts, "DEFAULT")
+				allElts, pActElts, "DEFAULT")
 		}
 		status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
 			v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
 			C.sb4(v.bufferSize), v.typ.oracleType,
 			unsafe.Pointer(&v.indicator[0]), aL, rC,
-			allElts, &actElts, C.OCI_DEFAULT)
+			allElts, pActElts, C.OCI_DEFAULT)
 	}
 	if err = v.environment.CheckStatus(status, "BindBy"); err != nil {
 		return

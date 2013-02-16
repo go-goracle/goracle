@@ -215,7 +215,7 @@ var arrBindsTests = []struct {
 	in      interface{}
 	out     string
 }{
-	{"INTEGER(3)", []int32{1, 3, 5}, "Typ=2 Len=2: c1,2"},
+	{"INTEGER(3)", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=2: 193,4\n3. Typ=2 Len=2: 193,6\nTyp=2 Len=2: c1,2\n"},
 	// {"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "Typ=2 Len=2: c0,33"},
 	// {"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"}, "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
 	// {"RAW(4)", [][]byte{[]byte{0, 1, 2, 3}, []byte{5, 7, 11, 13}}, "Typ=23 Len=8: 0,1,2,3,5,7,b,d"},
