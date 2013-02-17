@@ -46,7 +46,7 @@ type Variable struct {
 }
 
 // allocate a new variable
-func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size uint) (v *Variable, err error) {
+func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uint) (v *Variable, err error) {
 	// log.Printf("cur=%+v varType=%+v", cur, varType)
 	// perform basic initialization
 	if numElements < 1 {
@@ -59,6 +59,9 @@ func NewVariable(cur *Cursor, numElements uint, varType *VariableType, size uint
 		// returnCode:   make([]C.ub2, numElements),
 		// actualLength: make([]C.ub2, numElements),
 	}
+	//if numElements > 1 {
+	//	v.makeArray()
+	//}
 
 	// log.Printf("NewVariable(elts=%d typ=%s)", numElements, varType)
 
@@ -137,7 +140,7 @@ func isVariable(value interface{}) bool {
 }
 
 func (t *VariableType) NewVariable(cur *Cursor, numElements uint, size uint) (*Variable, error) {
-	return NewVariable(cur, numElements, t, size)
+	return cur.NewVariable(numElements, t, size)
 }
 
 func (t *VariableType) String() string {
@@ -499,15 +502,17 @@ func (v *Variable) makeArray() error {
 }
 
 // Default method for determining the type of variable to use for the data.
-func NewVariableByValue(cur *Cursor, value interface{}, numElements uint) (v *Variable, err error) {
+func (cur *Cursor) NewVariableByValue(value interface{}, numElements uint) (v *Variable, err error) {
 	var varType *VariableType
 	var size uint
 	if varType, size, numElements, err = VarTypeByValue(value); err != nil {
 		return
 	}
-	if v, err = NewVariable(cur, numElements, varType, size); err != nil {
+	if v, err = cur.NewVariable(numElements, varType, size); err != nil {
 		return
 	}
+	log.Printf("NewVariableByValue(%v, %d) isArray? %s", value, numElements,
+		reflect.TypeOf(value).Kind() == reflect.Slice)
 	if reflect.TypeOf(value).Kind() == reflect.Slice {
 		//if _, ok := value.([]interface{}); ok {
 		err = v.makeArray()
@@ -557,12 +562,17 @@ func NewVariableByValue(cur *Cursor, value interface{}, numElements uint) (v *Va
 */
 
 // Allocate a new PL/SQL array by looking at the data
-func NewVariableArrayByValue(cur *Cursor, element interface{}, numElements uint) (*Variable, error) {
+func (cur *Cursor) NewVariableArrayByValue(element interface{}, numElements uint) (*Variable, error) {
 	varType, size, _, err := VarTypeByValue(element)
 	if err != nil {
 		return nil, err
 	}
-	return NewVariable(cur, numElements, varType, size)
+	v, err := cur.NewVariable(numElements, varType, size)
+	if err != nil {
+		return nil, err
+	}
+	v.makeArray()
+	return v, nil
 }
 
 /*
@@ -691,7 +701,7 @@ func (v *Variable) aLrC() (aL, rC *C.ub2) {
 
 // Helper routine for Variable_Define() used so that constant calls to
 // OCIDescriptorFree() is not necessary.
-func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements uint) (v *Variable, err error) {
+func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements uint) (v *Variable, err error) {
 	var size C.ub4
 	var varType *VariableType
 
@@ -742,7 +752,7 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 	               numElements);
 	   else
 	*/
-	v, err = NewVariable(cur, numElements, varType, uint(size))
+	v, err = cur.NewVariable(numElements, varType, uint(size))
 	if err != nil {
 		return nil, fmt.Errorf("error creating variable: %s", err)
 	}
@@ -785,7 +795,7 @@ func variableDefineHelper(cur *Cursor, param *C.OCIParam, position, numElements 
 }
 
 // Allocate a variable and define it for the given statement.
-func varDefine(cur *Cursor, numElements, position uint) (*Variable, error) {
+func (cur *Cursor) varDefine(numElements, position uint) (*Variable, error) {
 	var param *C.OCIParam
 	// retrieve parameter descriptor
 	if cur.handle == nil {
@@ -807,7 +817,7 @@ func varDefine(cur *Cursor, numElements, position uint) (*Variable, error) {
 	// log.Printf("got param handle")
 
 	// call the helper to do the actual work
-	v, err := variableDefineHelper(cur, param, position, numElements)
+	v, err := cur.variableDefineHelper(param, position, numElements)
 	// log.Printf("variable defined err=%s nil?%s", err, err == nil)
 	if CTrace {
 		ctrace("OCIDescriptorFree", param, "DTYPE_PARAM")
@@ -829,6 +839,7 @@ func (v *Variable) internalBind() (err error) {
 	} else {
 		pActElts = nil
 	}
+	log.Printf("%v isArray? %b allElts=%d", v.typ.Name, v.isArray, allElts)
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {

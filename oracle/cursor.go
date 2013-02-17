@@ -224,7 +224,7 @@ func (cur *Cursor) performDefine() error {
 	var e error
 	cur.fetchArraySize = cur.arraySize
 	for pos := uint(1); pos <= numParams; pos++ {
-		v, e = varDefine(cur, cur.fetchArraySize, pos)
+		v, e = cur.varDefine(cur.fetchArraySize, pos)
 		// debug("varDefine[%d]: %s nil?%s", pos, e, e == nil)
 		if e != nil {
 			return fmt.Errorf("error defining variable %d: %s", pos, e)
@@ -591,7 +591,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 				origVar = nil
 			} else {
 				if numElements > origVar.allocatedElements {
-					if newVar, err = NewVariable(cur, numElements, origVar.typ,
+					if newVar, err = cur.NewVariable(numElements, origVar.typ,
 						origVar.size); err != nil {
 						return
 					}
@@ -637,7 +637,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 			// otherwise, create a new variable, unless the value is None and
 			// we wish to defer type assignment
 		} else if value != nil || !deferTypeAssignment {
-			if newVar, err = NewVariableByValue(cur, value, numElements); err != nil {
+			if newVar, err = cur.NewVariableByValue(value, numElements); err != nil {
 				return
 			}
 			if err = newVar.SetValue(arrayPos, value); err != nil {
@@ -1550,7 +1550,7 @@ func (cur *Cursor) NewVar(value interface{}, /*inconverter, outconverter, typena
 	*/
 
 	// create the variable
-	v, err = NewVariable(cur, numElements, varType, size)
+	v, err = cur.NewVariable(numElements, varType, size)
 	/*
 	   var->inConverter = inConverter;
 	   var->outConverter = outConverter;
@@ -1582,7 +1582,7 @@ func (cur *Cursor) NewArrayVar(varType *VariableType, values []interface{}, size
 	numElements := len(values)
 
 	// create the variable
-	if v, err = NewVariable(cur, uint(numElements), varType, size); err != nil {
+	if v, err = cur.NewVariable(uint(numElements), varType, size); err != nil {
 		return
 	}
 	if err = v.makeArray(); err != nil {

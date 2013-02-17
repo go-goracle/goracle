@@ -317,8 +317,8 @@ func TestArrayOutBinds(t *testing.T) {
 	)
 	for i, tt := range arrOutBindsTests {
 		//if out, err = cur.NewVar(""); err != nil {
-		if out, err = cur.NewVar([]string{"", "", ""}); err != nil {
-			//if out, err = NewVariableArrayByValue(cur, "", 10); err != nil {
+		//if out, err = cur.NewVar([]string{"", "", ""}); err != nil {
+		if out, err = cur.NewVariableArrayByValue("", 100); err != nil {
 			t.Errorf("cannot create out variable: %s", err)
 			t.FailNow()
 		}

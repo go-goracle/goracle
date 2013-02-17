@@ -126,7 +126,7 @@ func TestCursor(t *testing.T) {
 		t.Logf("%03d: %v", 0, row)
 	}
 
-	if err = cur.Execute("CREATE TABLE w (x LONG)", nil, nil); err != nil {
+	if err = cur.Execute("CREATE GLOBAL TEMPORARY TABLE w (x LONG)", nil, nil); err != nil {
 		t.Logf("cannot check LONG: %s", err)
 	} else {
 		cur.Execute("INSERT INTO w VALUES ('a')", nil, nil)
