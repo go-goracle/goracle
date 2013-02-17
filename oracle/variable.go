@@ -199,7 +199,8 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 
 // returns the number of allocated elements (array length for arrays)
 func (v Variable) ArrayLength() uint {
-	return v.allocatedElements
+	log.Printf("actualElements=%d allocatedElements=%d", v.actualElements, v.allocatedElements)
+	return v.actualElements + 1
 }
 
 // Allocate the data for the variable.
@@ -219,7 +220,7 @@ func (v *Variable) allocateData() error {
 	if dataLength > 1<<31-1 {
 		return ArrayTooLarge
 	}
-	log.Printf("%s bufsize=%d dataLength=%d", v.typ, v.bufferSize, dataLength)
+	//log.Printf("%s bufsize=%d dataLength=%d", v.typ, v.bufferSize, dataLength)
 	v.dataFloats = nil
 	v.dataInts = nil
 	v.dataBytes = nil
@@ -227,10 +228,10 @@ func (v *Variable) allocateData() error {
 		(v.typ == NativeFloatVarType || v.typ.IsInteger()) {
 		if v.typ == NativeFloatVarType {
 			v.dataFloats = make([]float64, v.allocatedElements)
-			log.Printf("floats=%v", unsafe.Pointer(&v.dataFloats[0]))
+			//log.Printf("floats=%v", unsafe.Pointer(&v.dataFloats[0]))
 		} else {
 			v.dataInts = make([]int64, v.allocatedElements)
-			log.Printf("ints=%v", unsafe.Pointer(&v.dataInts[0]))
+			//log.Printf("ints=%v", unsafe.Pointer(&v.dataInts[0]))
 		}
 	} else {
 		v.dataBytes = make([]byte, dataLength)
@@ -511,8 +512,8 @@ func (cur *Cursor) NewVariableByValue(value interface{}, numElements uint) (v *V
 	if v, err = cur.NewVariable(numElements, varType, size); err != nil {
 		return
 	}
-	log.Printf("NewVariableByValue(%v, %d) isArray? %s", value, numElements,
-		reflect.TypeOf(value).Kind() == reflect.Slice)
+	//log.Printf("NewVariableByValue(%v, %d) isArray? %s", value, numElements,
+	//	reflect.TypeOf(value).Kind() == reflect.Slice)
 	if reflect.TypeOf(value).Kind() == reflect.Slice {
 		//if _, ok := value.([]interface{}); ok {
 		err = v.makeArray()
@@ -766,8 +767,6 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 
 	// perform the define
 	aL, rC := v.aLrC()
-	// log.Printf("OCIDefineByPos(typ=%s, pos=%d, data=%v, size=%d, oracleType=%d, indicator=%v aL=%v rC=%v",
-	// 	v.typ, position, v.getDataArr(), v.bufferSize, v.typ.oracleType, v.indicator, aL, rC)
 	if CTrace {
 		ctrace("OCIDefineByPos", cur.handle, &v.defineHandle, v.environment.errorHandle,
 			position, v.getDataArr(), v.bufferSize, v.typ.oracleType, v.indicator,
@@ -839,7 +838,7 @@ func (v *Variable) internalBind() (err error) {
 	} else {
 		pActElts = nil
 	}
-	log.Printf("%v isArray? %b allElts=%d", v.typ.Name, v.isArray, allElts)
+	//log.Printf("%v isArray? %b allElts=%d", v.typ.Name, v.isArray, allElts)
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {
@@ -874,7 +873,7 @@ func (v *Variable) internalBind() (err error) {
 		return
 	}
 	if v.isArray {
-		v.actualElements = uint(actElts)
+		v.actualElements = uint(*pActElts)
 	}
 
 	// set the max data size for strings
@@ -1033,17 +1032,18 @@ func (v *Variable) getArrayValueInto(dest interface{}, numElements uint) error {
 
 // Return the value of the variable.
 func (v *Variable) GetValue(arrayPos uint) (interface{}, error) {
-	if v.isArray {
-		return v.getArrayValue(uint(v.actualElements))
-	}
+	//log.Printf("GetValue isArray? %b", v.isArray)
+	//if v.isArray {
+	//	return v.getArrayValue(uint(v.actualElements))
+	//}
 	return v.getSingleValue(arrayPos)
 }
 
 // Insert the value of the variable into the given pointer
 func (v *Variable) GetValueInto(dest *interface{}, arrayPos uint) error {
-	if v.isArray {
-		return v.getArrayValueInto(dest, uint(v.actualElements))
-	}
+	//if v.isArray {
+	//	return v.getArrayValueInto(dest, uint(v.actualElements))
+	//}
 	return v.getSingleValueInto(dest, arrayPos)
 }
 

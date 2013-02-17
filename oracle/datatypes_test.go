@@ -317,8 +317,8 @@ func TestArrayOutBinds(t *testing.T) {
 	)
 	for i, tt := range arrOutBindsTests {
 		//if out, err = cur.NewVar(""); err != nil {
-		//if out, err = cur.NewVar([]string{"", "", ""}); err != nil {
-		if out, err = cur.NewVariableArrayByValue("", 100); err != nil {
+		//if out, err = cur.NewVar([]string{"01234567890123456789", "01234567890123456789", "01234567890123456789"}); err != nil {
+		if out, err = cur.NewVariableArrayByValue("0123456789", 100); err != nil {
 			t.Errorf("cannot create out variable: %s", err)
 			t.FailNow()
 		}
@@ -332,6 +332,7 @@ BEGIN
 	v_idx := in_tab.FIRST;
 	WHILE v_idx IS NOT NULL LOOP
 	    SELECT SUBSTR(DUMP(in_tab(v_idx)), 1, 100) INTO out_tab(v_idx) FROM DUAL;
+		EXIT;
 		v_idx := in_tab.NEXT(v_idx);
 	END LOOP;
 	:out := out_tab;
@@ -341,15 +342,16 @@ END;`
 			t.Errorf("error executing `%s`: %s", qry, err)
 			continue
 		}
-		for j := uint(0); j < out.ArrayLength(); j++ {
+		n := out.ArrayLength()
+		for j := uint(0); j < n; j++ {
 			if val, err = out.GetValue(j); err != nil {
 				t.Errorf("%d. error getting %d. value: %s", i, j, err)
 				continue
 			}
 			if out_str, ok = val.(string); !ok {
-				t.Logf("output is not string!?!, but %T (%v)", val, val)
+				t.Logf("%d/%d. output is not string!?!, but %T (%v)", i, j, val, val)
 			}
-			//t.Logf("%d. in:%s => out:%v", i, out, out_str)
+			t.Logf("%d/%d. => out:%#v", i, j, out_str)
 			if out_str != tt.out[j] {
 				t.Errorf("%d. exec(%q)[%d] => %q, want %q", i, tt.in, j,
 					out_str, tt.out)
