@@ -30,19 +30,20 @@ type Variable struct {
 	boundName         string
 	//PyObject*inConverter;
 	//PyObject*outConverter;
-	connection                        *Connection //for LOBs
-	typ                               *VariableType
-	allocatedElements, actualElements uint
-	boundPos, internalFetchNum        uint
-	size, bufferSize                  uint
-	environment                       *Environment
-	isArray, isAllocatedInternally    bool
-	indicator                         []C.sb2
-	returnCode, actualLength          []C.ub2
-	dataBytes                         []byte
-	dataInts                          []int64
-	dataFloats                        []float64
-	cursors                           []*Cursor
+	connection                     *Connection //for LOBs
+	typ                            *VariableType
+	allocatedElements              uint
+	actualElements                 C.ub4
+	boundPos, internalFetchNum     uint
+	size, bufferSize               uint
+	environment                    *Environment
+	isArray, isAllocatedInternally bool
+	indicator                      []C.sb2
+	returnCode, actualLength       []C.ub2
+	dataBytes                      []byte
+	dataInts                       []int64
+	dataFloats                     []float64
+	cursors                        []*Cursor
 }
 
 // allocate a new variable
@@ -59,9 +60,9 @@ func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uin
 		// returnCode:   make([]C.ub2, numElements),
 		// actualLength: make([]C.ub2, numElements),
 	}
-	//if numElements > 1 {
-	//	v.makeArray()
-	//}
+	if numElements > 1 {
+		v.makeArray()
+	}
 
 	// log.Printf("NewVariable(elts=%d typ=%s)", numElements, varType)
 
@@ -199,8 +200,8 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 
 // returns the number of allocated elements (array length for arrays)
 func (v Variable) ArrayLength() uint {
-	log.Printf("actualElements=%d allocatedElements=%d", v.actualElements, v.allocatedElements)
-	return v.allocatedElements
+	//log.Printf("actualElements=%d allocatedElements=%d", v.actualElements, v.allocatedElements)
+	return uint(v.actualElements)
 }
 
 // Allocate the data for the variable.
@@ -514,10 +515,9 @@ func (cur *Cursor) NewVariableByValue(value interface{}, numElements uint) (v *V
 	}
 	//log.Printf("NewVariableByValue(%v, %d) isArray? %s", value, numElements,
 	//	reflect.TypeOf(value).Kind() == reflect.Slice)
-	if reflect.TypeOf(value).Kind() == reflect.Slice {
-		//if _, ok := value.([]interface{}); ok {
-		err = v.makeArray()
-	}
+	//if reflect.TypeOf(value).Kind() == reflect.Slice {
+	//	err = v.makeArray()
+	//}
 	return
 }
 
@@ -572,7 +572,7 @@ func (cur *Cursor) NewVariableArrayByValue(element interface{}, numElements uint
 	if err != nil {
 		return nil, err
 	}
-	v.makeArray()
+	//v.makeArray()
 	return v, nil
 }
 
@@ -831,8 +831,8 @@ func (v *Variable) internalBind() (err error) {
 	// perform the bind
 	aL, rC := v.aLrC()
 	allElts := C.ub4(0)
-	actElts := C.ub4(v.actualElements)
-	pActElts := &actElts
+	//actElts := C.ub4(v.actualElements)
+	pActElts := &v.actualElements
 	if v.isArray {
 		allElts = C.ub4(v.allocatedElements)
 	} else {
@@ -871,9 +871,6 @@ func (v *Variable) internalBind() (err error) {
 	}
 	if err = v.environment.CheckStatus(status, "BindBy"); err != nil {
 		return
-	}
-	if v.isArray {
-		v.actualElements = uint(*pActElts)
 	}
 
 	// set the max data size for strings
@@ -1087,7 +1084,7 @@ func (v *Variable) setArrayValue(value []interface{}) error {
 	}
 
 	// set all of the values
-	v.actualElements = numElements
+	v.actualElements = C.ub4(numElements)
 	var err error
 	for i, elt := range value {
 		if err = v.setSingleValue(uint(i), elt); err != nil {
@@ -1107,7 +1104,7 @@ func (v *Variable) setArrayReflectValue(value reflect.Value) error {
 	}
 
 	// set all of the values
-	v.actualElements = numElements
+	v.actualElements = C.ub4(numElements)
 	var err error
 	for i := uint(0); i < numElements; i++ {
 		//for i, elt := range value {
