@@ -200,7 +200,7 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 // returns the number of allocated elements (array length for arrays)
 func (v Variable) ArrayLength() uint {
 	log.Printf("actualElements=%d allocatedElements=%d", v.actualElements, v.allocatedElements)
-	return v.actualElements + 1
+	return v.allocatedElements
 }
 
 // Allocate the data for the variable.

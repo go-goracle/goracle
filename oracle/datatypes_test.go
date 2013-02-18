@@ -287,7 +287,7 @@ var arrOutBindsTests = []struct {
 	in      interface{}
 	out     []string
 }{
-	{"INTEGER(3)", []int32{1, 3, 5}, []string{"1. Typ=2 Len=2: 193,2", "Typ=2 Len=2: 193,4", "Typ=2 Len=2: 193,6"}},
+	{"INTEGER(3)", []int32{1, 3, 5}, []string{"Typ=2 Len=2: 193,2", "Typ=2 Len=2: 193,4", "Typ=2 Len=2: 193,6"}},
 	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, []string{"Typ=2 Len=2: 192,51", "Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102"}},
 	{"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"},
 		[]string{"Typ=1 Len=6: 83,69,76,69,67,84",
@@ -315,10 +315,11 @@ func TestArrayOutBinds(t *testing.T) {
 		out_str string
 		ok      bool
 	)
+	placeholder := string(make([]byte, 100))
 	for i, tt := range arrOutBindsTests {
 		//if out, err = cur.NewVar(""); err != nil {
-		//if out, err = cur.NewVar([]string{"01234567890123456789", "01234567890123456789", "01234567890123456789"}); err != nil {
-		if out, err = cur.NewVariableArrayByValue("0123456789", 100); err != nil {
+		//if out, err = cur.NewVar([]string{"01234567890123456789", "01234567890123456789"}); err != nil {
+		if out, err = cur.NewVariableArrayByValue(placeholder, 10); err != nil {
 			t.Errorf("cannot create out variable: %s", err)
 			t.FailNow()
 		}
@@ -332,7 +333,6 @@ BEGIN
 	v_idx := in_tab.FIRST;
 	WHILE v_idx IS NOT NULL LOOP
 	    SELECT SUBSTR(DUMP(in_tab(v_idx)), 1, 100) INTO out_tab(v_idx) FROM DUAL;
-		EXIT;
 		v_idx := in_tab.NEXT(v_idx);
 	END LOOP;
 	:out := out_tab;
@@ -343,6 +343,7 @@ END;`
 			continue
 		}
 		n := out.ArrayLength()
+		//n = 2
 		for j := uint(0); j < n; j++ {
 			if val, err = out.GetValue(j); err != nil {
 				t.Errorf("%d. error getting %d. value: %s", i, j, err)
@@ -352,7 +353,7 @@ END;`
 				t.Logf("%d/%d. output is not string!?!, but %T (%v)", i, j, val, val)
 			}
 			t.Logf("%d/%d. => out:%#v", i, j, out_str)
-			if out_str != tt.out[j] {
+			if j < uint(len(tt.out)) && out_str != tt.out[j] {
 				t.Errorf("%d. exec(%q)[%d] => %q, want %q", i, tt.in, j,
 					out_str, tt.out)
 			}
