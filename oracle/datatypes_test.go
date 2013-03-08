@@ -289,11 +289,12 @@ var arrOutBindsTests = []struct {
 }{
 	{"INTEGER(3)", []int32{1, 3, 5}, []string{"Typ=2 Len=2: 193,2", "Typ=2 Len=2: 193,4", "Typ=2 Len=2: 193,6"}},
 	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, []string{"Typ=2 Len=2: 192,51", "Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102"}},
-	{"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"},
-		[]string{"Typ=1 Len=6: 83,69,76,69,67,84",
-			"Typ=1 Len=31: 195,161,114,118,195,173,122,116,197,177,114,197,145,32,116,195,188,107,195,182,114,102,195,186,114,195,179,103,195,169,112"}},
+	{"VARCHAR2(40)", []string{"SELECT    012345678901234567890123456789", "árvíztűrő tükörfúrógép"},
+		[]string{"Typ=1 Len=40: 83,69,76,69,67,84,32,32,32,32,48,49,50,51,52,53,54,55,56,57,48,49,50,51,52,53,54,55,56,57,48,49,50,51,52,53,54,55,56,57",
+			"Typ=1 Len=31: 195,161,114,118,195,173,122,116,197,177,114,197,145,32,116,195,188,107,195,182,114,102,195,186,114,195,179,103,195,169,112",
+		}},
 	{"RAW(4)", [][]byte{[]byte{0, 1, 2, 3}, []byte{5, 7, 11, 13}},
-		[]string{"Typ=23 Len=4: 0,1,2,3", "Typ=23 Len=4: 5,7,11,13\n"}},
+		[]string{"Typ=23 Len=4: 0,1,2,3", "Typ=23 Len=4: 5,7,11,13"}},
 	{"DATE", []time.Time{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
 		time.Date(2012, 1, 2, 10, 6, 49, 0, time.Local)},
 		[]string{"Typ=12 Len=7: 120,113,1,2,11,7,50", "Typ=12 Len=7: 120,112,1,2,11,7,50"}},
@@ -326,13 +327,13 @@ func TestArrayOutBinds(t *testing.T) {
 		qry = `DECLARE
 	TYPE in_tab_typ IS TABLE OF ` + tt.tab_typ + ` INDEX BY PLS_INTEGER;
 	in_tab in_tab_typ := :inp;
-	TYPE out_tab_typ IS TABLE OF VARCHAR2(100) INDEX BY PLS_INTEGER;
+	TYPE out_tab_typ IS TABLE OF VARCHAR2(1000) INDEX BY PLS_INTEGER;
 	out_tab out_tab_typ;
 	v_idx PLS_INTEGER;
 BEGIN
 	v_idx := in_tab.FIRST;
 	WHILE v_idx IS NOT NULL LOOP
-	    SELECT SUBSTR(DUMP(in_tab(v_idx)), 1, 100) INTO out_tab(v_idx) FROM DUAL;
+	    SELECT SUBSTR(DUMP(in_tab(v_idx)), 1, 1000) INTO out_tab(v_idx) FROM DUAL;
 		v_idx := in_tab.NEXT(v_idx);
 	END LOOP;
 	:out := out_tab;
@@ -354,8 +355,8 @@ END;`
 			}
 			t.Logf("%d/%d. => out:%#v", i, j, out_str)
 			if j < uint(len(tt.out)) && out_str != tt.out[j] {
-				t.Errorf("%d. exec(%q)[%d] => %q, want %q", i, tt.in, j,
-					out_str, tt.out)
+				t.Errorf("%d. exec(%q)[%d]\n got %q,\nwant %q", i, tt.in, j,
+					out_str, tt.out[j])
 			}
 		}
 	}
