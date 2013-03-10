@@ -361,3 +361,36 @@ END;`
 		}
 	}
 }
+
+func TestCursorOut(t *testing.T) {
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+	cur := conn.NewCursor()
+	defer cur.Close()
+	cur_out := conn.NewCursor()
+	defer cur_out.Close()
+
+	var (
+		err error
+		row []interface{}
+	)
+	qry := `DECLARE
+  v_cur SYS_REFCURSOR;
+BEGIN
+  OPEN v_cur FOR
+    SELECT * FROM all_objects;
+  :1 := v_cur;
+END;`
+	if err = cur.Execute(qry, []interface{}{cur_out}, nil); err != nil {
+		t.Errorf("error executing `%s`: %s", qry, err)
+		t.FailNow()
+	}
+	if row, err = cur_out.FetchOne(); err != nil {
+		t.Errorf("cannot fetch row: %s", err)
+		t.Fail()
+	}
+
+	t.Logf("row: %#v", row)
+}
