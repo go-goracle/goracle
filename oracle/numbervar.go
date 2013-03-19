@@ -10,7 +10,7 @@ package oracle
 import "C"
 
 import (
-	"log"
+	// "log"
 	// "bytes"
 	// "encoding/binary"
 	"fmt"
@@ -131,7 +131,7 @@ func (env *Environment) numberFromText(value string, dst unsafe.Pointer) error {
 
 // Set the value of the variable.
 func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
-	log.Printf("numberVar_SetValue(typ=%s, pos=%d len=(%d), value=%+v (%T))", v.typ,
+	debug("numberVar_SetValue(typ=%s, pos=%d len=(%d), value=%+v (%T))", v.typ,
 		pos, len(v.dataBytes), value, value)
 	nfInt := func(intVal int64) error {
 		if v.dataInts != nil {

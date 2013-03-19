@@ -19,6 +19,7 @@ import (
 
 var (
 	NotImplemented = errors.New("Not implemented")
+	IsDebug        bool
 )
 
 type conn struct {
@@ -33,7 +34,7 @@ type stmt struct {
 // Prepare the query for execution, return a prepared statement and error
 func (c conn) Prepare(query string) (driver.Stmt, error) {
 	cu := c.cx.NewCursor()
-	log.Printf("%p.Prepare(%s)", cu, query)
+	debug("%p.Prepare(%s)", cu, query)
 	err := cu.Prepare(query, "")
 	if err != nil {
 		return nil, err
@@ -78,7 +79,7 @@ func (t tx) Rollback() error {
 // closes statement
 func (s stmt) Close() error {
 	if s.cu != nil {
-		log.Printf("CLOSEing statement %p (%s)", s.cu, s.statement)
+		debug("CLOSEing statement %p (%s)", s.cu, s.statement)
 		s.cu.Close()
 		s.cu = nil
 	}
@@ -113,7 +114,7 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 
 	var err error
 	a := (*[]interface{})(unsafe.Pointer(&args))
-	log.Printf("%p.run(%s, %v)", s.cu, s.statement, *a)
+	debug("%p.run(%s, %v)", s.cu, s.statement, *a)
 	if err = s.cu.Execute(s.statement, *a, nil); err != nil {
 		return nil, err
 	}
@@ -121,7 +122,7 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 	var cols []oracle.VariableDescription
 	if !s.cu.IsDDL() {
 		cols, err = s.cu.GetDescription()
-		log.Printf("cols: %+v err: %s", cols, err)
+		debug("cols: %+v err: %s", cols, err)
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +158,7 @@ func (r rowsRes) Columns() []string {
 // closes the resultset
 func (r rowsRes) Close() error {
 	if r.cu != nil {
-		log.Printf("CLOSEing result %p", r.cu)
+		debug("CLOSEing result %p", r.cu)
 		// r.cu.Close() // FIXME
 		r.cu = nil
 	}
@@ -169,7 +170,7 @@ func (r rowsRes) Next(dest []driver.Value) error {
 	row := (*[]interface{})(unsafe.Pointer(&dest))
 	// log.Printf("FetcOneInto(%p %+v len=%d) %T", row, *row, len(*row), *row)
 	err := r.cu.FetchOneInto(*row...)
-	log.Printf("fetched row=%p %+v (len=%d) err=%s", row, *row, len(*row), err)
+	debug("fetched row=%p %+v (len=%d) err=%s", row, *row, len(*row), err)
 	return err
 }
 
@@ -206,6 +207,13 @@ func (d *Driver) Open(uri string) (driver.Conn, error) {
 		return nil, err
 	}
 	return &conn{cx: &cx}, nil
+}
+
+// use log.Printf for log messages if IsDebug
+func debug(fmt string, args ...interface{}) {
+	if IsDebug {
+		log.Printf(fmt, args...)
+	}
 }
 
 // Driver automatically registered in database/sql

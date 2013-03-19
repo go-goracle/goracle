@@ -310,7 +310,7 @@ func (cur *Cursor) internalExecute(numIters uint) error {
 	}
 
 	// Py_BEGIN_ALLOW_THREADS
-	log.Printf("%p.StmtExecute(%s, mode=%d) in internalExecute", cur,
+	debug("%p.StmtExecute(%s, mode=%d) in internalExecute", cur,
 		cur.statement, mode)
 	if CTrace {
 		ctrace("OCIStmtExecute", cur.connection.handle, cur.handle,
@@ -862,7 +862,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 
 	// prepare statement
 	cur.isOwned = false
-	log.Printf(`%p.Prepare2 for "%s" [%x]`, cur, cur.statement, cur.statementTag)
+	debug(`%p.Prepare2 for "%s" [%x]`, cur, cur.statement, cur.statementTag)
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
 		ctrace("OCIStmtPrepare2", cur.connection.handle, &cur.handle, cur.environment.errorHandle,

@@ -1130,7 +1130,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 			//return fmt.Errorf("%v is %T, not array!", value, value)
 		}
 	}
-	log.Printf("calling %s.setValue(%d, %v (%T))", v.typ, arrayPos, value, value)
+	debug("calling %s.setValue(%d, %v (%T))", v.typ, arrayPos, value, value)
 	return v.setSingleValue(arrayPos, value)
 }
 
