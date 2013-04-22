@@ -408,6 +408,9 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		}
 		vt, size, _, err = VarTypeByValue(x[0])
 		return
+
+	case *Cursor:
+		return CursorVarType, 0, 0, nil
 	}
 
 	if x, ok := data.(OraTyper); ok {
