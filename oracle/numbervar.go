@@ -226,7 +226,6 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		}
 		return fmt.Errorf("required some kind of int, got %T", value)
 	}
-	return nil
 }
 
 // Returns the value stored at the given array position.

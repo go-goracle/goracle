@@ -190,12 +190,8 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 		return (unsafe.Pointer(&v.dataBytes[0]))
 	} else if v.dataInts != nil {
 		return (unsafe.Pointer(&v.dataInts[0]))
-	} else {
-		return (unsafe.Pointer(&v.dataFloats[0]))
-
 	}
-	log.Panicf("everything is nil!")
-	return nil
+	return (unsafe.Pointer(&v.dataFloats[0]))
 }
 
 // returns the number of allocated elements (array length for arrays)

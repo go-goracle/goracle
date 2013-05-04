@@ -270,7 +270,7 @@ func (env *Environment) CheckStatus(status C.sword, at string) error {
 	err := &Error{Code: errorcode,
 		Message: fmt.Sprintf("[%d] %s", status, message),
 		At:      at}
-	log.Printf("CheckStatus(%d) ERR=%v", err)
+	log.Printf("CheckStatus(%d) ERR=%v", status, err)
 	return err
 }
 
