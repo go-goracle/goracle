@@ -369,11 +369,13 @@ func TestCursorOut(t *testing.T) {
 	}
 	cur := conn.NewCursor()
 	defer cur.Close()
-	cur_out := conn.NewCursor()
-	defer cur_out.Close()
+	out, err := cur.NewVariable(0, CursorVarType, 0)
+	if err != nil {
+		t.Errorf("error getting cursor variable: %s", err)
+		t.FailNow()
+	}
 
 	var (
-		err error
 		row []interface{}
 	)
 	qry := `DECLARE
@@ -383,11 +385,22 @@ BEGIN
     SELECT * FROM all_objects;
   :1 := v_cur;
 END;`
-	if err = cur.Execute(qry, []interface{}{cur_out}, nil); err != nil {
+	if err = cur.Execute(qry, []interface{}{out}, nil); err != nil {
 		t.Errorf("error executing `%s`: %s", qry, err)
 		t.FailNow()
 	}
-	if row, err = cur_out.FetchOne(); err != nil {
+	out_val, err := out.GetValue(1)
+	if err != nil {
+		t.Errorf("cannor get out value: %s", err)
+		t.FailNow()
+	}
+	out_cur, ok := out_val.(*Cursor)
+	if !ok {
+		t.Errorf("got %v (%T), required cursor.", out_cur, out_cur)
+		t.FailNow()
+	}
+	defer out_cur.Close()
+	if row, err = out_cur.FetchOne(); err != nil {
 		t.Errorf("cannot fetch row: %s", err)
 		t.Fail()
 	}

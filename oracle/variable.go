@@ -858,8 +858,9 @@ func (v *Variable) internalBind() (err error) {
 		if CTrace {
 			ctrace("OCIBindByPos", v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, fmt.Sprintf("pos=%d", v.boundPos),
-				v.getDataArr(),
-				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
+				"dataArr:", v.getDataArr(),
+				"bufsize:", v.bufferSize, "typ:", v.typ.oracleType,
+				v.indicator, aL, rC,
 				allElts, pActElts, "DEFAULT")
 		}
 		status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
@@ -890,6 +891,12 @@ func (v *Variable) Bind(cur *Cursor, name string, pos uint) error {
 	// nothing to do if already bound
 	if v.bindHandle != nil && name == v.boundName && pos == v.boundPos {
 		return nil
+	}
+	if cur == nil {
+		log.Fatalf("cur is nil")
+	}
+	if cur.handle == nil {
+		log.Fatalf("cur=%v handle is nil", cur)
 	}
 
 	// set the instance variables specific for binding
