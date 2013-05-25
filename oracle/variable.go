@@ -266,6 +266,7 @@ func (v *Variable) resize(size uint) error {
 		return nil
 	}
 
+	v.dataBytes = v.dataBytes[:cap(v.dataBytes)]
 	nsize := v.allocatedElements * size
 	olen := len(v.dataBytes)
 	if olen == int(nsize) {

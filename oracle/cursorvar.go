@@ -4,19 +4,22 @@ package oracle
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
 #cgo LDFLAGS: -lclntsh -L/usr/lib/oracle/11.2/client64/lib
 
+#include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <oci.h>
 
 const unsigned int sof_OCIStmtp = sizeof(OCIStmt*);
 
 static void cursorVar_setHandle(void *data, OCIStmt *handle) {
-	data = handle;
+    memcpy(data, handle, sof_OCIStmtp);
 }
 */
 import "C"
 
 import (
 	"fmt"
+	"log"
 	"unsafe"
 )
 
@@ -26,6 +29,7 @@ var CursorVarType *VariableType
 func cursorVar_Initialize(v *Variable, cur *Cursor) error {
 	var tempCursor *Cursor
 	var err error
+	var j int
 
 	v.connection = cur.connection
 	v.cursors = make([]*Cursor, v.allocatedElements)
@@ -34,7 +38,11 @@ func cursorVar_Initialize(v *Variable, cur *Cursor) error {
 		if err = tempCursor.allocateHandle(); err != nil {
 			return err
 		}
-		C.cursorVar_setHandle(unsafe.Pointer(&v.dataBytes[i]), tempCursor.handle)
+		j = int(i * v.typ.size)
+		C.cursorVar_setHandle(unsafe.Pointer(&v.dataBytes[j]),
+			tempCursor.handle)
+		log.Printf("set position %d(%d) in dataBytes to %x", i, j,
+			v.dataBytes[j:j+int(C.sof_OCIStmtp)])
 	}
 
 	return nil
@@ -53,6 +61,10 @@ func cursorVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	if !ok {
 		return fmt.Errorf("requires *Cursor, got %T", value)
 	}
+	if uint(len(v.cursors)) <= pos {
+		return fmt.Errorf("can't set cursor at pos %d in array of %d length",
+			pos, len(v.cursors))
+	}
 
 	var err error
 	v.cursors[pos] = x
@@ -65,13 +77,19 @@ func cursorVar_SetValue(v *Variable, pos uint, value interface{}) error {
 			return err
 		}
 	}
-	C.cursorVar_setHandle(unsafe.Pointer(&v.dataBytes[pos]), x.handle)
+	C.cursorVar_setHandle(unsafe.Pointer(&v.dataBytes[pos*v.typ.size]),
+		x.handle)
+
 	x.statementType = -1
 	return nil
 }
 
 // Set the value of the variable.
 func cursorVar_GetValue(v *Variable, pos uint) (interface{}, error) {
+	if uint(len(v.cursors)) <= pos {
+		return nil, fmt.Errorf("can't get cursor at pos %d from array of %d length",
+			pos, len(v.cursors))
+	}
 	cur := v.cursors[pos]
 	cur.statementType = -1
 	return cur, nil

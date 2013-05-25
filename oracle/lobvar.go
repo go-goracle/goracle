@@ -34,7 +34,7 @@ func lobVar_Initialize(v *Variable, cur *Cursor) error {
 	for i := uint(0); i < v.allocatedElements; i++ {
 		if err = v.environment.CheckStatus(
 			C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
-				(*unsafe.Pointer)(unsafe.Pointer(&v.dataBytes[i])),
+				(*unsafe.Pointer)(unsafe.Pointer(&v.dataBytes[i*v.typ.size])),
 				C.OCI_DTYPE_LOB, 0, nil),
 			"DescrAlloc"); err != nil {
 			return err
@@ -49,12 +49,14 @@ func lobVar_PreFetch(v *Variable) error {
 	var isTemporary C.boolean
 
 	var err error
+	var j int
 	for i := uint(0); i < v.allocatedElements; i++ {
-		if v.dataBytes != nil && uint(len(v.dataBytes)) > i && v.dataBytes[i] != 0 {
+		j = int(i * v.typ.size)
+		if v.dataBytes != nil && len(v.dataBytes) > j && v.dataBytes[j] != 0 {
 			if err = v.environment.CheckStatus(
 				C.OCILobIsTemporary(v.environment.handle,
 					v.environment.errorHandle,
-					(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[i])),
+					(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[j])),
 					&isTemporary),
 				"LobIsTemporary"); err != nil {
 				return err
@@ -64,7 +66,7 @@ func lobVar_PreFetch(v *Variable) error {
 				if err = v.environment.CheckStatus(
 					C.OCILobFreeTemporary(v.connection.handle,
 						v.environment.errorHandle,
-						(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[i]))),
+						(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[j]))),
 					"LobFreeTemporary"); err != nil {
 					return err
 				}
@@ -78,9 +80,11 @@ func lobVar_PreFetch(v *Variable) error {
 
 // Prepare for variable destruction.
 func lobVar_Finalize(v *Variable) error {
+	var j int
 	for i := uint(0); i < v.allocatedElements; i++ {
-		if v.dataBytes != nil && uint(len(v.dataBytes)) > i && v.dataBytes[i] != 0 {
-			C.OCIDescriptorFree(unsafe.Pointer(&v.dataBytes[i]), C.OCI_DTYPE_LOB)
+		j = int(i * v.typ.size)
+		if v.dataBytes != nil && len(v.dataBytes) > j && v.dataBytes[j] != 0 {
+			C.OCIDescriptorFree(unsafe.Pointer(&v.dataBytes[j]), C.OCI_DTYPE_LOB)
 		}
 	}
 	return nil
@@ -127,7 +131,7 @@ func (v *Variable) lobVar_Write(data []byte, pos uint, off int64) (amount int, e
 	if err := v.environment.CheckStatus(
 		C.OCILobWrite(v.connection.handle,
 			v.environment.errorHandle,
-			(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[pos])),
+			(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size])),
 			&oamount, C.ub4(off),
 			unsafe.Pointer(&data[0]), C.ub4(len(data)),
 			C.OCI_ONE_PIECE, nil, nil, 0,
@@ -161,12 +165,13 @@ func lobVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		lobType     C.ub1
 		err         error
 	)
+	j := pos * v.typ.size
 
 	// make sure have temporary LOBs set up
 	if err = v.environment.CheckStatus(
 		C.OCILobIsTemporary(v.environment.handle,
 			v.environment.errorHandle,
-			(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[pos])), &isTemporary),
+			(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[j])), &isTemporary),
 		"LobIsTemporary"); err != nil {
 		return err
 	}
@@ -180,7 +185,7 @@ func lobVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		if err = v.environment.CheckStatus(
 			C.OCILobCreateTemporary(v.connection.handle,
 				v.environment.errorHandle,
-				(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[pos])),
+				(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[j])),
 				C.OCI_DEFAULT, v.typ.charsetForm, lobType, C.FALSE,
 				C.OCI_DURATION_SESSION),
 			"LobCreateTemporary"); err != nil {
@@ -194,7 +199,7 @@ func lobVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	if err = v.environment.CheckStatus(
 		C.OCILobTrim(v.connection.handle,
 			v.environment.errorHandle,
-			(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[pos])), 0),
+			(*C.OCILobLocator)(unsafe.Pointer(&v.dataBytes[j])), 0),
 		"LobTrim"); err != nil {
 		return err
 	}
