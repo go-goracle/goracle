@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -21,12 +22,25 @@ package oracle
 
 #include <stdlib.h>
 #include <oci.h>
+#include <string.h>
+#include <xa.h>
+
+const int sizeof_XID = sizeof(XID);
+void setXID(XID *xid, int formatId, char *transactionId, int tIdLen, char *branchId, int bIdLen) {
+    xid->formatID = formatId;
+    xid->gtrid_length = tIdLen;
+    xid->bqual_length = bIdLen;
+    if (tIdLen > 0)
+        strncpy(xid->data, transactionId, tIdLen);
+    if (bIdLen > 0)
+        strncpy(&xid->data[tIdLen], branchId, bIdLen);
+}
 */
 import "C"
 
 import (
+	"errors"
 	"fmt"
-	// "log"
 	"strings"
 	"sync"
 	"unsafe"
@@ -61,7 +75,9 @@ func ClientVersion() []int32 {
 		int32(patchNum), int32(portUpdateNum)}
 }
 
+// Connection stores the handles for a connection
 type Connection struct {
+	// not exported fields
 	handle        *C.OCISvcCtx  //connection
 	serverHandle  *C.OCIServer  //server's handle
 	sessionHandle *C.OCISession //session's handle
@@ -73,36 +89,38 @@ type Connection struct {
 	srvMtx                           sync.Mutex
 }
 
-// Connection_IsConnected()
-//   Determines if the connection object is connected to the database.
+// IsConnected determines if the connection object is connected to the database.
 func (conn Connection) IsConnected() bool {
 	return conn.handle != nil
 }
 
-// returns a (non-modifiable) Environment of the connection
+// GetEnvironment returns a (non-modifiable) Environment of the connection
 func (conn Connection) GetEnvironment() Environment {
 	return *conn.environment
 }
 
+// AttrSet sets an attribute on the connection identified by key setting value with valueLength length
 func (conn *Connection) AttrSet(key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX,
 		key, value, valueLength)
 }
 
+// ServerAttrSet sets an attribute on the server handle identified by key
 func (conn *Connection) ServerAttrSet(key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER,
 		key, value, valueLength)
 }
 
+// SessionAttrSet sets an attribute on the session handle identified by key
 func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return conn.environment.AttrSet(
 		unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION,
 		key, value, valueLength)
 }
 
-//   Initialize the connection members.
+// NewConnection creates a new connection and initializes the connection members.
 func NewConnection(username, password, dsn string /*commitMode , pool, twophase bool*/) (
 	conn Connection, err error) {
 	conn = Connection{username: username, password: password, dsn: dsn}
@@ -285,6 +303,128 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	return nil
 }
 
+// Commit commits the transaction on the connection.
+func (conn *Connection) Commit() error {
+	// make sure we are actually connected
+	if !conn.IsConnected() {
+		return nil //?
+	}
+
+	conn.srvMtx.Lock()
+	defer conn.srvMtx.Unlock()
+	// perform the commit
+	//Py_BEGIN_ALLOW_THREADS
+	if err := conn.environment.CheckStatus(
+		C.OCITransCommit(conn.handle, conn.environment.errorHandle,
+			C.ub4(conn.commitMode)), "Commit"); err != nil {
+		return err
+	}
+	conn.commitMode = C.OCI_DEFAULT
+	//Py_END_ALLOW_THREADS
+	return nil
+}
+
+// Begin begins a new transaction on the connection.
+func (conn *Connection) Begin(formatID int, transactionID, branchID string) error {
+	var transactionHandle *C.OCITrans
+	var xid C.XID
+
+	// parse the arguments
+	formatID = -1
+	if len(transactionID) > C.MAXGTRIDSIZE {
+		return errors.New("transaction id too large")
+	}
+	if len(branchID) > C.MAXBQUALSIZE {
+		return errors.New("branch id too large")
+	}
+
+	// make sure we are actually connected
+	if !conn.IsConnected() {
+		return nil
+	}
+
+	// determine if a transaction handle was previously allocated
+	_, err := conn.environment.AttrGet(
+		unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX,
+		C.OCI_ATTR_TRANS, unsafe.Pointer(&transactionHandle),
+		"Connection.Begin(): find existing transaction handle")
+	if err != nil {
+		return err
+	}
+
+	// create a new transaction handle, if necessary
+	if transactionHandle == nil {
+		if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
+			C.OCI_HTYPE_TRANS,
+			(*unsafe.Pointer)(unsafe.Pointer(&transactionHandle)),
+			"Connection.Begin"); err != nil {
+			return errors.New("Connection.Begin(): allocate transaction handle: " +
+				err.Error())
+		}
+	}
+
+	// set the XID for the transaction, if applicable
+	if formatID != -1 {
+		tID := []byte(transactionID)
+		bID := []byte(branchID)
+		C.setXID(&xid, C.int(formatID),
+			(*C.char)(unsafe.Pointer(&tID[0])), C.int(len(tID)),
+			(*C.char)(unsafe.Pointer(&bID[0])), C.int(len(bID)))
+		if err = conn.environment.AttrSet(
+			unsafe.Pointer(transactionHandle), C.OCI_ATTR_XID,
+			C.OCI_HTYPE_TRANS, unsafe.Pointer(&xid), C.sizeof_XID); err != nil {
+			return errors.New("Connection.Begin(): set XID: " + err.Error())
+		}
+	}
+
+	// associate the transaction with the connection
+	if err = conn.environment.AttrSet(
+		unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX,
+		C.OCI_ATTR_TRANS, unsafe.Pointer(transactionHandle), 0); err != nil {
+		return errors.New("Connection.Begin(): associate transaction: " + err.Error())
+	}
+
+	// start the transaction
+	//Py_BEGIN_ALLOW_THREADS
+	conn.srvMtx.Lock()
+	defer conn.srvMtx.Unlock()
+	if err = conn.environment.CheckStatus(
+		C.OCITransStart(conn.handle, conn.environment.errorHandle, 0, C.OCI_TRANS_NEW),
+		"start transaction"); err != nil {
+		return errors.New("Connection.Begin(): start transaction: " + err.Error())
+	}
+
+	//Py_END_ALLOW_THREADS
+	return nil
+}
+
+// Prepare commits (if there is anything, TWO-PAHSE) the transaction on the connection.
+func (conn *Connection) Prepare() (bool, error) {
+	// make sure we are actually connected
+	if !conn.IsConnected() {
+		return false, nil //?
+	}
+
+	conn.srvMtx.Lock()
+	defer conn.srvMtx.Unlock()
+	// perform the prepare
+	//Py_BEGIN_ALLOW_THREADS
+	status := C.OCITransPrepare(conn.handle, conn.environment.errorHandle, C.OCI_DEFAULT)
+	// if nothing available to prepare, return False in order to allow for
+	// avoiding the call to commit() which will fail with ORA-24756
+	// (transaction does not exist)
+	if status == C.OCI_SUCCESS_WITH_INFO {
+		return false, nil
+	}
+	if err := conn.environment.CheckStatus(status, "Prepare"); err != nil {
+		return false, err
+	}
+	conn.commitMode = C.OCI_TRANS_TWOPHASE
+	//Py_END_ALLOW_THREADS
+	return true, nil
+}
+
+// Rollback rolls back the transaction
 func (conn *Connection) Rollback() error {
 	conn.srvMtx.Lock()
 	defer conn.srvMtx.Unlock()
@@ -293,7 +433,7 @@ func (conn *Connection) Rollback() error {
 			C.OCI_DEFAULT), "Rollback")
 }
 
-// Deallocate the connection, disconnecting from the database if necessary.
+// Free deallocates the connection, disconnecting from the database if necessary.
 func (conn *Connection) Free() {
 	if conn.release {
 		// Py_BEGIN_ALLOW_THREADS
@@ -320,7 +460,7 @@ func (conn *Connection) Free() {
 	}
 }
 
-//   Close the connection, disconnecting from the database.
+// Close the connection, disconnecting from the database.
 func (conn *Connection) Close() (err error) {
 	if !conn.IsConnected() {
 		return nil //?
@@ -356,7 +496,7 @@ func (conn *Connection) Close() (err error) {
 	return nil
 }
 
-// Execute an OCIBreak() to cause an immediate (asynchronous) abort of any
+// Cancel executes an OCIBreak() to cause an immediate (asynchronous) abort of any
 // currently executing OCI function.
 func (conn *Connection) Cancel() error {
 	// make sure we are actually connected
@@ -369,7 +509,7 @@ func (conn *Connection) Cancel() error {
 		conn.environment.errorHandle), "Cancel")
 }
 
-// Makes a round trip call to the server to confirm that the connection and
+// Ping makes a round trip call to the server to confirm that the connection and
 // server are active.
 func (conn *Connection) Ping() error {
 	if !conn.IsConnected() {
@@ -380,7 +520,7 @@ func (conn *Connection) Ping() error {
 
 }
 
-// Create a new cursor (statement) referencing the connection.
+// NewCursor creates a new cursor (statement) referencing the connection.
 func (conn *Connection) NewCursor() *Cursor {
 	return NewCursor(conn)
 }
@@ -398,7 +538,7 @@ func max(numbers ...int) int {
 	return m
 }
 
-// splits username/password@sid
+//SplitDsn splits username/password@sid
 func SplitDsn(dsn string) (username, password, sid string) {
 	if i := strings.Index(dsn, "/"); i > 0 {
 		username = dsn[:i]
@@ -412,7 +552,7 @@ func SplitDsn(dsn string) (username, password, sid string) {
 	return
 }
 
-// retrieve NLS parameters: OCI charset, client NLS_LANG and database NLS_LANG
+// NlsSettings retrieves NLS parameters: OCI charset, client NLS_LANG and database NLS_LANG
 // cur can be nil (in this case it allocates one)
 func (conn *Connection) NlsSettings(cur *Cursor) (oci, client, database string, err error) {
 	oci = conn.environment.Encoding

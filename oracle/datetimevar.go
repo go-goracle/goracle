@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -49,19 +50,21 @@ void setDateTime(OCIDate *date, sb2 year, ub1 month, ub1 day,
 import "C"
 
 import (
-	// "log"
-	// "bytes"
-	// "encoding/binary"
 	"fmt"
 	"time"
 	"unsafe"
 )
 
 var (
-	IntervalWorks                    bool = false
-	DateTimeVarType, IntervalVarType *VariableType
+	//IntervalWorks should be true only if Interval datatype works
+	IntervalWorks = false
+	//DateTimeVarType is the variable type for DateTime
+	DateTimeVarType *VariableType
+	//IntervalVarType is the variable type for Interval
+	IntervalVarType *VariableType
 )
 
+// IsDate checks whether the variable type is Date or Interval
 func (t *VariableType) IsDate() bool {
 	if t == DateTimeVarType || t == IntervalVarType {
 		return true
@@ -69,20 +72,20 @@ func (t *VariableType) IsDate() bool {
 	return false
 }
 
-func dateTimeVar_SetValue(v *Variable, pos uint, value interface{}) error {
+func dateTimeVarSetValue(v *Variable, pos uint, value interface{}) error {
 	x, ok := value.(time.Time)
 	if !ok {
-		if a, ok := value.([]time.Time); !ok {
+		a, ok := value.([]time.Time)
+		if !ok {
 			return fmt.Errorf("awaited time.Time or []time.Time, got %T", value)
-		} else {
-			var err error
-			for i, x := range a {
-				if err = dateTimeVar_SetValue(v, pos+uint(i), x); err != nil {
-					return err
-				}
-			}
-			return nil
 		}
+		var err error
+		for i, x := range a {
+			if err = dateTimeVarSetValue(v, pos+uint(i), x); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	/*
 		if err := v.environment.CheckStatus(
@@ -102,7 +105,7 @@ func dateTimeVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	return nil
 }
 
-func dateTimeVar_GetValue(v *Variable, pos uint) (interface{}, error) {
+func dateTimeVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	var (
 		year                             C.sb2
 		month, day, hour, minute, second C.ub1
@@ -126,8 +129,8 @@ func dateTimeVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 		int(hour), int(minute), int(second), 0, time.Local), nil
 }
 
-//   Set the value of the variable.
-func internalVar_SetValue(v *Variable, pos uint, value interface{}) error {
+// intervalVarSetValue sets the value of the variable.
+func intervalVarSetValue(v *Variable, pos uint, value interface{}) error {
 	var days, hours, minutes, seconds, microseconds C.sb4
 
 	x, ok := value.(time.Duration)
@@ -149,7 +152,7 @@ func internalVar_SetValue(v *Variable, pos uint, value interface{}) error {
 }
 
 // Returns the value stored at the given array position.
-func internalVar_GetValue(v *Variable, pos uint) (interface{}, error) {
+func intervalVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	var days, hours, minutes, seconds, microseconds C.sb4
 
 	if err := v.environment.CheckStatus(
@@ -170,8 +173,8 @@ func internalVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 func init() {
 	DateTimeVarType = &VariableType{
 		Name:             "DateTime",
-		setValue:         dateTimeVar_SetValue,
-		getValue:         dateTimeVar_GetValue,
+		setValue:         dateTimeVarSetValue,
+		getValue:         dateTimeVarGetValue,
 		oracleType:       C.SQLT_ODT,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             C.sizeof_OCIDate, // element length
@@ -182,8 +185,8 @@ func init() {
 	}
 	IntervalVarType = &VariableType{
 		Name:             "Interval",
-		setValue:         dateTimeVar_SetValue,
-		getValue:         dateTimeVar_GetValue,
+		setValue:         intervalVarSetValue,
+		getValue:         intervalVarGetValue,
 		oracleType:       C.SQLT_INTERVAL_DS,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT,         // charset form
 		size:             uint(C.sof_OCIIntervalp), // element length

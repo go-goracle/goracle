@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 import (
 	"fmt"
@@ -118,9 +119,9 @@ func TestSimpleBinds(t *testing.T) {
 }
 
 var outBindsTests = []struct {
-	in_str  string
-	out_val interface{}
-	out_str string
+	inStr  string
+	outVal interface{}
+	outStr string
 }{
 	{"3", int32(0), "3"},
 	{"-10.24", float32(-10.24), "-10.24"},
@@ -140,35 +141,35 @@ func TestOutBinds(t *testing.T) {
 	defer cur.Close()
 
 	var (
-		err          error
-		qry, out_str string
-		out          *Variable
+		err         error
+		qry, outStr string
+		out         *Variable
 	)
 	for i, tt := range outBindsTests {
-		qry = `BEGIN SELECT ` + tt.in_str + ` INTO :1 FROM DUAL; END;`
-		if out, err = cur.NewVar(tt.out_val); err != nil {
-			t.Errorf("error creating variable for %s(%T): %s", tt.out_val, tt.out_val, err)
+		qry = `BEGIN SELECT ` + tt.inStr + ` INTO :1 FROM DUAL; END;`
+		if out, err = cur.NewVar(tt.outVal); err != nil {
+			t.Errorf("error creating variable for %s(%T): %s", tt.outVal, tt.outVal, err)
 		}
 		if err = cur.Execute(qry, []interface{}{out}, nil); err != nil {
 			t.Errorf("error executing `%s`: %s", qry, err)
 			continue
 		}
-		if err = out.GetValueInto(&tt.out_val, 0); err != nil {
+		if err = out.GetValueInto(&tt.outVal, 0); err != nil {
 			t.Errorf("%d. error getting value: %s", i, err)
 			continue
 		}
-		t.Logf("%d. out:%s %v", i, out, tt.out_val)
-		out_str = fmt.Sprintf("%v", tt.out_val)
-		if out_str != tt.out_str {
-			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in_str, out_str, tt.out_str)
+		t.Logf("%d. out:%s %v", i, out, tt.outVal)
+		outStr = fmt.Sprintf("%v", tt.outVal)
+		if outStr != tt.outStr {
+			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.inStr, outStr, tt.outStr)
 		}
 	}
 }
 
 var inOutBindsTests = []struct {
-	in_typ string
-	in     interface{}
-	out    string
+	inTyp string
+	in    interface{}
+	out   string
 }{
 	{"INTEGER(3)", int32(1), "Typ=2 Len=2: 193,2"},
 	{"NUMBER(5,3)", float32(1.0 / 2), "Typ=2 Len=2: 192,51"},
@@ -187,17 +188,17 @@ func TestInOutBinds(t *testing.T) {
 	defer cur.Close()
 
 	var (
-		ok      bool
-		err     error
-		qry     string
-		out     *Variable
-		val     interface{}
-		out_str string
+		ok     bool
+		err    error
+		qry    string
+		out    *Variable
+		val    interface{}
+		outStr string
 	)
 
 	for i, tt := range inOutBindsTests {
 		qry = `DECLARE
-	v_in ` + tt.in_typ + ` := :1;
+	v_in ` + tt.inTyp + ` := :1;
 	v_out VARCHAR2(1000);
 BEGIN
 	SELECT DUMP(v_in) INTO v_out FROM DUAL;
@@ -215,20 +216,20 @@ END;`
 			t.Errorf("%d. error getting value: %s", i, err)
 			continue
 		}
-		if out_str, ok = val.(string); !ok {
+		if outStr, ok = val.(string); !ok {
 			t.Logf("output is not string!?!, but %T (%v)", val, val)
 		}
-		//t.Logf("%d. out:%s =?= %s", i, out_str, tt.out)
-		if out_str != tt.out {
-			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out_str, tt.out)
+		//t.Logf("%d. out:%s =?= %s", i, outStr, tt.out)
+		if outStr != tt.out {
+			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, outStr, tt.out)
 		}
 	}
 }
 
 var arrInBindsTests = []struct {
-	tab_typ string
-	in      interface{}
-	out     string
+	tabTyp string
+	in     interface{}
+	out    string
 }{
 	{"INTEGER(3)", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=2: 193,4\n3. Typ=2 Len=2: 193,6\n"},
 	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "!2!1. Typ=2 Len=2: 192,51\n2. Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102\n"},
@@ -250,12 +251,12 @@ func TestArrayInBinds(t *testing.T) {
 	defer cur.Close()
 
 	var (
-		err     error
-		qry     string
-		out     *Variable
-		val     interface{}
-		out_str string
-		ok      bool
+		err    error
+		qry    string
+		out    *Variable
+		val    interface{}
+		outStr string
+		ok     bool
 	)
 	for i, tt := range arrInBindsTests {
 		if out, err = cur.NewVar(""); err != nil {
@@ -263,8 +264,8 @@ func TestArrayInBinds(t *testing.T) {
 			t.FailNow()
 		}
 		qry = `DECLARE
-	TYPE tab_typ IS TABLE OF ` + tt.tab_typ + ` INDEX BY PLS_INTEGER;
-	tab tab_typ := :1;
+	TYPE tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY PLS_INTEGER;
+	tab tabTyp := :1;
 	v_idx PLS_INTEGER;
 	v_out VARCHAR2(1000) := '!';
 BEGIN
@@ -287,20 +288,20 @@ END;`
 			t.Errorf("%d. error getting value: %s", i, err)
 			continue
 		}
-		if out_str, ok = val.(string); !ok {
+		if outStr, ok = val.(string); !ok {
 			t.Logf("output is not string!?!, but %T (%v)", val, val)
 		}
-		//t.Logf("%d. in:%s => out:%v", i, out, out_str)
-		if out_str != tt.out {
-			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, out_str, tt.out)
+		//t.Logf("%d. in:%s => out:%v", i, out, outStr)
+		if outStr != tt.out {
+			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, outStr, tt.out)
 		}
 	}
 }
 
 var arrOutBindsTests = []struct {
-	tab_typ string
-	in      interface{}
-	out     []string
+	tabTyp string
+	in     interface{}
+	out    []string
 }{
 	{"INTEGER(3)", []int32{1, 3, 5}, []string{"Typ=2 Len=2: 193,2", "Typ=2 Len=2: 193,4", "Typ=2 Len=2: 193,6"}},
 	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, []string{"Typ=2 Len=2: 192,51", "Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102"}},
@@ -324,12 +325,12 @@ func TestArrayOutBinds(t *testing.T) {
 	defer cur.Close()
 
 	var (
-		err     error
-		qry     string
-		out     *Variable
-		val     interface{}
-		out_str string
-		ok      bool
+		err    error
+		qry    string
+		out    *Variable
+		val    interface{}
+		outStr string
+		ok     bool
 	)
 	placeholder := string(make([]byte, 100))
 	for i, tt := range arrOutBindsTests {
@@ -340,10 +341,10 @@ func TestArrayOutBinds(t *testing.T) {
 			t.FailNow()
 		}
 		qry = `DECLARE
-	TYPE in_tab_typ IS TABLE OF ` + tt.tab_typ + ` INDEX BY PLS_INTEGER;
-	in_tab in_tab_typ := :inp;
-	TYPE out_tab_typ IS TABLE OF VARCHAR2(1000) INDEX BY PLS_INTEGER;
-	out_tab out_tab_typ;
+	TYPE in_tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY PLS_INTEGER;
+	in_tab in_tabTyp := :inp;
+	TYPE out_tabTyp IS TABLE OF VARCHAR2(1000) INDEX BY PLS_INTEGER;
+	out_tab out_tabTyp;
 	v_idx PLS_INTEGER;
 BEGIN
 	v_idx := in_tab.FIRST;
@@ -365,19 +366,21 @@ END;`
 				t.Errorf("%d. error getting %d. value: %s", i, j, err)
 				continue
 			}
-			if out_str, ok = val.(string); !ok {
+			if outStr, ok = val.(string); !ok {
 				t.Logf("%d/%d. output is not string!?!, but %T (%v)", i, j, val, val)
 			}
-			t.Logf("%d/%d. => out:%#v", i, j, out_str)
-			if j < uint(len(tt.out)) && out_str != tt.out[j] {
+			t.Logf("%d/%d. => out:%#v", i, j, outStr)
+			if j < uint(len(tt.out)) && outStr != tt.out[j] {
 				t.Errorf("%d. exec(%q)[%d]\n got %q,\nwant %q", i, tt.in, j,
-					out_str, tt.out[j])
+					outStr, tt.out[j])
 			}
 		}
 	}
 }
 
 func TestCursorOut(t *testing.T) {
+	IsDebug = true
+
 	conn := getConnection(t)
 	if !conn.IsConnected() {
 		t.FailNow()
@@ -404,18 +407,18 @@ END;`
 		t.Errorf("error executing `%s`: %s", qry, err)
 		t.FailNow()
 	}
-	out_val, err := out.GetValue(1)
+	outVal, err := out.GetValue(0)
 	if err != nil {
 		t.Errorf("cannor get out value: %s", err)
 		t.FailNow()
 	}
-	out_cur, ok := out_val.(*Cursor)
+	outCur, ok := outVal.(*Cursor)
 	if !ok {
-		t.Errorf("got %v (%T), required cursor.", out_cur, out_cur)
+		t.Errorf("got %v (%T), required cursor.", outCur, outCur)
 		t.FailNow()
 	}
-	defer out_cur.Close()
-	if row, err = out_cur.FetchOne(); err != nil {
+	defer outCur.Close()
+	if row, err = outCur.FetchOne(); err != nil {
 		t.Errorf("cannot fetch row: %s", err)
 		t.Fail()
 	}

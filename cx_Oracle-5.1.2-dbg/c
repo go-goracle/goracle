@@ -1,0 +1,19 @@
+#!/bin/sh
+PYTHONPATH=build/lib.linux-x86_64-2.7-11g:$PYTHONPATH python <<EOF
+import cx_Oracle_dbg as cx_Oracle
+import sys
+cx = cx_Oracle.connect('$1')
+cu = cx.cursor()
+cur = cu.var(cx_Oracle.CURSOR)
+cu.execute("""DECLARE
+  v_cur SYS_REFCURSOR;
+BEGIN
+  OPEN v_cur FOR
+    SELECT * FROM all_objects;
+  :1 := v_cur;
+END;""", [cur])
+for row in cur.getvalue():
+    print row
+    break
+EOF
+

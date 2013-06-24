@@ -1,19 +1,20 @@
 /*
-   Copyright 2013 Tamás Gulácsi
+Package godrv implements a Go Oracle driver
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Copyright 2013 Tamás Gulácsi
 
-     http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
-//Go Oracle driver
 package godrv
 
 import (
@@ -33,8 +34,10 @@ import (
 )
 
 var (
+	// NotImplemented prints Not implemented
 	NotImplemented = errors.New("Not implemented")
-	IsDebug        bool
+	// IsDebug should we print debug logs?
+	IsDebug bool
 )
 
 type conn struct {
@@ -69,26 +72,30 @@ type tx struct {
 }
 
 // begins a transaction
-func (c conn) Begin() (driver.Tx, error) {
+func (c conn) Begin() (tx driver.Tx, err error) {
 	if !c.cx.IsConnected() {
-		if err := c.cx.Connect(0, false); err != nil {
-			return tx{cx: nil}, err
+		if err = c.cx.Connect(0, false); err != nil {
+			return
 		}
 	}
-	return tx{cx: c.cx}, nil
+	tx = tx{cx: c.cx}
+	return
 }
 
 // commits currently opened transaction
 func (t tx) Commit() error {
-	if t.cx != nil && t.cx.IsConnected() {
-		return t.cx.NewCursor().Execute("COMMIT", nil, nil)
+	if t.cx != nil {
+		return t.cx.Commit()
 	}
 	return nil
 }
 
 // rolls back current transaction
 func (t tx) Rollback() error {
-	return t.cx.Rollback()
+	if t.cx != nil {
+		return t.cx.Rollback()
+	}
+	return nil
 }
 
 // closes statement
@@ -189,6 +196,7 @@ func (r rowsRes) Next(dest []driver.Value) error {
 	return err
 }
 
+// Driver implements a Driver
 type Driver struct {
 	// Defaults
 	user, passwd, db string

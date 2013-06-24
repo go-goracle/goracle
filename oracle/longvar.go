@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -28,19 +29,20 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	// "log"
-	// "unsafe"
 )
 
 var (
-	LongStringVarType, LongBinaryVarType *VariableType
+	//LongStringVarType is a VariableType for LONG strings
+	LongStringVarType *VariableType
+	//LongBinaryVarType is a VariableType for RAW strings
+	LongBinaryVarType *VariableType
 )
 
 func init() {
 	LongStringVarType = &VariableType{
-		setValue:         longVar_SetValue,
-		getValue:         longVar_GetValue,
-		getBufferSize:    longVar_GetBufferSize,
+		setValue:         longVarSetValue,
+		getValue:         longVarGetValue,
+		getBufferSize:    longVarGetBufferSize,
 		oracleType:       C.SQLT_LVC,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             128 * 1024,       // element length (default)
@@ -51,9 +53,9 @@ func init() {
 	}
 
 	LongBinaryVarType = &VariableType{
-		setValue:         longVar_SetValue,
-		getValue:         longVar_GetValue,
-		getBufferSize:    longVar_GetBufferSize,
+		setValue:         longVarSetValue,
+		getValue:         longVarGetValue,
+		getBufferSize:    longVarGetBufferSize,
 		oracleType:       C.SQLT_LVB,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             128 * 1024,       // element length (default)
@@ -64,15 +66,15 @@ func init() {
 	}
 }
 
-// Set the value of the variable.
-func longVar_SetValue(v *Variable, pos uint, value interface{}) error {
+// longVarSetValue sets the value of the variable.
+func longVarSetValue(v *Variable, pos uint, value interface{}) error {
 	var x []byte
 	if y, ok := value.(string); !ok {
-		if y, ok := value.([]byte); !ok {
+		z, ok := value.([]byte)
+		if !ok {
 			return fmt.Errorf("awaited string or []byte, got %T", value)
-		} else {
-			x = y
 		}
+		x = z
 	} else {
 		x = []byte(y)
 	}
@@ -95,8 +97,8 @@ func longVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	return nil
 }
 
-// Returns the value stored at the given array position.
-func longVar_GetValue(v *Variable, pos uint) (interface{}, error) {
+// longVarGetValue returns the value stored at the given array position.
+func longVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	p := v.bufferSize * pos
 	size := uint32(v.bufferSize)
 	if err := binary.Read(bytes.NewReader(v.dataBytes[p:p+4]),
@@ -110,8 +112,8 @@ func longVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 	return data, nil
 }
 
-// Returns the size of the buffer to use for data of the given size.
-func longVar_GetBufferSize(v *Variable) uint {
+// longVarGetBufferSize returns the size of the buffer to use for data of the given size.
+func longVarGetBufferSize(v *Variable) uint {
 	if v.typ.isCharData {
 		return v.size + C.sizeof_ub4
 	}

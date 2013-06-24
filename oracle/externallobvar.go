@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -26,15 +27,12 @@ import "C"
 
 import (
 	"errors"
-	// "fmt"
-	// "log"
-	// "time"
 	"unsafe"
 )
 
 // Defines the routines for handling LOB variables external to this module.
 
-// external LOB type
+// ExternalLobVar is an external LOB var type
 type ExternalLobVar struct {
 	lobVar           *Variable
 	pos              uint
@@ -42,7 +40,7 @@ type ExternalLobVar struct {
 	isFile           bool
 }
 
-// Create a new external LOB variable.
+// NewExternalLobVar creates a new external LOB variable.
 func NewExternalLobVar(v *Variable, // variable to encapsulate
 	pos uint, // position in array to encapsulate
 ) *ExternalLobVar {
@@ -59,9 +57,9 @@ func (lv *ExternalLobVar) Verify() error {
 	return nil
 }
 
-// Return the size of the LOB variable for internal comsumption.
+// internalRead returns the size of the LOB variable for internal comsumption.
 func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err error) {
-	var charsetId C.ub2
+	var charsetID C.ub2
 	j := lv.pos * lv.lobVar.typ.size
 
 	if lv.isFile {
@@ -79,10 +77,10 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 
 	// Py_BEGIN_ALLOW_THREADS
 	if lv.lobVar.typ == NClobVarType {
-		// charsetId = C.OCI_UTF16ID
-		charsetId = CSID_AL32UTF8
+		// charsetID = C.OCI_UTF16ID
+		charsetID = CsIDAl32UTF8
 	} else {
-		charsetId = 0
+		charsetID = 0
 	}
 	length = int64(len(p))
 	olength := C.ub4(length + 1)
@@ -91,7 +89,7 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 			lv.lobVar.environment.errorHandle,
 			(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[j])),
 			&olength, C.ub4(off+1), unsafe.Pointer(&p[0]),
-			C.ub4(len(p)), nil, nil, charsetId, lv.lobVar.typ.charsetForm),
+			C.ub4(len(p)), nil, nil, charsetID, lv.lobVar.typ.charsetForm),
 		"LobRead"); err != nil {
 		// Py_END_ALLOW_THREADS
 		C.OCILobFileClose(lv.lobVar.connection.handle,
@@ -114,7 +112,7 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 	return
 }
 
-// Return the size of the LOB variable for internal comsumption.
+// internalSize returns the size of the LOB variable for internal comsumption.
 func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
 	// Py_BEGIN_ALLOW_THREADS
 	if err = lv.lobVar.environment.CheckStatus(
@@ -130,7 +128,7 @@ func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
 	return
 }
 
-// Return the size of the data in the LOB variable.
+// Size returns the size of the data in the LOB variable.
 func (lv *ExternalLobVar) Size(inChars bool) (int64, error) {
 	if err := lv.Verify(); err != nil {
 		return 0, err
@@ -146,7 +144,7 @@ func (lv *ExternalLobVar) Size(inChars bool) (int64, error) {
 	return int64(length), err
 }
 
-// Return a portion (or all) of the data in the external LOB variable.
+// ReadAt returns a portion (or all) of the data in the external LOB variable.
 func (lv *ExternalLobVar) ReadAt(p []byte, off int64) (int, error) {
 	/*
 		length, err := lv.Size(false)
@@ -224,7 +222,7 @@ func (lv *ExternalLobVar) Close() error {
 	// Py_END_ALLOW_THREADS
 }
 
-// Return a portion (or all) of the data in the external LOB variable.
+// Read returns a portion (or all) of the data in the external LOB variable.
 func (lv *ExternalLobVar) Read(p []byte) (int, error) {
 	if err := lv.Verify(); err != nil {
 		return 0, err
@@ -232,7 +230,7 @@ func (lv *ExternalLobVar) Read(p []byte) (int, error) {
 	return lv.ReadAt(p, 0)
 }
 
-// Return a portion (or all) of the data in the external LOB variable.
+// ReadAll returns all of the data in the external LOB variable.
 func (lv *ExternalLobVar) ReadAll() ([]byte, error) {
 	amount, err := lv.internalSize()
 	if err != nil {
@@ -243,13 +241,13 @@ func (lv *ExternalLobVar) ReadAll() ([]byte, error) {
 	return p, err
 }
 
-// Write a value to the LOB variable; return the number of bytes written.
+// WriteAt writes a value to the LOB variable; return the number of bytes written.
 func (lv *ExternalLobVar) WriteAt(value []byte, off int64) (n int, err error) {
 	// perform the write, if possible
 	if err = lv.Verify(); err != nil {
 		return 0, err
 	}
-	return lv.lobVar.lobVar_Write(value, 0, off)
+	return lv.lobVar.lobVarWrite(value, 0, off)
 }
 
 // Trim the LOB variable to the specified length.
@@ -274,8 +272,8 @@ func (lv *ExternalLobVar) Trim(newSize int) error {
 	return nil
 }
 
-// Return the chunk size that should be used when reading/writing the LOB in
-// chunks.
+// GetChunkSize returns the chunk size that should be used when
+// reading/writing the LOB in chunks.
 func (lv *ExternalLobVar) GetChunkSize() (int, error) {
 	var chunkSize C.ub4
 	var err error
@@ -294,7 +292,7 @@ func (lv *ExternalLobVar) GetChunkSize() (int, error) {
 	return int(chunkSize), nil
 }
 
-// Return a boolean indicating if the lob is open or not.
+// IsOpen returns a boolean indicating if the lob is open or not.
 func (lv *ExternalLobVar) IsOpen() (bool, error) {
 	var (
 		err    error
@@ -316,7 +314,7 @@ func (lv *ExternalLobVar) IsOpen() (bool, error) {
 	return isOpen == C.TRUE, nil
 }
 
-// Return the directory alias and file name for the BFILE lob.
+// GetFileName returns the directory alias and file name for the BFILE lob.
 func (lv *ExternalLobVar) GetFileName() (string, string, error) {
 	var err error
 	// determine the directory alias and name
@@ -340,7 +338,7 @@ func (lv *ExternalLobVar) GetFileName() (string, string, error) {
 	return string(dirAliasB[:dirAliasLength]), string(nameB[:nameLength]), nil
 }
 
-// Set the directory alias and file name for the BFILE lob.
+// SetFileName sets the directory alias and file name for the BFILE lob.
 func (lv *ExternalLobVar) SetFileName(dirAlias, name string) error {
 	var err error
 	// create a string for retrieving the value
@@ -363,7 +361,7 @@ func (lv *ExternalLobVar) SetFileName(dirAlias, name string) error {
 	return nil
 }
 
-// Return a boolean indicating if the BFIILE lob exists.
+// FileExists returns a boolean indicating if the BFIILE lob exists.
 func (lv *ExternalLobVar) FileExists() (bool, error) {
 	var (
 		err  error

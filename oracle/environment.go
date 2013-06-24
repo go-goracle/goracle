@@ -1,21 +1,20 @@
 /*
-   Copyright 2013 Tamás Gulácsi
+Package oracle is translated from cx_Oracle ((c) Anthony Tuininga) by Tamás Gulácsi
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Copyright 2013 Tamás Gulácsi
 
-     http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
-// Copyright 2012-2013 Tamás Gulácsi
-// See LICENSE.txt
-// Translated from cx_Oracle ((c) Anthony Tuininga) by Tamás Gulácsi
 package oracle
 
 /*
@@ -30,13 +29,13 @@ char* AttrGetName(const dvoid *mypard,
 				  ub4 key,
                   OCIError *errhp,
                   sword *status,
-                  ub4 *name_len) {
+                  ub4 *nameLen) {
 	char *name;
 
 	*status = OCIAttrGet(mypard, parType,
-       (dvoid*)&name, name_len,
+       (dvoid*)&name, nameLen,
        key, errhp);
-    //fprintf(stderr, "%d %s\n", *name_len, (char*)name);
+    //fprintf(stderr, "%d %s\n", *nameLen, (char*)name);
     return name;
 }
 */
@@ -44,12 +43,15 @@ import "C"
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"unsafe"
 )
 
+// Environment holds handles for the database environment
 type Environment struct {
+	// unexported fields
 	handle                       *C.OCIEnv
 	errorHandle                  *C.OCIError
 	MaxBytesPerCharacter         uint
@@ -63,13 +65,14 @@ type Environment struct {
 
 // maximum number of characters/bytes applicable to strings/binaries
 const (
-	MAX_STRING_CHARS = 4000
-	MAX_BINARY_BYTES = 4000
+	MaxStringChars = 4000
+	MaxBinaryBytes = 4000
 )
 
-var CSID_AL32UTF8 C.ub2
+// CsIDAl32UTF8 holds the charaterset ID for UTF8
+var CsIDAl32UTF8 C.ub2
 
-// Create and initialize a new environment object
+// NewEnvironment creates and initializes a new environment object
 func NewEnvironment() (*Environment, error) {
 	var err error
 
@@ -77,13 +80,13 @@ func NewEnvironment() (*Environment, error) {
 	env := &Environment{
 		FixedWidth:                   false,
 		MaxBytesPerCharacter:         4,
-		maxStringBytes:               MAX_STRING_CHARS,
+		maxStringBytes:               MaxStringChars,
 		numberToStringFormatBuffer:   []byte("TM9"),
 		numberFromStringFormatBuffer: []byte("999999999999999999999999999999999999999999999999999999999999999"),
 		nlsNumericCharactersBuffer:   []byte("NLS_NUMERIC_CHARACTERS='.,'"),
 	}
 
-	if CSID_AL32UTF8 == 0 {
+	if CsIDAl32UTF8 == 0 {
 		// create the new environment handle
 		if err = checkStatus(C.OCIEnvNlsCreate(&env.handle,
 			C.OCI_DEFAULT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0, 0),
@@ -92,14 +95,14 @@ func NewEnvironment() (*Environment, error) {
 			return nil, err
 		}
 		buffer := []byte("AL32UTF8\000")
-		CSID_AL32UTF8 = C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
+		CsIDAl32UTF8 = C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
 			(*C.oratext)(&buffer[0]))
 		C.OCIHandleFree(unsafe.Pointer(&env.handle), C.OCI_HTYPE_ENV)
-		// log.Printf("csid=%d", CSID_AL32UTF8)
+		// log.Printf("csid=%d", CsIDAl32UTF8)
 	}
 	if err = checkStatus(C.OCIEnvNlsCreate(
 		&env.handle, C.OCI_DEFAULT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
-		CSID_AL32UTF8, CSID_AL32UTF8), false); err != nil {
+		CsIDAl32UTF8, CsIDAl32UTF8), false); err != nil {
 		setErrAt(err, "Unable to acquire Oracle environment handle with AL32UTF8 charset")
 		return nil, err
 	}
@@ -120,7 +123,7 @@ func NewEnvironment() (*Environment, error) {
 		return nil, err
 	}
 	env.MaxBytesPerCharacter = uint(sb4)
-	env.maxStringBytes = MAX_STRING_CHARS * env.MaxBytesPerCharacter
+	env.maxStringBytes = MaxStringChars * env.MaxBytesPerCharacter
 	// log.Printf("maxBytesPerCharacter=%d", env.maxBytesPerCharacter)
 
 	// acquire whether character set is fixed width
@@ -145,9 +148,13 @@ func NewEnvironment() (*Environment, error) {
 
 func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at string) error {
 	// var vsize C.ub4
-	return checkStatus(C.OCIHandleAlloc(parent, dst, typ, C.size_t(0), nil), false)
+	if err := checkStatus(C.OCIHandleAlloc(parent, dst, typ, C.size_t(0), nil), false); err != nil {
+		return errors.New(at + ": " + err.Error())
+	}
+	return nil
 }
 
+//AttrSet sets an attribute on the given parent pointer
 func (env *Environment) AttrSet(parent unsafe.Pointer, parentTyp C.ub4,
 	key C.ub4, value unsafe.Pointer, valueLength int) error {
 	return env.CheckStatus(C.OCIAttrSet(parent, parentTyp,
@@ -156,11 +163,11 @@ func (env *Environment) AttrSet(parent unsafe.Pointer, parentTyp C.ub4,
 		"AttrSet")
 }
 
-// Retrieve and store the IANA character set name for the attribute.
+// GetCharacterSetName retrieves the IANA character set name for the attribute.
 func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 	//, overrideValue string
 	var (
-		charsetId, vsize C.ub4
+		charsetID, vsize C.ub4
 		status           C.sword
 		err              error
 	)
@@ -179,7 +186,7 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 	// get character set id
 	status = C.OCIAttrGet(unsafe.Pointer(env.handle), //void *trgthndlp
 		C.OCI_HTYPE_ENV,            //ub4 trghndltyp
-		unsafe.Pointer(&charsetId), //void *attributep
+		unsafe.Pointer(&charsetID), //void *attributep
 		&vsize,           //ub4 *sizep
 		C.ub4(attribute), //ub4 attrtype
 		env.errorHandle)  //OCIError *errhp
@@ -193,7 +200,7 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 	// get character set name
 	if err = env.CheckStatus(C.OCINlsCharSetIdToName(unsafe.Pointer(env.handle),
 		(*C.oratext)(&charsetName[0]),
-		C.OCI_NLS_MAXBUFSZ, C.ub2(charsetId)),
+		C.OCI_NLS_MAXBUFSZ, C.ub2(charsetID)),
 		"GetCharacterSetName[get Oracle charset name]"); err != nil {
 		return "", err
 	}
@@ -245,7 +252,7 @@ func checkStatus(status C.sword, justSpecific bool) error {
 	return nil
 }
 
-// Check for an error in the last call and if an error has occurred,
+// CheckStatus checks for an error in the last call and if an error has occurred,
 // retrieve the error message from the database environment
 func (env *Environment) CheckStatus(status C.sword, at string) error {
 	// if status != C.OCI_SUCCESS {
@@ -289,6 +296,7 @@ func (env *Environment) CheckStatus(status C.sword, at string) error {
 	return err
 }
 
+//AttrGet gets the parent's attribute identified by key, and stores it in dst
 func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 	dst unsafe.Pointer, errText string) (int, error) {
 	var osize C.ub4
@@ -304,30 +312,32 @@ func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 	return int(osize), nil
 }
 
+//AttrGetName retrieves the name of the parent's attribute identified by key
 func (env *Environment) AttrGetName(parent unsafe.Pointer, parentType, key int,
 	errText string) ([]byte, error) {
 	var (
-		name_len C.ub4
-		status   C.sword
+		nameLen C.ub4
+		status  C.sword
 	)
 	if CTrace {
 		ctrace("OCIAttrGetName", parent, C.ub4(parentType),
 			C.ub4(key), env.errorHandle,
-			&status, &name_len)
+			&status, &nameLen)
 	}
 	name := C.AttrGetName(parent, C.ub4(parentType),
 		C.ub4(key), env.errorHandle,
-		&status, &name_len)
+		&status, &nameLen)
 	if err := env.CheckStatus(status, errText); err != nil {
 		log.Printf("error getting char attr: %s", err)
 		return nil, err
 	}
-	// log.Printf("name_len=%d name=%v", name_len, name)
-	result := C.GoBytes(unsafe.Pointer(name), C.int(name_len))
+	// log.Printf("nameLen=%d name=%v", nameLen, name)
+	result := C.GoBytes(unsafe.Pointer(name), C.int(nameLen))
 	// log.Printf("dst=%s = %v", result, result)
 	return result, nil
 }
 
+//FromEncodedString returns string decoded from Oracle's representation
 func (env *Environment) FromEncodedString(text []byte) string {
 	// log.Printf("FromEncodedString(%v=%s)", text, text)
 	return string(text)

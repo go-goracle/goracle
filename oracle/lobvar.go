@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -29,17 +30,22 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	// "log"
-	// "time"
 	"unsafe"
 )
 
 var (
-	ClobVarType, NClobVarType, BlobVarType, BFileVarType *VariableType
+	//ClobVarType is a VariableType for CLOB
+	ClobVarType *VariableType
+	//NClobVarType is a VariableType for NCLOB
+	NClobVarType *VariableType
+	//BlobVarType is a VariableType for BLOB
+	BlobVarType *VariableType
+	//BFileVarType is a VariableType for BFILE
+	BFileVarType *VariableType
 )
 
 // Initialize the variable.
-func lobVar_Initialize(v *Variable, cur *Cursor) error {
+func lobVarInitialize(v *Variable, cur *Cursor) error {
 	// initialize members
 	v.connection = cur.connection
 	// v.isFile = v.typ == BFileVarType
@@ -60,7 +66,7 @@ func lobVar_Initialize(v *Variable, cur *Cursor) error {
 }
 
 // Free temporary LOBs prior to fetch.
-func lobVar_PreFetch(v *Variable) error {
+func lobVarPreFetch(v *Variable) error {
 	var isTemporary C.boolean
 
 	var err error
@@ -94,7 +100,7 @@ func lobVar_PreFetch(v *Variable) error {
 }
 
 // Prepare for variable destruction.
-func lobVar_Finalize(v *Variable) error {
+func lobVarFinalize(v *Variable) error {
 	var j int
 	for i := uint(0); i < v.allocatedElements; i++ {
 		j = int(i * v.typ.size)
@@ -106,7 +112,7 @@ func lobVar_Finalize(v *Variable) error {
 }
 
 // Write data to the LOB variable.
-func (v *Variable) lobVar_Write(data []byte, pos uint, off int64) (amount int, err error) {
+func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, err error) {
 	if !(v.typ == BlobVarType || v.typ == ClobVarType ||
 		v.typ == NClobVarType || v.typ == BFileVarType) {
 		return 0, fmt.Errorf("only LOBs an be written into, not %T", v.typ)
@@ -160,17 +166,17 @@ func (v *Variable) lobVar_Write(data []byte, pos uint, off int64) (amount int, e
 }
 
 // Returns the value stored at the given array position.
-func lobVar_GetValue(v *Variable, pos uint) (interface{}, error) {
+func lobVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	return NewExternalLobVar(v, pos), nil
 }
 
-func lobVar_GetValueInto(v *Variable, pos uint, lv *ExternalLobVar) error {
+func lobVarGetValueInto(v *Variable, pos uint, lv *ExternalLobVar) error {
 	*lv = *NewExternalLobVar(v, pos)
 	return nil
 }
 
 // Sets the value stored at the given array position.
-func lobVar_SetValue(v *Variable, pos uint, value interface{}) error {
+func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 	x, ok := value.([]byte)
 	if !ok {
 		return fmt.Errorf("requires []byte, got %T", value)
@@ -221,18 +227,18 @@ func lobVar_SetValue(v *Variable, pos uint, value interface{}) error {
 	// Py_END_ALLOW_THREADS
 
 	// set the current value
-	// func (v *Variable) lobVar_Write(data []byte, pos uint, off int64) (amount int, err error) {
-	_, err = v.lobVar_Write(x, pos, 0)
+	// func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, err error) {
+	_, err = v.lobVarWrite(x, pos, 0)
 	return err
 }
 
 func init() {
 	ClobVarType = &VariableType{
-		initialize:  lobVar_Initialize,
-		finalize:    lobVar_Finalize,
-		preFetch:    lobVar_PreFetch,
-		setValue:    lobVar_SetValue,
-		getValue:    lobVar_GetValue,
+		initialize:  lobVarInitialize,
+		finalize:    lobVarFinalize,
+		preFetch:    lobVarPreFetch,
+		setValue:    lobVarSetValue,
+		getValue:    lobVarGetValue,
 		oracleType:  C.SQLT_CLOB,                // Oracle type
 		charsetForm: C.SQLCS_IMPLICIT,           // charset form
 		size:        uint(C.sof_OCILobLocatorp), // element length
@@ -240,11 +246,11 @@ func init() {
 	}
 
 	NClobVarType = &VariableType{
-		initialize:  lobVar_Initialize,
-		finalize:    lobVar_Finalize,
-		preFetch:    lobVar_PreFetch,
-		setValue:    lobVar_SetValue,
-		getValue:    lobVar_GetValue,
+		initialize:  lobVarInitialize,
+		finalize:    lobVarFinalize,
+		preFetch:    lobVarPreFetch,
+		setValue:    lobVarSetValue,
+		getValue:    lobVarGetValue,
 		oracleType:  C.SQLT_CLOB,                // Oracle type
 		charsetForm: C.SQLCS_NCHAR,              // charset form
 		size:        uint(C.sof_OCILobLocatorp), // element length
@@ -252,11 +258,11 @@ func init() {
 	}
 
 	BlobVarType = &VariableType{
-		initialize:  lobVar_Initialize,
-		finalize:    lobVar_Finalize,
-		preFetch:    lobVar_PreFetch,
-		setValue:    lobVar_SetValue,
-		getValue:    lobVar_GetValue,
+		initialize:  lobVarInitialize,
+		finalize:    lobVarFinalize,
+		preFetch:    lobVarPreFetch,
+		setValue:    lobVarSetValue,
+		getValue:    lobVarGetValue,
 		oracleType:  C.SQLT_BLOB,                // Oracle type
 		charsetForm: C.SQLCS_IMPLICIT,           // charset form
 		size:        uint(C.sof_OCILobLocatorp), // element length
@@ -264,11 +270,11 @@ func init() {
 	}
 
 	BFileVarType = &VariableType{
-		initialize:  lobVar_Initialize,
-		finalize:    lobVar_Finalize,
-		preFetch:    lobVar_PreFetch,
-		setValue:    lobVar_SetValue,
-		getValue:    lobVar_GetValue,
+		initialize:  lobVarInitialize,
+		finalize:    lobVarFinalize,
+		preFetch:    lobVarPreFetch,
+		setValue:    lobVarSetValue,
+		getValue:    lobVarGetValue,
 		oracleType:  C.SQLT_BFILE,               // Oracle type
 		charsetForm: C.SQLCS_IMPLICIT,           // charset form
 		size:        uint(C.sof_OCILobLocatorp), // element length

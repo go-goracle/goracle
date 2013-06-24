@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -25,19 +26,28 @@ package oracle
 import "C"
 
 import (
-	// "log"
-	// "bytes"
-	// "encoding/binary"
 	"fmt"
 	"unsafe"
 )
 
 var (
-	FloatVarType, NativeFloatVarType               *VariableType
-	Int32VarType, Int64VarType, LongIntegerVarType *VariableType
-	NumberAsStringVarType, BooleanVarType          *VariableType
+	//FloatVarType is a VariableType for floats
+	FloatVarType *VariableType
+	//NativeFloatVarType is a VariableType for native floatss
+	NativeFloatVarType *VariableType
+	//Int32VarType is a VariableType for int32s
+	Int32VarType *VariableType
+	//Int64VarType is a VariableType for int64s
+	Int64VarType *VariableType
+	//LongIntegerVarType is a VariableType for long ints
+	LongIntegerVarType *VariableType
+	//NumberAsStringVarType is a VariableType for numbers represented as strings
+	NumberAsStringVarType *VariableType
+	//BooleanVarType is a VariableType for bools
+	BooleanVarType *VariableType
 )
 
+// IsNumber returns whether the VariableType represents a number
 func (t *VariableType) IsNumber() bool {
 	switch t {
 	case BooleanVarType, NumberAsStringVarType, LongIntegerVarType, Int64VarType, Int32VarType, FloatVarType, NativeFloatVarType:
@@ -46,10 +56,12 @@ func (t *VariableType) IsNumber() bool {
 	return false
 }
 
+// IsFloat returns whether the VariableType represents a float
 func (t *VariableType) IsFloat() bool {
 	return t == NativeFloatVarType || t == FloatVarType
 }
 
+// IsInteger returns whether the VariableType represents an integer
 func (t *VariableType) IsInteger() bool {
 	switch t {
 	case BooleanVarType, LongIntegerVarType, Int64VarType, Int32VarType:
@@ -60,7 +72,7 @@ func (t *VariableType) IsInteger() bool {
 
 // Set the type of value (integer, float or string) that will be returned
 // when values are fetched from this variable.
-func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
+func numberVarPreDefine(v *Variable, param *C.OCIParam) error {
 	var precision C.sb2
 	var scale C.sb1
 
@@ -69,16 +81,16 @@ func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
 	if _, err := v.environment.AttrGet(
 		unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 		C.OCI_ATTR_SCALE, unsafe.Pointer(&scale),
-		"numberVar_PreDefine: scale"); err != nil {
+		"numberVarPreDefine: scale"); err != nil {
 		return err
 	}
 	if _, err := v.environment.AttrGet(
 		unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 		C.OCI_ATTR_PRECISION, unsafe.Pointer(&precision),
-		"numberVar_PreDefine(): precision"); err != nil {
+		"numberVarPreDefine(): precision"); err != nil {
 		return err
 	}
-	// log.Printf("numberVar_PreDefine typ=%s scale=%d precision=%d", v.typ,
+	// log.Printf("numberVarPreDefine typ=%s scale=%d precision=%d", v.typ,
 	// 	scale, precision)
 	if v.typ == nil {
 		v.typ = FloatVarType
@@ -94,7 +106,7 @@ func numberVar_PreDefine(v *Variable, param *C.OCIParam) error {
 			}
 		}
 	}
-	// log.Printf("numberVar_PreDefine ok")
+	// log.Printf("numberVarPreDefine ok")
 
 	return nil
 }
@@ -114,7 +126,7 @@ func (env *Environment) numberFromFloat(value float64, dst unsafe.Pointer) error
 		"numberFromReal")
 }
 
-func numberVar_formatForString(text string) string {
+func numberVarformatForString(text string) string {
 	format := make([]byte, len(text))
 	rational := false
 	if text[0] == '-' {
@@ -133,7 +145,7 @@ func numberVar_formatForString(text string) string {
 // Set the value of the variable from a Python decimal.Decimal object.
 func (env *Environment) numberFromText(value string, dst unsafe.Pointer) error {
 	valuebuf := []byte(value)
-	formatbuf := []byte(numberVar_formatForString(value))
+	formatbuf := []byte(numberVarformatForString(value))
 	return env.CheckStatus(
 		C.OCINumberFromText(env.errorHandle,
 			(*C.oratext)(&valuebuf[0]), C.ub4(len(valuebuf)),
@@ -145,8 +157,8 @@ func (env *Environment) numberFromText(value string, dst unsafe.Pointer) error {
 }
 
 // Set the value of the variable.
-func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
-	debug("numberVar_SetValue(typ=%s, pos=%d len=(%d), value=%+v (%T))", v.typ,
+func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
+	debug("numberVarSetValue(typ=%s, pos=%d len=(%d), value=%+v (%T))", v.typ,
 		pos, len(v.dataBytes), value, value)
 	nfInt := func(intVal int64) error {
 		if v.dataInts != nil {
@@ -179,7 +191,7 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		return nfInt(int64(x))
 	case []int32:
 		for i := range x {
-			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+			if err = numberVarSetValue(v, pos+uint(i), x[i]); err != nil {
 				return err
 			}
 		}
@@ -197,7 +209,7 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		return nfInt(int64(x))
 	case []int64:
 		for i := range x {
-			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+			if err = numberVarSetValue(v, pos+uint(i), x[i]); err != nil {
 				return err
 			}
 		}
@@ -207,7 +219,7 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		return nfFloat(float64(x))
 	case []float32:
 		for i := range x {
-			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+			if err = numberVarSetValue(v, pos+uint(i), x[i]); err != nil {
 				return err
 			}
 		}
@@ -217,7 +229,7 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 		return nfFloat(x)
 	case []float64:
 		for i := range x {
-			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+			if err = numberVarSetValue(v, pos+uint(i), x[i]); err != nil {
 				return err
 			}
 		}
@@ -228,7 +240,7 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 			unsafe.Pointer(&v.dataBytes[pos*v.typ.size]))
 	case []string:
 		for i := range x {
-			if err = numberVar_SetValue(v, pos+uint(i), x[i]); err != nil {
+			if err = numberVarSetValue(v, pos+uint(i), x[i]); err != nil {
 				return err
 			}
 		}
@@ -244,7 +256,7 @@ func numberVar_SetValue(v *Variable, pos uint, value interface{}) error {
 }
 
 // Returns the value stored at the given array position.
-func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
+func numberVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	if v.dataFloats != nil {
 		// log.Printf("getting pos=%d from %+v", pos, v.dataFloats)
 		return v.dataFloats[pos], nil
@@ -295,9 +307,9 @@ func numberVar_GetValue(v *Variable, pos uint) (interface{}, error) {
 func init() {
 	FloatVarType = &VariableType{
 		Name:             "Float",
-		preDefine:        numberVar_PreDefine,
-		setValue:         numberVar_SetValue,
-		getValue:         numberVar_GetValue,
+		preDefine:        numberVarPreDefine,
+		setValue:         numberVarSetValue,
+		getValue:         numberVarGetValue,
 		oracleType:       C.SQLT_VNU,         // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
 		size:             C.sizeof_OCINumber, // element length
@@ -309,8 +321,8 @@ func init() {
 
 	NativeFloatVarType = &VariableType{
 		Name:             "NativeFloat",
-		setValue:         numberVar_SetValue,
-		getValue:         numberVar_GetValue,
+		setValue:         numberVarSetValue,
+		getValue:         numberVarGetValue,
 		oracleType:       C.SQLT_BDOUBLE,   // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             C.sizeof_double,  // element length
@@ -322,9 +334,9 @@ func init() {
 
 	Int32VarType = &VariableType{
 		Name:         "Int32",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
+		preDefine:    numberVarPreDefine,
+		setValue:     numberVarSetValue,
+		getValue:     numberVarGetValue,
 		oracleType:   C.SQLT_VNU,         // Oracle type
 		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
 		size:         C.sizeof_OCINumber, // element length
@@ -334,9 +346,9 @@ func init() {
 
 	Int64VarType = &VariableType{
 		Name:         "Int64",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
+		preDefine:    numberVarPreDefine,
+		setValue:     numberVarSetValue,
+		getValue:     numberVarGetValue,
 		oracleType:   C.SQLT_VNU,         // Oracle type
 		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
 		size:         C.sizeof_OCINumber, // element length
@@ -346,9 +358,9 @@ func init() {
 
 	LongIntegerVarType = &VariableType{
 		Name:         "LongInteger",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
+		preDefine:    numberVarPreDefine,
+		setValue:     numberVarSetValue,
+		getValue:     numberVarGetValue,
 		oracleType:   C.SQLT_VNU,         // Oracle type
 		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
 		size:         C.sizeof_OCINumber, // element length
@@ -358,9 +370,9 @@ func init() {
 
 	NumberAsStringVarType = &VariableType{
 		Name:         "NumberAsString",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
+		preDefine:    numberVarPreDefine,
+		setValue:     numberVarSetValue,
+		getValue:     numberVarGetValue,
 		oracleType:   C.SQLT_VNU,         // Oracle type
 		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
 		size:         C.sizeof_OCINumber, // element length
@@ -370,9 +382,9 @@ func init() {
 
 	BooleanVarType = &VariableType{
 		Name:         "Boolean",
-		preDefine:    numberVar_PreDefine,
-		setValue:     numberVar_SetValue,
-		getValue:     numberVar_GetValue,
+		preDefine:    numberVarPreDefine,
+		setValue:     numberVarSetValue,
+		getValue:     numberVarGetValue,
 		oracleType:   C.SQLT_VNU,         // Oracle type
 		charsetForm:  C.SQLCS_IMPLICIT,   // charset form
 		size:         C.sizeof_OCINumber, // element length

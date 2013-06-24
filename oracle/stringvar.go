@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -25,17 +26,23 @@ package oracle
 import "C"
 
 import (
-	// "unsafe"
 	"errors"
 	"fmt"
 	"log"
 )
 
 var (
-	StringVarType, FixedCharVarType *VariableType
-	BinaryVarType, RowidVarType     *VariableType
+	//StringVarType is a VariableType for VARCHAR2
+	StringVarType *VariableType
+	//FixedCharVarType is a VariableType for CHAR
+	FixedCharVarType *VariableType
+	//BinaryVarType is a VariableType for RAW
+	BinaryVarType *VariableType
+	//RowidVarType is a VariableType for ROWID
+	RowidVarType *VariableType
 )
 
+// IsString returns whether the VariableType is a string type
 func (t *VariableType) IsString() bool {
 	if t == StringVarType || t == FixedCharVarType {
 		return true
@@ -43,6 +50,7 @@ func (t *VariableType) IsString() bool {
 	return false
 }
 
+// IsBinary returns whether the VariableType is a binary type
 func (t *VariableType) IsBinary() bool {
 	if t == BinaryVarType {
 		return true
@@ -51,13 +59,13 @@ func (t *VariableType) IsBinary() bool {
 }
 
 // Initialize the variable.
-func stringVar_Initialize(v *Variable, cur *Cursor) error {
+func stringVarInitialize(v *Variable, cur *Cursor) error {
 	v.actualLength = make([]C.ub2, v.allocatedElements)
 	return nil
 }
 
 // Set the value of the variable.
-func stringVar_SetValue(v *Variable, pos uint, value interface{}) (err error) {
+func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 	var (
 		text   string
 		buf    []byte
@@ -68,14 +76,14 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) (err error) {
 		if buf, ok = value.([]byte); !ok {
 			if arr, ok := value.([]string); ok {
 				for i := range arr {
-					if err = stringVar_SetValue(v, pos+uint(i), arr[i]); err != nil {
+					if err = stringVarSetValue(v, pos+uint(i), arr[i]); err != nil {
 						return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
 					}
 				}
 				return nil
 			} else if arr, ok := value.([]byte); ok {
 				for i := range arr {
-					if err = stringVar_SetValue(v, pos+uint(i), arr[i]); err != nil {
+					if err = stringVarSetValue(v, pos+uint(i), arr[i]); err != nil {
 						return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
 					}
 				}
@@ -99,9 +107,9 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) (err error) {
 		}
 		buf = []byte(text)
 	}
-	if v.typ.isCharData && length > MAX_STRING_CHARS {
+	if v.typ.isCharData && length > MaxStringChars {
 		return errors.New("string data too large")
-	} else if !v.typ.isCharData && length > MAX_BINARY_BYTES {
+	} else if !v.typ.isCharData && length > MaxBinaryBytes {
 		return errors.New("binary data too large")
 	}
 
@@ -122,9 +130,9 @@ func stringVar_SetValue(v *Variable, pos uint, value interface{}) (err error) {
 }
 
 // Returns the value stored at the given array position.
-func stringVar_GetValue(v *Variable, pos uint) (interface{}, error) {
+func stringVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	buf := v.dataBytes[int(v.bufferSize*pos) : int(v.bufferSize*pos)+int(v.actualLength[pos])]
-	//log.Printf("stringVar_GetValue(pos=%d length=%d): %v (%s)", pos, v.actualLength[pos], buf, buf)
+	//log.Printf("stringVarGetValue(pos=%d length=%d): %v (%s)", pos, v.actualLength[pos], buf, buf)
 	if v.typ == BinaryVarType {
 		return buf, nil
 	}
@@ -164,7 +172,7 @@ static int StringVar_PostDefine(
 */
 
 // Returns the buffer size to use for the variable.
-func stringVar_GetBufferSize(v *Variable) uint {
+func stringVarGetBufferSize(v *Variable) uint {
 	if v.typ.isCharData {
 		return v.size * v.environment.MaxBytesPerCharacter
 	}
@@ -175,13 +183,13 @@ func init() {
 	StringVarType = &VariableType{
 		Name:             "String",
 		isVariableLength: true,
-		initialize:       stringVar_Initialize,
-		setValue:         stringVar_SetValue,
-		getValue:         stringVar_GetValue,
-		getBufferSize:    stringVar_GetBufferSize,
+		initialize:       stringVarInitialize,
+		setValue:         stringVarSetValue,
+		getValue:         stringVarGetValue,
+		getBufferSize:    stringVarGetBufferSize,
 		oracleType:       C.SQLT_CHR,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
-		size:             MAX_STRING_CHARS, // element length (default)
+		size:             MaxStringChars,   // element length (default)
 		isCharData:       true,             // is character data
 		canBeCopied:      true,             // can be copied
 		canBeInArray:     true,             // can be in array
@@ -189,10 +197,10 @@ func init() {
 
 	FixedCharVarType = &VariableType{
 		Name:             "FixedChar",
-		initialize:       stringVar_Initialize,
-		setValue:         stringVar_SetValue,
-		getValue:         stringVar_GetValue,
-		getBufferSize:    stringVar_GetBufferSize,
+		initialize:       stringVarInitialize,
+		setValue:         stringVarSetValue,
+		getValue:         stringVarGetValue,
+		getBufferSize:    stringVarGetBufferSize,
 		oracleType:       C.SQLT_AFC,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             2000,             // element length (default)
@@ -204,10 +212,10 @@ func init() {
 
 	RowidVarType = &VariableType{
 		Name:             "Rowid",
-		initialize:       stringVar_Initialize,
-		setValue:         stringVar_SetValue,
-		getValue:         stringVar_GetValue,
-		getBufferSize:    stringVar_GetBufferSize,
+		initialize:       stringVarInitialize,
+		setValue:         stringVarSetValue,
+		getValue:         stringVarGetValue,
+		getBufferSize:    stringVarGetBufferSize,
 		oracleType:       C.SQLT_CHR,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             18,               // element length (default)
@@ -219,12 +227,12 @@ func init() {
 
 	BinaryVarType = &VariableType{
 		Name:             "Binary",
-		initialize:       stringVar_Initialize,
-		setValue:         stringVar_SetValue,
-		getValue:         stringVar_GetValue,
+		initialize:       stringVarInitialize,
+		setValue:         stringVarSetValue,
+		getValue:         stringVarGetValue,
 		oracleType:       C.SQLT_BIN,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
-		size:             MAX_BINARY_BYTES, // element length (default)
+		size:             MaxBinaryBytes,   // element length (default)
 		isCharData:       false,            // is character data
 		isVariableLength: true,             // is variable length
 		canBeCopied:      true,             // can be copied

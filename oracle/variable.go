@@ -1,19 +1,20 @@
-/*
-   Copyright 2013 Tamás Gulácsi
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package oracle
+
+/*
+Copyright 2013 Tamás Gulácsi
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -34,11 +35,15 @@ import (
 )
 
 var (
+	//NotImplemented prints not implemented
 	NotImplemented = errors.New("not implemented")
-	ArrayTooLarge  = errors.New("array too large")
+	//ArrayTooLarge prints array too large
+	ArrayTooLarge = errors.New("array too large")
 )
 
+//Variable holds the handles for a variable
 type Variable struct {
+	// private or unexported fields
 	bindHandle        *C.OCIBind
 	defineHandle      *C.OCIDefine
 	boundCursorHandle *C.OCIStmt
@@ -61,7 +66,7 @@ type Variable struct {
 	cursors                        []*Cursor
 }
 
-// allocate a new variable
+// NewVariable allocates a new variable
 func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uint) (v *Variable, err error) {
 	// log.Printf("cur=%+v varType=%+v", cur, varType)
 	// perform basic initialization
@@ -110,12 +115,14 @@ func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uin
 	return v, nil
 }
 
+// VariableDescription holds the description of a variable
 type VariableDescription struct {
 	Name                                              string
 	Type, InternalSize, DisplaySize, Precision, Scale int
 	NullOk                                            bool
 }
 
+// VariableType holds data for a variable
 type VariableType struct {
 	Name                         string
 	isVariableLength, isCharData bool
@@ -135,7 +142,7 @@ type VariableType struct {
 }
 
 // FIXME: proper Into, not just this dummy
-// fetches value into the dest pointer
+// getValueInto fetches value into the dest pointer
 func (t *VariableType) getValueInto(dest *interface{}, v *Variable, pos uint) error {
 	var err error
 	*dest, err = t.getValue(v, pos)
@@ -143,7 +150,7 @@ func (t *VariableType) getValueInto(dest *interface{}, v *Variable, pos uint) er
 	return err
 }
 
-//   Returns a boolean indicating if the object is a variable.
+// isVariable returns a boolean indicating if the object is a variable.
 func isVariable(value interface{}) bool {
 	//FIXME
 	if _, ok := value.(Variable); ok {
@@ -155,12 +162,14 @@ func isVariable(value interface{}) bool {
 	return false
 }
 
+// NewVariable returns a new Variable of the given VariableType
 func (t *VariableType) NewVariable(cur *Cursor, numElements uint, size uint) (*Variable, error) {
 	return cur.NewVariable(numElements, t, size)
 }
 
+// String returns a string representation of the VariableType
 func (t *VariableType) String() string {
-	return fmt.Sprintf("<%s %d var?%s char?%s>", t.Name, t.oracleType,
+	return fmt.Sprintf("<%s %d var?%t char?%t>", t.Name, t.oracleType,
 		t.isVariableLength, t.isCharData)
 }
 
@@ -209,13 +218,13 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 	return (unsafe.Pointer(&v.dataFloats[0]))
 }
 
-// returns the number of allocated elements (array length for arrays)
+// ArrayLength returns the number of allocated elements (array length for arrays)
 func (v Variable) ArrayLength() uint {
 	//log.Printf("actualElements=%d allocatedElements=%d", v.actualElements, v.allocatedElements)
 	return uint(v.actualElements)
 }
 
-// Allocate the data for the variable.
+// allocateData allocates the data for the variable.
 func (v *Variable) allocateData() error {
 	// set the buffer size for the variable
 	if v.typ.getBufferSize != nil {
@@ -304,12 +313,12 @@ func (v *Variable) resize(size uint) error {
 	return nil
 }
 
-// Go => Oracle type conversion interface
+// OraTyper is a Go => Oracle type conversion interface
 type OraTyper interface {
 	GetVarType() *VariableType
 }
 
-// Return a variable type given a Go object or error if the Go
+// VarTypeByValue returns a variable type given a Go object or error if the Go
 // value does not have a corresponding variable type.
 func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements uint, err error) {
 	// defer func() {
@@ -336,7 +345,7 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return x.typ, x.typ.size, 0, nil
 
 	case string:
-		if len(x) > MAX_STRING_CHARS {
+		if len(x) > MaxStringChars {
 			return LongStringVarType, uint(len(x)), 0, nil
 		}
 		return StringVarType, uint(len(x)), 0, nil
@@ -401,7 +410,7 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return IntervalVarType, 0, 0, nil
 
 	case []byte:
-		if len(x) > MAX_BINARY_BYTES {
+		if len(x) > MaxBinaryBytes {
 			return LongBinaryVarType, uint(len(x)), 0, nil
 		}
 		return BinaryVarType, uint(len(x)), 0, nil
@@ -518,7 +527,8 @@ func (v *Variable) makeArray() error {
 	return nil
 }
 
-// Default method for determining the type of variable to use for the data.
+// NewVariableByValue is the default method for determining the
+// type of variable to use for the data.
 func (cur *Cursor) NewVariableByValue(value interface{}, numElements uint) (v *Variable, err error) {
 	var varType *VariableType
 	var size uint
@@ -577,7 +587,7 @@ func NewVariableByValue(cur *Cursor, value interface{}, numElements uint) (v *Va
 }
 */
 
-// Allocate a new PL/SQL array by looking at the data
+// NewVariableArrayByValue allocates a new PL/SQL array by looking at the data
 func (cur *Cursor) NewVariableArrayByValue(element interface{}, numElements uint) (*Variable, error) {
 	varType, size, _, err := VarTypeByValue(element)
 	if err != nil {
@@ -609,7 +619,7 @@ static udt_Variable *Variable_NewByType(
         size = PyInt_AsLong(value);
         if (PyErr_Occurred())
             return NULL;
-        if (size > MAX_STRING_CHARS)
+        if (size > MaxStringChars)
             varType = &vt_LongString;
         else varType = &vt_String;
         return Variable_New(cursor, numElements, varType, size);
@@ -857,7 +867,7 @@ func (v *Variable) internalBind() (err error) {
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {
-			ctrace("OCIBindByName", v.boundCursorHandle, &v.bindHandle,
+			ctrace("internalBind.OCIBindByName", v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, "name="+string(bname), len(bname),
 				v.getDataArr(),
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
@@ -872,9 +882,9 @@ func (v *Variable) internalBind() (err error) {
 			aL, rC, allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
-			ctrace("OCIBindByPos", v.boundCursorHandle, &v.bindHandle,
+			ctrace("internalBind.OCIBindByPos", v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, fmt.Sprintf("pos=%d", v.boundPos),
-				"dataArr:", v.getDataArr(),
+				"dataArr:", fmt.Sprintf("%x", v.dataBytes[:v.bufferSize]),
 				"bufsize:", v.bufferSize, "typ:", v.typ.oracleType,
 				v.indicator, aL, rC,
 				allElts, pActElts, "DEFAULT")
@@ -901,7 +911,7 @@ func (v *Variable) internalBind() (err error) {
 	return
 }
 
-// Allocate a variable and bind it to the given statement.
+// Bind allocates a variable and bind it to the given statement.
 // bind to name or pos
 func (v *Variable) Bind(cur *Cursor, name string, pos uint) error {
 	// nothing to do if already bound
@@ -924,7 +934,7 @@ func (v *Variable) Bind(cur *Cursor, name string, pos uint) error {
 	return v.internalBind()
 }
 
-// Verifies that truncation or other problems did not take place on retrieve.
+// verifyFetch verifies that truncation or other problems did not take place on retrieve.
 func (v *Variable) verifyFetch(arrayPos uint) error {
 	if v.typ.isVariableLength {
 		if code := v.returnCode[arrayPos]; code != 0 {
@@ -938,7 +948,7 @@ func (v *Variable) verifyFetch(arrayPos uint) error {
 	return nil
 }
 
-// Return the value of the variable at the given position.
+// getSingleValue returns the value of the variable at the given position.
 func (v *Variable) getSingleValue(arrayPos uint) (interface{}, error) {
 	var isNull bool
 
@@ -973,7 +983,7 @@ func (v *Variable) getSingleValue(arrayPos uint) (interface{}, error) {
 	*/
 }
 
-// Insert the value of the variable at the given position into the pointer
+// getSingleValueInto inserts the value of the variable at the given position into the pointer
 func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 	var isNull bool
 
@@ -1006,7 +1016,7 @@ func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 	return err
 }
 
-// Return the value of the variable as an array.
+// getArrayValue returns the value of the variable as an array.
 func (v *Variable) getArrayValue(numElements uint) (interface{}, error) {
 	value := make([]interface{}, numElements)
 	var singleValue interface{}
@@ -1022,16 +1032,16 @@ func (v *Variable) getArrayValue(numElements uint) (interface{}, error) {
 	return value, nil
 }
 
-// Insert the value of the variable as an array into the given pointer
+// getArrayValueInto inserts the value of the variable as an array into the given pointer
 func (v *Variable) getArrayValueInto(dest interface{}, numElements uint) error {
 	var valp *[]interface{}
 	valp, ok := dest.(*[]interface{})
 	if !ok {
-		if val, ok := dest.([]interface{}); !ok {
+		val, ok := dest.([]interface{})
+		if !ok {
 			return fmt.Errorf("getArrayValueInto requires *[]interface{}, got %T", dest)
-		} else {
-			valp = &val
 		}
+		valp = &val
 	}
 	*valp = (*valp)[:numElements]
 	if missnum := numElements - uint(cap(*valp)); missnum > 0 {
@@ -1049,7 +1059,7 @@ func (v *Variable) getArrayValueInto(dest interface{}, numElements uint) error {
 	return nil
 }
 
-// Return the value of the variable.
+// GetValue returns the value of the variable.
 func (v *Variable) GetValue(arrayPos uint) (interface{}, error) {
 	//log.Printf("GetValue isArray? %b", v.isArray)
 	//if v.isArray {
@@ -1058,7 +1068,7 @@ func (v *Variable) GetValue(arrayPos uint) (interface{}, error) {
 	return v.getSingleValue(arrayPos)
 }
 
-// Insert the value of the variable into the given pointer
+// GetValueInto inserts the value of the variable into the given pointer
 func (v *Variable) GetValueInto(dest *interface{}, arrayPos uint) error {
 	//if v.isArray {
 	//	return v.getArrayValueInto(dest, uint(v.actualElements))
@@ -1066,7 +1076,7 @@ func (v *Variable) GetValueInto(dest *interface{}, arrayPos uint) error {
 	return v.getSingleValueInto(dest, arrayPos)
 }
 
-// Set a single value in the variable.
+// setSingleValue sets a single value in the variable.
 func (v *Variable) setSingleValue(arrayPos uint, value interface{}) error {
 	// ensure we do not exceed the number of allocated elements
 	if arrayPos >= v.allocatedElements {
@@ -1097,7 +1107,7 @@ func (v *Variable) setSingleValue(arrayPos uint, value interface{}) error {
 	return v.typ.setValue(v, arrayPos, value)
 }
 
-// Set all of the array values for the variable.
+// setArrayValue sets all of the array values for the variable.
 func (v *Variable) setArrayValue(value []interface{}) error {
 	// ensure we haven't exceeded the number of allocated elements
 	numElements := uint(len(value))
@@ -1116,6 +1126,7 @@ func (v *Variable) setArrayValue(value []interface{}) error {
 	return nil
 }
 
+// setArrayReflectValue sets all of the array values for the variable, using reflection
 func (v *Variable) setArrayReflectValue(value reflect.Value) error {
 	if value.Kind() != reflect.Slice {
 		return fmt.Errorf("Variable_setArrayReflectValue needs slice, not %s!", value.Kind())
@@ -1138,7 +1149,7 @@ func (v *Variable) setArrayReflectValue(value reflect.Value) error {
 	return nil
 }
 
-// Set the value of the variable.
+// SetValue sets the value of the variable.
 func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	if v.isArray {
 		if arrayPos > 0 {
@@ -1147,16 +1158,15 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		//if reflect.TypeOf(value).Kind == reflect.Slice {
 		if x, ok := value.([]interface{}); ok {
 			return v.setArrayValue(x)
-		} else {
-			return v.setArrayReflectValue(reflect.ValueOf(value))
-			//return fmt.Errorf("%v is %T, not array!", value, value)
 		}
+		return v.setArrayReflectValue(reflect.ValueOf(value))
+		//return fmt.Errorf("%v is %T, not array!", value, value)
 	}
 	debug("calling %s.setValue(%d, %v (%T))", v.typ, arrayPos, value, value)
 	return v.setSingleValue(arrayPos, value)
 }
 
-// Copy the contents of the source variable to the destination variable.
+// externalCopy the contents of the source variable to the destination variable.
 func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePos, targetPos uint) error {
 	if !sourceVar.typ.canBeCopied {
 		return errors.New("variable does not support copying")
@@ -1210,12 +1220,12 @@ func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePos, targetPo
 	return nil
 }
 
-// Set the value of the variable at the given position.
+// externalSetValue the value of the variable at the given position.
 func (v *Variable) externalSetValue(pos uint, value interface{}) error {
 	return v.SetValue(pos, value)
 }
 
-// Return the value of the variable at the given position.
+// externalGetValue returns the value of the variable at the given position.
 func (v *Variable) externalGetValue(pos uint) (interface{}, error) {
 	return v.GetValue(pos)
 }
