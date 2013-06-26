@@ -242,7 +242,8 @@ func debug(fmt string, args ...interface{}) {
 // Driver automatically registered in database/sql
 var d = Driver{}
 
-// set auto commit, true is open autocommit, default false
+// SetAutoCommit sets auto commit mode for future connections
+// true is open autocommit, default false
 func SetAutoCommit(b bool) {
 	d.autocommit = b
 }

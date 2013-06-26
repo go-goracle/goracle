@@ -172,7 +172,7 @@ func getConnection(t *testing.T) Connection {
 	}
 	user, passw, sid := SplitDsn(*dsn)
 	var err error
-	conn, err = NewConnection(user, passw, sid)
+	conn, err = NewConnection(user, passw, sid, false)
 	if err != nil {
 		log.Panicf("error creating connection to %s: %s", *dsn, err)
 	}
