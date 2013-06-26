@@ -121,9 +121,9 @@ func (conn *Connection) SessionAttrSet(key C.ub4, value unsafe.Pointer, valueLen
 }
 
 // NewConnection creates a new connection and initializes the connection members.
-func NewConnection(username, password, dsn string /*commitMode , pool, twophase bool*/) (
+func NewConnection(username, password, dsn string, autocommit bool /*commitMode , pool, twophase bool*/) (
 	conn Connection, err error) {
-	conn = Connection{username: username, password: password, dsn: dsn}
+	conn = Connection{username: username, password: password, dsn: dsn, autocommit: autocommit}
 	/*
 		if pool != nil {
 			conn.environment = pool.environment

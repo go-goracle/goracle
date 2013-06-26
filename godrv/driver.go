@@ -200,7 +200,8 @@ type Driver struct {
 	// Defaults
 	user, passwd, db string
 
-	initCmds []string
+	initCmds   []string
+	autocommit bool
 }
 
 // Open new connection. The uri need to have the following syntax:
@@ -221,7 +222,7 @@ func (d *Driver) Open(uri string) (driver.Conn, error) {
 	d.db = uri[q+1:]
 
 	// Establish the connection
-	cx, err := oracle.NewConnection(d.user, d.passwd, d.db)
+	cx, err := oracle.NewConnection(d.user, d.passwd, d.db, d.autocommit)
 	if err == nil {
 		err = cx.Connect(0, false)
 	}
@@ -240,6 +241,11 @@ func debug(fmt string, args ...interface{}) {
 
 // Driver automatically registered in database/sql
 var d = Driver{}
+
+// set auto commit, true is open autocommit, default false
+func SetAutoCommit(b bool) {
+	d.autocommit = b
+}
 
 func init() {
 	sql.Register("goracle", &d)
