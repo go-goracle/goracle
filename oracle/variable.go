@@ -999,7 +999,12 @@ func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 		isNull = v.indicator[arrayPos] == C.OCI_IND_NULL
 	}
 	if isNull {
-		*dest = nil
+		switch v.typ {
+		case StringVarType:
+			*dest = ""
+		default:
+			*dest = nil
+		}
 		return nil
 	}
 
