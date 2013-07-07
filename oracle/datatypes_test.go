@@ -379,7 +379,7 @@ END;`
 }
 
 func TestCursorOut(t *testing.T) {
-	IsDebug = true
+	//IsDebug = true
 
 	conn := getConnection(t)
 	if !conn.IsConnected() {
@@ -424,4 +424,54 @@ END;`
 	}
 
 	t.Logf("row: %#v", row)
+}
+
+func TestLobOut(t *testing.T) {
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+	cur := conn.NewCursor()
+	defer cur.Close()
+	out, err := cur.NewVariable(0, ClobVarType, 0)
+	if err != nil {
+		t.Errorf("error getting cursor variable: %s", err)
+		t.FailNow()
+	}
+
+	qry := `DECLARE
+  clobvar CLOB;
+  len     BINARY_INTEGER;
+  x       VARCHAR2(80);
+BEGIN
+  dbms_lob.createtemporary(clobvar, TRUE);
+  dbms_lob.open(clobvar, dbms_lob.lob_readwrite);
+  x := 'before line break' || CHR(10) || 'after line break';
+  len := length(x);
+  dbms_lob.writeappend(clobvar, len, x);
+  :1 := clobvar;
+  --dbms_lob.close(clobvar);
+END;`
+
+	if err = cur.Execute(qry, []interface{}{out}, nil); err != nil {
+		t.Errorf("error executing `%s`: %s", qry, err)
+		t.FailNow()
+	}
+	outVal, err := out.GetValue(0)
+	if err != nil {
+		t.Errorf("cannot get out value: %s", err)
+		t.FailNow()
+	}
+	t.Logf("outVal: %T %s", outVal, outVal)
+	ext, ok := outVal.(*ExternalLobVar)
+	if !ok {
+		t.Errorf("outVal is not *ExternalLobVar, but %T", outVal)
+		t.FailNow()
+	}
+	buf, err := ext.ReadAll()
+	if err != nil {
+		t.Errorf("error reading LOB: %s", err)
+		t.FailNow()
+	}
+	t.Logf("buf=%s", buf)
 }

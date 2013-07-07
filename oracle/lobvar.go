@@ -1,5 +1,3 @@
-package oracle
-
 /*
 Copyright 2013 Tamás Gulácsi
 
@@ -15,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+package oracle
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -234,6 +234,7 @@ func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 
 func init() {
 	ClobVarType = &VariableType{
+		Name:        "ClobVar",
 		initialize:  lobVarInitialize,
 		finalize:    lobVarFinalize,
 		preFetch:    lobVarPreFetch,
@@ -246,6 +247,7 @@ func init() {
 	}
 
 	NClobVarType = &VariableType{
+		Name:        "NClobVar",
 		initialize:  lobVarInitialize,
 		finalize:    lobVarFinalize,
 		preFetch:    lobVarPreFetch,
@@ -258,6 +260,7 @@ func init() {
 	}
 
 	BlobVarType = &VariableType{
+		Name:        "BlobVar",
 		initialize:  lobVarInitialize,
 		finalize:    lobVarFinalize,
 		preFetch:    lobVarPreFetch,
@@ -270,6 +273,7 @@ func init() {
 	}
 
 	BFileVarType = &VariableType{
+		Name:        "BFileVar",
 		initialize:  lobVarInitialize,
 		finalize:    lobVarFinalize,
 		preFetch:    lobVarPreFetch,

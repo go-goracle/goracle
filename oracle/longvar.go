@@ -1,5 +1,3 @@
-package oracle
-
 /*
 Copyright 2013 Tamás Gulácsi
 
@@ -15,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+package oracle
 
 /*
 #cgo CFLAGS: -I/usr/include/oracle/11.2/client64
@@ -40,6 +40,7 @@ var (
 
 func init() {
 	LongStringVarType = &VariableType{
+		Name:             "long",
 		setValue:         longVarSetValue,
 		getValue:         longVarGetValue,
 		getBufferSize:    longVarGetBufferSize,
@@ -53,6 +54,7 @@ func init() {
 	}
 
 	LongBinaryVarType = &VariableType{
+		Name:             "long_raw",
 		setValue:         longVarSetValue,
 		getValue:         longVarGetValue,
 		getBufferSize:    longVarGetBufferSize,
