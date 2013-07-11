@@ -28,7 +28,7 @@ const int sizeof_OraText = sizeof(OraText);
 import "C"
 
 import (
-	"bytes"
+	//"bytes"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -907,10 +907,10 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 	debug(`%p.Prepare2 for "%s" [%x]`, cur, cur.statement, cur.statementTag)
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
-		ctrace("internalPrepare.OCIStmtPrepare2", cur.connection.handle, &cur.handle, cur.environment.errorHandle,
-			string(bytes.Replace(cur.statement, []byte{'\n'}, []byte("\\n"), -1)),
-			len(cur.statement), cur.statementTag, len(cur.statementTag),
-			"NTV_SYNTAX", "DEFAULT")
+		ctrace("internalPrepare.OCIStmtPrepare2(conn=%p, &cur=%p, env=%p, "+
+			"statement=%q, len=%d, tag=%v, tagLen=%d, NTV_SYNTAX, DEFAULT)",
+			cur.connection.handle, &cur.handle, cur.environment.errorHandle,
+			cur.statement, len(cur.statement), cur.statementTag, len(cur.statementTag))
 	}
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtPrepare2(cur.connection.handle, &cur.handle,

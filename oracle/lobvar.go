@@ -149,6 +149,11 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 
 	oamount := C.ub4(amount)
 	// Py_BEGIN_ALLOW_THREADS
+	if CTrace {
+		ctrace("OCILobWrite", v.connection.handle, pos*v.typ.size,
+			v.dataBytes[pos*v.typ.size:(pos+1)*v.typ.size], oamount, off,
+			v.typ.charsetForm)
+	}
 	if err := v.environment.CheckStatus(
 		C.OCILobWrite(v.connection.handle,
 			v.environment.errorHandle,

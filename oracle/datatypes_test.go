@@ -1,5 +1,3 @@
-package oracle
-
 /*
 Copyright 2013 Tamás Gulácsi
 
@@ -16,8 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+package oracle
+
 import (
 	"fmt"
+	"log"
 	"testing"
 	"time"
 )
@@ -462,7 +463,7 @@ END;`
 		t.Errorf("cannot get out value: %s", err)
 		t.FailNow()
 	}
-	t.Logf("outVal: %T %s", outVal, outVal)
+	log.Printf("outVal: %T %s", outVal, outVal)
 	ext, ok := outVal.(*ExternalLobVar)
 	if !ok {
 		t.Errorf("outVal is not *ExternalLobVar, but %T", outVal)

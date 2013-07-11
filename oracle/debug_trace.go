@@ -25,5 +25,5 @@ const CTrace = true
 
 //ctrace prints with log.Printf the C-call trace
 func ctrace(name string, args ...interface{}) {
-	log.Printf("CTRACE %s(%v)", name, args)
+	log.Printf("CTRACE "+name, args...)
 }
