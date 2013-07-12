@@ -190,7 +190,7 @@ static int ExternalLobVar_InternalRead(
     status = OCILobRead(var->lobVar->connection->handle,
             var->lobVar->environment->errorHandle,
             var->lobVar->data[var->pos], length, offset, buffer,
-            bufferSize, NULL, NULL, charsetId, var->lobVar->type->charsetForm); 
+            bufferSize, NULL, NULL, charsetId, var->lobVar->type->charsetForm);
     Py_END_ALLOW_THREADS
     if (Environment_CheckForError(var->lobVar->environment, status,
             "ExternalLobVar_LobRead()") < 0) {
@@ -224,6 +224,9 @@ static int ExternalLobVar_InternalSize(
 {
     sword status;
     ub4 length;
+
+    PySys_WriteStderr("ExternalLobVar=%x pos=%d data=%x\n", var, var->pos, var->lobVar->data[var->pos]);
+
 
     Py_BEGIN_ALLOW_THREADS
     status = OCILobGetLength(var->lobVar->connection->handle,

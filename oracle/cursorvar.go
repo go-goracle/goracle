@@ -96,7 +96,7 @@ func cursorVarSetValue(v *Variable, pos uint, value interface{}) error {
 			return err
 		}
 	}
-	C.cursorVarsetHandle(unsafe.Pointer(&v.dataBytes[pos*v.typ.size]),
+	C.cursorVarsetHandle(v.getHandle(pos),
 		x.handle)
 
 	x.statementType = -1

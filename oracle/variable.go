@@ -1235,6 +1235,13 @@ func (v *Variable) externalGetValue(pos uint) (interface{}, error) {
 	return v.GetValue(pos)
 }
 
+func (v Variable) getHandle(pos uint) unsafe.Pointer {
+	return unsafe.Pointer(&v.dataBytes[int(pos*v.typ.size)])
+}
+func (v Variable) getHandleBytes(pos uint) []byte {
+	return v.dataBytes[int(pos*v.typ.size):int((pos+1)*v.typ.size)]
+}
+
 /*
 //-----------------------------------------------------------------------------
 // Variable_Repr()

@@ -42,10 +42,10 @@ type ExternalLobVar struct {
 }
 
 func (lv ExternalLobVar) getHandle() *C.OCILobLocator {
-	return (*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.typ.size]))
+	return (*C.OCILobLocator)(lv.lobVar.getHandle(lv.pos))
 }
 func (lv ExternalLobVar) getHandleBytes() []byte {
-	return lv.lobVar.dataBytes[lv.pos*lv.lobVar.typ.size : (lv.pos+1)*lv.lobVar.typ.size]
+	return lv.lobVar.getHandleBytes(lv.pos)
 }
 
 // NewExternalLobVar creates a new external LOB variable.

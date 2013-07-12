@@ -166,7 +166,7 @@ func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
 			return nil
 		}
 		return v.environment.numberFromInt(intVal,
-			unsafe.Pointer(&v.dataBytes[pos*v.typ.size]))
+			v.getHandle(pos))
 	}
 	nfFloat := func(floatVal float64) error {
 		if v.dataFloats != nil {
@@ -174,7 +174,7 @@ func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
 			return nil
 		}
 		return v.environment.numberFromFloat(floatVal,
-			unsafe.Pointer(&v.dataBytes[pos*v.typ.size]))
+			v.getHandle(pos))
 	}
 	var err error
 	switch x := value.(type) {
@@ -237,7 +237,7 @@ func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
 
 	case string:
 		return v.environment.numberFromText(x,
-			unsafe.Pointer(&v.dataBytes[pos*v.typ.size]))
+			v.getHandle(pos))
 	case []string:
 		for i := range x {
 			if err = numberVarSetValue(v, pos+uint(i), x[i]); err != nil {
@@ -249,7 +249,7 @@ func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
 	default:
 		if x, ok := value.(fmt.Stringer); ok {
 			return v.environment.numberFromText(x.String(),
-				unsafe.Pointer(&v.dataBytes[pos*v.typ.size]))
+				v.getHandle(pos))
 		}
 		return fmt.Errorf("required some kind of int, got %T", value)
 	}
@@ -270,7 +270,7 @@ func numberVarGetValue(v *Variable, pos uint) (interface{}, error) {
 		var size C.ub4
 		if err := v.environment.CheckStatus(
 			C.OCINumberToText(v.environment.errorHandle,
-				(*C.OCINumber)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size])),
+				(*C.OCINumber)(v.getHandle(pos)),
 				(*C.oratext)(unsafe.Pointer(&v.environment.numberToStringFormatBuffer[0])),
 				C.ub4(len(v.environment.numberToStringFormatBuffer)), nil, 0,
 				&size, (*C.oratext)(&buf[0])),
@@ -284,7 +284,7 @@ func numberVarGetValue(v *Variable, pos uint) (interface{}, error) {
 		intVal := int64(0)
 		if err := v.environment.CheckStatus(
 			C.OCINumberToInt(v.environment.errorHandle,
-				(*C.OCINumber)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size])),
+				(*C.OCINumber)(v.getHandle(pos)),
 				C.sizeof_long, C.OCI_NUMBER_SIGNED, unsafe.Pointer(&intVal)),
 			"numberToInt"); err != nil {
 			return -1, err
@@ -298,7 +298,7 @@ func numberVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	floatVal := float64(0)
 	err := v.environment.CheckStatus(
 		C.OCINumberToReal(v.environment.errorHandle,
-			(*C.OCINumber)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size])),
+			(*C.OCINumber)(v.getHandle(pos)),
 			C.sizeof_double, unsafe.Pointer(&floatVal)),
 		"numberToFloat")
 	return floatVal, err

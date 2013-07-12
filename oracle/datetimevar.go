@@ -99,7 +99,7 @@ func dateTimeVarSetValue(v *Variable, pos uint, value interface{}) error {
 				x.Hour(), x.Minute(), x.Second()),
 			"OCIDateSetTime")
 	*/
-	C.setDateTime((*C.OCIDate)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size])),
+	C.setDateTime((*C.OCIDate)(v.getHandle(pos)),
 		C.sb2(x.Year()), C.ub1(x.Month()), C.ub1(x.Day()),
 		C.ub1(x.Hour()), C.ub1(x.Minute()), C.ub1(x.Second()))
 	return nil
@@ -123,7 +123,7 @@ func dateTimeVarGetValue(v *Variable, pos uint) (interface{}, error) {
 			return nil, err
 		}
 	*/
-	C.getDateTime((*C.OCIDate)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size])),
+	C.getDateTime((*C.OCIDate)(v.getHandle(pos)),
 		&year, &month, &day, &hour, &minute, &second)
 	return time.Date(int(year), time.Month(month), int(day),
 		int(hour), int(minute), int(second), 0, time.Local), nil
@@ -147,7 +147,7 @@ func intervalVarSetValue(v *Variable, pos uint, value interface{}) error {
 		C.OCIIntervalSetDaySecond(unsafe.Pointer(v.environment.handle),
 			v.environment.errorHandle,
 			days, hours, minutes, seconds, microseconds,
-			(*C.OCIInterval)(unsafe.Pointer(&v.dataBytes[pos*v.typ.size]))),
+			(*C.OCIInterval)(v.getHandle(pos))),
 		"IntervalSetDaySecond")
 }
 

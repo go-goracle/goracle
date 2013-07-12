@@ -16,4 +16,27 @@ for row in cur.getvalue():
     print row
     break
 EOF
+echo '----------------------------------------------------------'
+PYTHONPATH=build/lib.linux-x86_64-2.7-11g:$PYTHONPATH python <<EOF
+import cx_Oracle_dbg as cx_Oracle
+import sys
+cx = cx_Oracle.connect('$1')
+cu = cx.cursor()
+params = [cu.var(cx_Oracle.CLOB)]
+cu.execute("""DECLARE
+  clobvar CLOB;
+  len BINARY_INTEGER;
+  x VARCHAR2(80);
+BEGIN
+  dbms_lob.createtemporary(clobvar, TRUE);
+  dbms_lob.open(clobvar, dbms_lob.lob_readwrite);
+  x := 'before line break' || CHR(10) || 'after line break';
+  len := length(x);
+  dbms_lob.writeappend(clobvar, len, x);
+  :1 := clobvar;
+  --dbms_lob.close(clobvar);
+END;""", params)
+clob = params[0].getvalue()
+print clob.size(), repr(clob.read())
+EOF
 
