@@ -51,14 +51,34 @@ func lobVarInitialize(v *Variable, cur *Cursor) error {
 	// v.isFile = v.typ == BFileVarType
 
 	// initialize the LOB locators
-	var err error
+	var (
+		x   unsafe.Pointer
+		err error
+	)
 	for i := uint(0); i < v.allocatedElements; i++ {
+		x = v.getHandle(i)
 		if err = v.environment.CheckStatus(
 			C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
-				(*unsafe.Pointer)(v.getHandle(i)),
-				C.OCI_DTYPE_LOB, 0, nil),
+				&x, C.OCI_DTYPE_LOB, 0, nil),
 			"DescrAlloc"); err != nil {
 			return err
+		}
+		if CTrace {
+			ctrace("lobVarInitialize(x=%p (%x))", x, x)
+		}
+		v.setHandle(i, x)
+		if CTrace {
+			ctrace("lobVarInitialize(env=%p, i=%d, lob=%x)",
+				v.environment.handle, i, v.getHandleBytes(i))
+		}
+		/*
+			for j := 0; j < int(v.typ.size/2); j++ { // reverse
+				v.dataBytes[int(i*v.typ.size)+j], v.dataBytes[int((i+1)*v.typ.size)-j-1] = v.dataBytes[int((i+1)*v.typ.size)-j-1], v.dataBytes[int(i*v.typ.size)+j]
+			}
+		*/
+		if CTrace {
+			ctrace("lobVarInitialize(env=%p, i=%d, lob=%x)",
+				v.environment.handle, i, v.getHandleBytes(i))
 		}
 	}
 
@@ -109,6 +129,9 @@ func lobVarFinalize(v *Variable) error {
 		return nil
 	}
 	for i := uint(0); i < v.allocatedElements; i++ {
+		if CTrace {
+			ctrace("lobVarFinalize(lob=%x)", v.getHandle(i))
+		}
 		C.OCIDescriptorFree(v.getHandle(i), C.OCI_DTYPE_LOB)
 	}
 	return nil

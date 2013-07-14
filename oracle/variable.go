@@ -22,6 +22,7 @@ limitations under the License.
 
 #include <stdlib.h>
 #include <oci.h>
+#include <string.h>
 */
 import "C"
 
@@ -1237,6 +1238,10 @@ func (v *Variable) externalGetValue(pos uint) (interface{}, error) {
 
 func (v Variable) getHandle(pos uint) unsafe.Pointer {
 	return unsafe.Pointer(&v.dataBytes[int(pos*v.typ.size)])
+}
+func (v Variable) setHandle(pos uint, val unsafe.Pointer) {
+	C.memcpy(unsafe.Pointer(&v.dataBytes[int(pos*v.typ.size)]),
+		unsafe.Pointer(&val), C.size_t(v.typ.size))
 }
 func (v Variable) getHandleBytes(pos uint) []byte {
 	return v.dataBytes[int(pos*v.typ.size):int((pos+1)*v.typ.size)]

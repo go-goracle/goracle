@@ -239,6 +239,8 @@ static int LobVar_Initialize(
         if (Environment_CheckForError(var->environment, status,
                 "LobVar_Initialize()") < 0)
             return -1;
+        PySys_WriteStderr("LobVar_Initialize(env=%p, i=%d, lob=%p)\n",
+                var->environment->handle, i, var->data[i]);
     }
 
     return 0;

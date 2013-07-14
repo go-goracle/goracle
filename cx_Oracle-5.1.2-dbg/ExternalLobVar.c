@@ -214,6 +214,19 @@ static int ExternalLobVar_InternalRead(
     return 0;
 }
 
+static void printStackTrace() {
+    PyObject* stderr = PyDict_GetItemString(
+            PyModule_GetDict(PyImport_ImportModule("sys")),
+            "stderr");
+    PyObject* print = PyDict_GetItemString(
+            PyModule_GetDict(PyImport_ImportModule("traceback")),
+            "print_stack");
+    PyObject* kw = PyDict_New();
+    PyDict_SetItemString(kw, "file", stderr);
+    PyObject_Call(print, PyTuple_New(0), kw);
+    //PyObject* co = Py_CompileString("import sys,traceback; traceback.print_stack()", "ExternalLobVar", 0);
+    //PyEval_EvalCode(co, PyEval_GetGlobals(), PyEval_GetLocals());
+}
 
 //-----------------------------------------------------------------------------
 // ExternalLobVar_InternalSize()
@@ -225,7 +238,8 @@ static int ExternalLobVar_InternalSize(
     sword status;
     ub4 length;
 
-    PySys_WriteStderr("ExternalLobVar=%x pos=%d data=%x\n", var, var->pos, var->lobVar->data[var->pos]);
+    PySys_WriteStderr("ExternalLobVar_InternalSize=%p pos=%d data=%p\n",
+            var, var->pos, var->lobVar->data[var->pos]);
 
 
     Py_BEGIN_ALLOW_THREADS

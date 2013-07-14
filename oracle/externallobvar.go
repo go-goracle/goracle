@@ -28,6 +28,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"unsafe"
 )
 
@@ -52,7 +53,9 @@ func (lv ExternalLobVar) getHandleBytes() []byte {
 func NewExternalLobVar(v *Variable, // variable to encapsulate
 	pos uint, // position in array to encapsulate
 ) *ExternalLobVar {
-	return &ExternalLobVar{lobVar: v, pos: pos,
+	return &ExternalLobVar{
+		lobVar:           v,
+		pos:              pos,
 		internalFetchNum: v.internalFetchNum,
 		isFile:           v.typ == BFileVarType}
 }
@@ -150,6 +153,8 @@ func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
 		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
 			lv.lobVar.connection.handle, lv.pos*lv.lobVar.typ.size,
 			lv.getHandleBytes(), &length)
+		buf := make([]byte, 8192)
+		ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
 	}
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobGetLength(lv.lobVar.connection.handle,
@@ -281,6 +286,9 @@ func (lv *ExternalLobVar) Read(p []byte) (int, error) {
 
 // ReadAll returns all of the data in the external LOB variable.
 func (lv *ExternalLobVar) ReadAll() ([]byte, error) {
+	if err := lv.Verify(); err != nil {
+		return nil, err
+	}
 	amount, err := lv.internalSize()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get internal size of %s: %s", lv, err)
