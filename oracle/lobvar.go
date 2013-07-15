@@ -30,6 +30,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"unsafe"
 )
 
@@ -53,6 +54,7 @@ func lobVarInitialize(v *Variable, cur *Cursor) error {
 	// initialize the LOB locators
 	var (
 		x   unsafe.Pointer
+		n   C.ub4
 		err error
 	)
 	for i := uint(0); i < v.allocatedElements; i++ {
@@ -76,13 +78,42 @@ func lobVarInitialize(v *Variable, cur *Cursor) error {
 				v.dataBytes[int(i*v.typ.size)+j], v.dataBytes[int((i+1)*v.typ.size)-j-1] = v.dataBytes[int((i+1)*v.typ.size)-j-1], v.dataBytes[int(i*v.typ.size)+j]
 			}
 		*/
+		if n, err = v.getLobInternalSize(i); err != nil {
+			return fmt.Errorf("the freshly initialized LobLocator is bad!? %s", err)
+		}
 		if CTrace {
-			ctrace("lobVarInitialize(env=%p, i=%d, lob=%x)",
-				v.environment.handle, i, v.getHandleBytes(i))
+			ctrace("lobVarInitialize(env=%p, i=%d, n=%d, lob=%x)",
+				v.environment.handle, i, n, v.getHandleBytes(i))
 		}
 	}
 
 	return nil
+}
+
+func (v *Variable) getLobInternalSize(pos uint) (length C.ub4, err error) {
+	switch v.typ {
+	case ClobVarType, NClobVarType, BlobVarType, BFileVarType:
+	default:
+		return 0, fmt.Errorf("getLobInternalSize is usable only for LOB vars! not for %T", v.typ)
+	}
+	// Py_BEGIN_ALLOW_THREADS
+	if CTrace {
+		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
+			v.connection.handle, pos*v.typ.size,
+			v.getHandleBytes(pos), &length)
+		buf := make([]byte, 8192)
+		ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
+	}
+	if err = v.environment.CheckStatus(
+		C.OCILobGetLength(v.connection.handle,
+			v.environment.errorHandle,
+			(*C.OCILobLocator)(v.getHandle(pos)), &length),
+		"LobGetLength"); err != nil {
+		return
+	}
+	// Py_END_ALLOW_THREADS
+
+	return
 }
 
 // Free temporary LOBs prior to fetch.

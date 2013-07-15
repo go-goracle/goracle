@@ -110,7 +110,10 @@ func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uin
 
 	// perform extended initialization
 	if v.typ.initialize != nil {
-		v.typ.initialize(v, cur)
+		if err = v.typ.initialize(v, cur); err != nil {
+			err = fmt.Errorf("error initializing %s: %s", v, err)
+			return
+		}
 	}
 
 	return v, nil
