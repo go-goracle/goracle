@@ -92,7 +92,7 @@ func (cur *Cursor) freeHandle() error {
 	//debug("freeing cursor handle %v", cur.handle)
 	if cur.isOwned {
 		if CTrace {
-			ctrace("OCIHandleFree", cur.handle, "htype_stmt")
+			ctrace("OCIHandleFree(cur=%p)", cur.handle, "htype_stmt")
 		}
 		return cur.environment.CheckStatus(
 			C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
@@ -100,8 +100,9 @@ func (cur *Cursor) freeHandle() error {
 	} else if cur.connection.handle != nil &&
 		cur.statementTag != nil && len(cur.statementTag) > 0 {
 		if CTrace {
-			ctrace("OCIStmtRelease", cur.handle, cur.environment.errorHandle,
-				cur.statementTag, len(cur.statementTag), "OCI_DEFAULT")
+			ctrace("OCIStmtRelease(cur=%p, env=%p, stmtT=%s, len(stmtT)=%v)",
+				cur.handle, cur.environment.errorHandle,
+				cur.statementTag, len(cur.statementTag))
 		}
 		return cur.environment.CheckStatus(C.OCIStmtRelease(cur.handle,
 			cur.environment.errorHandle, (*C.OraText)(&cur.statementTag[0]),
@@ -320,6 +321,9 @@ func (cur *Cursor) getErrorOffset() int {
 
 // setErrorOffset sets the error offset (if applicable)
 func (cur *Cursor) setErrorOffset(err error) {
+	if err == nil {
+		return
+	}
 	if x, ok := err.(*Error); ok {
 		x.Offset = cur.getErrorOffset()
 	}
@@ -340,8 +344,10 @@ func (cur *Cursor) internalExecute(numIters uint) error {
 	debug("%p.StmtExecute(%s, mode=%d) in internalExecute", cur,
 		cur.statement, mode)
 	if CTrace {
-		ctrace("internalExecute.OCIStmtExecute", cur.connection.handle, cur.handle,
-			cur.environment.errorHandle, numIters, 0, nil, nil, mode)
+		ctrace("internalExecute.OCIStmtExecute(conn=%p, cur=%p, env=%p,"+
+			" iters=%d, rowOff=%d, mode=%d)",
+			cur.connection.handle, cur.handle,
+			cur.environment.errorHandle, numIters, 0, mode)
 	}
 	if err := cur.environment.CheckStatus(
 		C.OCIStmtExecute(cur.connection.handle,
@@ -577,6 +583,9 @@ func (cur *Cursor) GetDescription() (descs []VariableDescription, err error) {
 
 // Close the cursor.
 func (cur *Cursor) Close() {
+	if CTrace {
+		ctrace("closing %#v", cur)
+	}
 	// make sure we are actually open
 	if !cur.isOpen {
 		return

@@ -451,7 +451,7 @@ BEGIN
   len := length(x);
   dbms_lob.writeappend(clobvar, len, x);
   :1 := clobvar;
-  --dbms_lob.close(clobvar);
+  dbms_lob.close(clobvar);
 END;`
 
 	if err = cur.Execute(qry, []interface{}{out}, nil); err != nil {

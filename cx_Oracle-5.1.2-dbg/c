@@ -35,7 +35,7 @@ BEGIN
   len := length(x);
   dbms_lob.writeappend(clobvar, len, x);
   :1 := clobvar;
-  --dbms_lob.close(clobvar);
+  dbms_lob.close(clobvar);
 END;""", params)
 clob = params[0].getvalue()
 print clob.size(), repr(clob.read())

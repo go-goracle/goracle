@@ -126,6 +126,9 @@ PyObject *ExternalLobVar_New(
     Py_INCREF(var);
     self->lobVar = var;
 
+    PySys_WriteStderr("ExternalLobVar_New(pos=%d) size=%d\n", pos,
+            ExternalLobVar_InternalSize(self));
+
     return (PyObject*) self;
 }
 
@@ -232,7 +235,7 @@ static void printStackTrace() {
 // ExternalLobVar_InternalSize()
 //   Return the size of the LOB variable for internal comsumption.
 //-----------------------------------------------------------------------------
-static int ExternalLobVar_InternalSize(
+int ExternalLobVar_InternalSize(
     udt_ExternalLobVar *var)            // variable to return the size of
 {
     sword status;

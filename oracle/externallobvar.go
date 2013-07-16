@@ -53,11 +53,20 @@ func (lv ExternalLobVar) getHandleBytes() []byte {
 func NewExternalLobVar(v *Variable, // variable to encapsulate
 	pos uint, // position in array to encapsulate
 ) *ExternalLobVar {
-	return &ExternalLobVar{
+	ret := &ExternalLobVar{
 		lobVar:           v,
 		pos:              pos,
 		internalFetchNum: v.internalFetchNum,
 		isFile:           v.typ == BFileVarType}
+	if CTrace {
+		if n, err := ret.internalSize(); err != nil {
+			ctrace("error getting internal size in NewExternalLobVar(%v, %d): %s",
+				v, pos, err)
+		} else {
+			ctrace("internal size: %d", n)
+		}
+	}
+	return ret
 }
 
 // Verify that the external LOB var is still valid.
