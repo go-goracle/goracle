@@ -226,6 +226,7 @@ static int LobVar_Initialize(
 {
     sword status;
     ub4 i;
+    ub4 length;
 
     // initialize members
     Py_INCREF(cursor->connection);
@@ -241,6 +242,20 @@ static int LobVar_Initialize(
             return -1;
         PySys_WriteStderr("LobVar_Initialize(env=%p, i=%d, lob=%p)\n",
                 var->environment->handle, i, var->data[i]);
+
+        /*
+        Py_BEGIN_ALLOW_THREADS
+        status = OCILobGetLength(var->connection->handle,
+                var->environment->errorHandle,
+                var->data[i], &length);
+        Py_END_ALLOW_THREADS
+        if (Environment_CheckForError(var->environment, status,
+                "LobVar_InternalSize()") < 0)
+            return -1;
+
+        PySys_WriteStderr("LobVar_Initialize(lob=%p length=%d)\n",
+                var->data[i], length);
+        */
     }
 
     return 0;

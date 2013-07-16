@@ -1,8 +1,9 @@
 #!/bin/sh
+DSN=${1:-$(cat ../.dsn)}
 PYTHONPATH=build/lib.linux-x86_64-2.7-11g:$PYTHONPATH python <<EOF
 import cx_Oracle_dbg as cx_Oracle
 import sys
-cx = cx_Oracle.connect('$1')
+cx = cx_Oracle.connect('$DSN')
 cu = cx.cursor()
 cur = cu.var(cx_Oracle.CURSOR)
 cu.execute("""DECLARE
@@ -20,7 +21,7 @@ echo '----------------------------------------------------------'
 PYTHONPATH=build/lib.linux-x86_64-2.7-11g:$PYTHONPATH python <<EOF
 import cx_Oracle_dbg as cx_Oracle
 import sys
-cx = cx_Oracle.connect('$1')
+cx = cx_Oracle.connect('$DSN')
 cu = cx.cursor()
 params = [cu.var(cx_Oracle.CLOB)]
 cu.execute("""DECLARE

@@ -54,7 +54,6 @@ func lobVarInitialize(v *Variable, cur *Cursor) error {
 	// initialize the LOB locators
 	var (
 		x   unsafe.Pointer
-		n   C.ub4
 		err error
 	)
 	for i := uint(0); i < v.allocatedElements; i++ {
@@ -78,13 +77,15 @@ func lobVarInitialize(v *Variable, cur *Cursor) error {
 				v.dataBytes[int(i*v.typ.size)+j], v.dataBytes[int((i+1)*v.typ.size)-j-1] = v.dataBytes[int((i+1)*v.typ.size)-j-1], v.dataBytes[int(i*v.typ.size)+j]
 			}
 		*/
-		if n, err = v.getLobInternalSize(i); err != nil {
-			return fmt.Errorf("the freshly initialized LobLocator is bad!? %s", err)
-		}
-		if CTrace {
-			ctrace("lobVarInitialize(env=%p, i=%d, n=%d, lob=%x)",
-				v.environment.handle, i, n, v.getHandleBytes(i))
-		}
+		/*
+			if n, err = v.getLobInternalSize(i); err != nil {
+				return fmt.Errorf("the freshly initialized LobLocator is bad!? %s", err)
+			}
+			if CTrace {
+				ctrace("lobVarInitialize(env=%p, i=%d, n=%d, lob=%x)",
+					v.environment.handle, i, n, v.getHandleBytes(i))
+			}
+		*/
 	}
 
 	return nil
