@@ -270,6 +270,9 @@ func (cur *Cursor) performDefine() error {
 func (cur *Cursor) setRowCount() error {
 	var rowCount, x C.ub4
 
+	if CTrace {
+		ctrace("setRowCount statementType=%d", cur.statementType)
+	}
 	if cur.statementType == C.OCI_STMT_SELECT {
 		cur.rowCount = 0
 		cur.actualRows = -1

@@ -1086,6 +1086,10 @@ static int Variable_InternalBind(
                     var->actualLength, var->returnCode, var->allocatedElements,
                     &var->actualElements, OCI_DEFAULT);
         } else {
+            PySys_WriteStderr("OCIBindByPos(cur=%p, boundPos=%d, data=%p, bufSize=%d oracleType=%d indicator=%s actLen=%s rc=%p)\n",
+                    var->boundCursorHandle, var->boundPos, var->data,
+                    var->bufferSize, var->type->oracleType, var->indicator,
+                    var->actualLength, var->returnCode);
             status = OCIBindByPos(var->boundCursorHandle, &var->bindHandle,
                     var->environment->errorHandle, var->boundPos, var->data,
                     var->bufferSize, var->type->oracleType, var->indicator,
@@ -1170,7 +1174,7 @@ static int Variable_VerifyFetch(
         if (var->returnCode[arrayPos] != 0) {
             error = Error_New(var->environment, "Variable_VerifyFetch()", 0);
             error->code = var->returnCode[arrayPos];
-            sprintf(messageText, 
+            sprintf(messageText,
                     "column at array pos %d fetched with error: %d",
                     arrayPos, var->returnCode[arrayPos]);
             error->message = cxString_FromAscii(messageText);

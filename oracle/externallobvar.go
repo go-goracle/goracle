@@ -71,6 +71,10 @@ func NewExternalLobVar(v *Variable, // variable to encapsulate
 
 // Verify that the external LOB var is still valid.
 func (lv *ExternalLobVar) Verify() error {
+	if CTrace {
+		ctrace("externalLobVar.Verify(%x) %d =?= %d", lv.getHandleBytes(),
+			lv.internalFetchNum, lv.lobVar.internalFetchNum)
+	}
 	if lv.internalFetchNum != lv.lobVar.internalFetchNum {
 		return errors.New("LOB variable no longer valid after subsequent fetch")
 	}

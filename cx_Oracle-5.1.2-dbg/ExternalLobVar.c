@@ -152,6 +152,8 @@ static void ExternalLobVar_Free(
 static int ExternalLobVar_Verify(
     udt_ExternalLobVar *var)            // variable to verify
 {
+    PySys_WriteStderr("ExternalLobVar_Verify(%d =?= %d)\n",
+            var->internalFetchNum, var->lobVar->internalFetchNum);
     if (var->internalFetchNum != var->lobVar->internalFetchNum) {
         PyErr_SetString(g_ProgrammingErrorException,
                 "LOB variable no longer valid after subsequent fetch");
@@ -271,6 +273,8 @@ static PyObject *ExternalLobVar_Value(
     PyObject *result;
     char *buffer;
 
+    PySys_WriteStderr("ExternalLobVar_Value(%x) offset=%d amount=%d\n",
+            var->lobVar->data[var->pos], offset, amount);
     // modify the arguments
     if (offset < 0)
         offset = 1;
@@ -288,6 +292,9 @@ static PyObject *ExternalLobVar_Value(
     else if (var->lobVar->type == &vt_NCLOB)
         bufferSize = amount * 2;
     else bufferSize = amount;
+
+    PySys_WriteStderr("ExternalLobVar_Value(%x) offset=%d amount=%d\n",
+            var->lobVar->data[var->pos], offset, amount);
 
     // create a string for retrieving the value
     buffer = (char*) PyMem_Malloc(bufferSize);

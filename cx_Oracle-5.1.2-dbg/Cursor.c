@@ -498,6 +498,7 @@ static int Cursor_SetRowCount(
     ub4 rowCount;
     sword status;
 
+    PySys_WriteStderr("Cursor_SetRowCount statementType=%d\n", self->statementType);
     if (self->statementType == OCI_STMT_SELECT) {
         self->rowCount = 0;
         self->actualRows = -1;
@@ -557,6 +558,8 @@ static int Cursor_InternalExecute(
         mode = OCI_COMMIT_ON_SUCCESS;
     else mode = OCI_DEFAULT;
 
+    PySys_WriteStderr("OCIStmtExecute(conn=%p, cur=%p, numIters=%d, mode=%d)\n",
+            self->connection->handle, self->handle, numIters, mode);
     Py_BEGIN_ALLOW_THREADS
     status = OCIStmtExecute(self->connection->handle, self->handle,
             self->environment->errorHandle, numIters, 0, 0, 0, mode);

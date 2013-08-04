@@ -886,12 +886,10 @@ func (v *Variable) internalBind() (err error) {
 			aL, rC, allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
-			ctrace("internalBind.OCIBindByPos", v.boundCursorHandle, &v.bindHandle,
-				v.environment.errorHandle, fmt.Sprintf("pos=%d", v.boundPos),
-				"dataArr:", fmt.Sprintf("%x", v.dataBytes[:v.bufferSize]),
-				"bufsize:", v.bufferSize, "typ:", v.typ.oracleType,
-				v.indicator, aL, rC,
-				allElts, pActElts, "DEFAULT")
+			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data=%v, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
+				v.boundCursorHandle, v.boundPos, v.dataBytes[:v.bufferSize],
+				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
+				allElts, pActElts)
 		}
 		status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
 			v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
@@ -901,6 +899,22 @@ func (v *Variable) internalBind() (err error) {
 	}
 	if err = v.environment.CheckStatus(status, "BindBy"); err != nil {
 		return
+	}
+
+	if v.typ.charsetForm != C.SQLCS_IMPLICIT {
+		if err = v.environment.AttrSet(
+			unsafe.Pointer(v.bindHandle), C.OCI_HTYPE_BIND,
+			C.OCI_ATTR_CHARSET_FORM, unsafe.Pointer(&v.typ.size),
+			C.sizeof_ub4); err != nil {
+			return
+		}
+		// why do we set this here?
+		if err = v.environment.AttrSet(
+			unsafe.Pointer(v.bindHandle), C.OCI_HTYPE_BIND,
+			C.OCI_ATTR_MAXDATA_SIZE, unsafe.Pointer(&v.bufferSize),
+			C.sizeof_ub4); err != nil {
+			return
+		}
 	}
 
 	// set the max data size for strings
