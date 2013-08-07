@@ -119,6 +119,11 @@ func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uin
 	return v, nil
 }
 
+// String returns a (short) representation of the variable
+func (v *Variable) String() string {
+	return fmt.Sprintf("<Variable %s of %p>", v.typ.Name, v.boundCursorHandle)
+}
+
 // VariableDescription holds the description of a variable
 type VariableDescription struct {
 	Name                                              string
@@ -230,6 +235,9 @@ func (v Variable) ArrayLength() uint {
 
 // allocateData allocates the data for the variable.
 func (v *Variable) allocateData() error {
+	if CTrace {
+		ctrace("%s.allocateData", v)
+	}
 	// set the buffer size for the variable
 	if v.typ.getBufferSize != nil {
 		v.bufferSize = v.typ.getBufferSize(v)
@@ -856,6 +864,10 @@ func (cur *Cursor) varDefine(numElements, position uint) (*Variable, error) {
 
 // Allocate a variable and bind it to the given statement.
 func (v *Variable) internalBind() (err error) {
+	if CTrace {
+		ctrace("%s.internalBind", v)
+	}
+
 	var status C.sword
 	// perform the bind
 	aL, rC := v.aLrC()
@@ -932,6 +944,10 @@ func (v *Variable) internalBind() (err error) {
 // Bind allocates a variable and bind it to the given statement.
 // bind to name or pos
 func (v *Variable) Bind(cur *Cursor, name string, pos uint) error {
+	if CTrace {
+		ctrace("%s.Bind(%s, %s, %d)", v, cur, name, pos)
+	}
+
 	// nothing to do if already bound
 	if v.bindHandle != nil && name == v.boundName && pos == v.boundPos {
 		return nil
@@ -954,6 +970,10 @@ func (v *Variable) Bind(cur *Cursor, name string, pos uint) error {
 
 // verifyFetch verifies that truncation or other problems did not take place on retrieve.
 func (v *Variable) verifyFetch(arrayPos uint) error {
+	if CTrace {
+		ctrace("%s.verifyFetch(%d) varlength? %t", v, arrayPos, v.typ.isVariableLength)
+	}
+
 	if v.typ.isVariableLength {
 		if code := v.returnCode[arrayPos]; code != 0 {
 			err := NewError(int(code),
@@ -968,6 +988,9 @@ func (v *Variable) verifyFetch(arrayPos uint) error {
 
 // getSingleValue returns the value of the variable at the given position.
 func (v *Variable) getSingleValue(arrayPos uint) (interface{}, error) {
+	if CTrace {
+		ctrace("%s.getSingleValue(%d)", v, arrayPos)
+	}
 	var isNull bool
 
 	// ensure we do not exceed the number of allocated elements
@@ -1084,6 +1107,9 @@ func (v *Variable) getArrayValueInto(dest interface{}, numElements uint) error {
 
 // GetValue returns the value of the variable.
 func (v *Variable) GetValue(arrayPos uint) (interface{}, error) {
+	if CTrace {
+		ctrace("%s.GetValue(%d)", v, arrayPos)
+	}
 	//log.Printf("GetValue isArray? %b", v.isArray)
 	//if v.isArray {
 	//	return v.getArrayValue(uint(v.actualElements))
@@ -1250,6 +1276,9 @@ func (v *Variable) externalSetValue(pos uint, value interface{}) error {
 
 // externalGetValue returns the value of the variable at the given position.
 func (v *Variable) externalGetValue(pos uint) (interface{}, error) {
+	if CTrace {
+		ctrace("%s.externalGetValue(%d)", v, pos)
+	}
 	return v.GetValue(pos)
 }
 

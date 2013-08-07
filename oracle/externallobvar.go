@@ -53,6 +53,9 @@ func (lv ExternalLobVar) getHandleBytes() []byte {
 func NewExternalLobVar(v *Variable, // variable to encapsulate
 	pos uint, // position in array to encapsulate
 ) *ExternalLobVar {
+	if CTrace {
+		ctrace("NewExternalLobVar(%s, %d)", v, pos)
+	}
 	ret := &ExternalLobVar{
 		lobVar:           v,
 		pos:              pos,
@@ -161,6 +164,10 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 
 // internalSize returns the size of the LOB variable for internal comsumption.
 func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
+	if CTrace {
+		ctrace("%s.internalSize", lv)
+	}
+
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
 		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
@@ -196,6 +203,11 @@ func (lv *ExternalLobVar) Size(inChars bool) (int64, error) {
 		}
 	}
 	return int64(length), err
+}
+
+// String returns a short representation of the ExternalLobVar
+func (lv *ExternalLobVar) String() string {
+	return fmt.Sprintf("<ExternalLobVar of %s>", lv.lobVar)
 }
 
 // ReadAt returns a portion (or all) of the data in the external LOB variable.

@@ -179,6 +179,8 @@ static PyTypeObject g_CursorType = {
 };
 
 
+void TRACE(const char *name) { PySys_WriteStderr("TRACE %s\n", name); }
+
 //-----------------------------------------------------------------------------
 // Cursor_AllocateHandle()
 //   Allocate a new handle.
@@ -186,6 +188,7 @@ static PyTypeObject g_CursorType = {
 static int Cursor_AllocateHandle(
     udt_Cursor *self)                   // cursor object
 {
+    TRACE("Cursor_AllocateHandle");
     sword status;
 
     self->isOwned = 1;
@@ -206,6 +209,7 @@ static int Cursor_FreeHandle(
     udt_Cursor *self,                   // cursor object
     int raiseException)                 // raise an exception, if necesary?
 {
+    TRACE("Cursor_FreeHandle");
     udt_Buffer buffer;
     sword status;
 
@@ -244,6 +248,7 @@ static int Cursor_FreeHandle(
 static int Cursor_IsOpen(
     udt_Cursor *self)                   // cursor to check
 {
+    TRACE("Cursor_IsOpen");
     if (!self->isOpen) {
         PyErr_SetString(g_InterfaceErrorException, "not open");
         return -1;
@@ -261,6 +266,7 @@ static PyObject *Cursor_New(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("Cursor_New");
     return type->tp_alloc(type, 0);
 }
 
@@ -274,6 +280,7 @@ static int Cursor_Init(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("Cursor_Init");
     udt_Connection *connection;
 
     // parse arguments
@@ -303,6 +310,7 @@ static int Cursor_Init(
 static PyObject *Cursor_Repr(
     udt_Cursor *cursor)                 // cursor to return the string for
 {
+    TRACE("Cursor_Repr");
     PyObject *connectionRepr, *module, *name, *result, *format, *formatArgs;
 
     format = cxString_FromAscii("<%s.%s on %s>");
@@ -340,6 +348,7 @@ static PyObject *Cursor_Repr(
 static void Cursor_Free(
     udt_Cursor *self)                   // cursor object
 {
+    TRACE("Cursor_Free");
     Cursor_FreeHandle(self, 0);
     Py_CLEAR(self->statement);
     Py_CLEAR(self->statementTag);
@@ -363,6 +372,7 @@ static int Cursor_GetBindNames(
     int numElements,                    // number of elements (IN/OUT)
     PyObject **names)                   // list of names (OUT)
 {
+    TRACE("Cursor_GetBindNames");
     ub1 *bindNameLengths, *indicatorNameLengths, *duplicate;
     char *buffer, **bindNames, **indicatorNames;
     OCIBind **bindHandles;
@@ -459,6 +469,7 @@ static int Cursor_GetBindNames(
 static int Cursor_PerformDefine(
     udt_Cursor *self)                   // cursor to perform define on
 {
+    TRACE("Cursor_PerformDefine");
     int numParams, pos;
     udt_Variable *var;
     sword status;
@@ -495,6 +506,7 @@ static int Cursor_PerformDefine(
 static int Cursor_SetRowCount(
     udt_Cursor *self)                   // cursor to set the rowcount on
 {
+    TRACE("Cursor_SetRowCount");
     ub4 rowCount;
     sword status;
 
@@ -529,6 +541,7 @@ static int Cursor_SetRowCount(
 static void Cursor_SetErrorOffset(
     udt_Cursor *self)                   // cursor to get the error offset from
 {
+    TRACE("Cursor_SetErrorOffset");
     PyObject *type, *value, *traceback;
     udt_Error *error;
 
@@ -551,6 +564,7 @@ static int Cursor_InternalExecute(
     udt_Cursor *self,                   // cursor to perform the execute on
     ub4 numIters)                       // number of iterations to execute
 {
+    TRACE("Cursor_InternalExecute");
     sword status;
     ub4 mode;
 
@@ -582,6 +596,7 @@ static int Cursor_InternalExecute(
 static int Cursor_GetStatementType(
     udt_Cursor *self)                   // cursor to perform binds on
 {
+    TRACE("Cursor_GetStatementType");
     ub2 statementType;
     sword status;
 
@@ -609,6 +624,7 @@ static int Cursor_GetStatementType(
 static int Cursor_FixupBoundCursor(
     udt_Cursor *self)                   // cursor that may have been bound
 {
+    TRACE("Cursor_FixupBoundCursor");
     if (self->handle && self->statementType < 0) {
         if (Cursor_GetStatementType(self) < 0)
             return -1;
@@ -632,6 +648,7 @@ static PyObject *Cursor_ItemDescriptionHelper(
     unsigned pos,                       // position in description
     OCIParam *param)                    // parameter to use for description
 {
+    TRACE("Cursor_ItemDescriptionHelper");
     ub2 internalSize, charSize;
     udt_VariableType *varType;
     int displaySize, index;
@@ -757,6 +774,7 @@ static PyObject *Cursor_ItemDescription(
     udt_Cursor *self,                   // cursor object
     unsigned pos)                       // position
 {
+    TRACE("Cursor_ItemDescription");
     PyObject *tuple;
     OCIParam *param;
     sword status;
@@ -784,6 +802,7 @@ static PyObject *Cursor_GetDescription(
     udt_Cursor *self,                   // cursor object
     void *arg)                          // optional argument (ignored)
 {
+    TRACE("Cursor_GetDescription");
     PyObject *results, *tuple;
     int numItems, index;
     sword status;
@@ -836,6 +855,7 @@ static PyObject *Cursor_Close(
     udt_Cursor *self,                   // cursor to close
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_Close");
     // make sure we are actually open
     if (Cursor_IsOpen(self) < 0)
         return NULL;
@@ -864,6 +884,7 @@ static int Cursor_SetBindVariableHelper(
     udt_Variable **newVar,              // new variable to be bound
     int deferTypeAssignment)            // defer type assignment if null?
 {
+    TRACE("Cursor_SetBindVariableHelper");
     int isValueVar;
 
     // initialization
@@ -953,6 +974,7 @@ static int Cursor_SetBindVariables(
     unsigned arrayPos,                  // array position to set
     int deferTypeAssignment)            // defer type assignment if null?
 {
+    TRACE("Cursor_SetBindVariables");
     int i, origBoundByPos, origNumParams, boundByPos, numParams;
     PyObject *key, *value, *origVar;
     udt_Variable *newVar;
@@ -1050,6 +1072,7 @@ static int Cursor_SetBindVariables(
 static int Cursor_PerformBind(
     udt_Cursor *self)                   // cursor to perform binds on
 {
+    TRACE("Cursor_PerformBind");
     PyObject *key, *var;
     Py_ssize_t pos;
     ub2 i;
@@ -1094,6 +1117,7 @@ static int Cursor_PerformBind(
 static PyObject *Cursor_CreateRow(
     udt_Cursor *self)                   // cursor object
 {
+    TRACE("Cursor_CreateRow");
     PyObject *tuple, *item, *result;
     int numItems, pos;
     udt_Variable *var;
@@ -1139,6 +1163,7 @@ static int Cursor_InternalPrepare(
     PyObject *statement,                // statement to prepare
     PyObject *statementTag)             // tag of statement to prepare
 {
+    TRACE("Cursor_InternalPrepare");
     udt_Buffer statementBuffer, tagBuffer;
     sword status;
 
@@ -1225,6 +1250,7 @@ static PyObject *Cursor_Parse(
     udt_Cursor *self,                   // cursor to perform parse on
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_Parse");
     PyObject *statement;
     sword status;
     ub4 mode;
@@ -1266,6 +1292,7 @@ static PyObject *Cursor_Prepare(
     udt_Cursor *self,                   // cursor to perform prepare on
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_Prepare");
     PyObject *statement, *statementTag;
 
     // statement text and optional tag is expected
@@ -1297,6 +1324,7 @@ static int Cursor_CallCalculateSize(
     PyObject *keywordArguments,         // dictionary of keyword arguments
     int *size)                          // statement size (OUT)
 {
+    TRACE("Cursor_CallCalculateSize");
     int numPositionalArgs, numKeywordArgs;
 
     // set base size without any arguments
@@ -1344,6 +1372,7 @@ static int Cursor_CallBuildStatement(
     PyObject **statementObj,            // statement object (OUT)
     PyObject **bindVariables)           // variables to bind (OUT)
 {
+    TRACE("Cursor_CallBuildStatement");
     PyObject *key, *value, *format, *formatArgs, *positionalArgs, *temp;
     int i, argNum, numPositionalArgs;
     Py_ssize_t pos;
@@ -1455,6 +1484,7 @@ static int Cursor_Call(
     PyObject *listOfArguments,          // arguments
     PyObject *keywordArguments)         // keyword arguments
 {
+    TRACE("Cursor_Call");
     PyObject *bindVariables, *statementObj, *results;
     int statementSize;
     char *statement;
@@ -1523,6 +1553,7 @@ static PyObject *Cursor_CallFunc(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("Cursor_CallFunc");
     static char *keywordList[] = { "name", "returnType", "parameters",
             "keywordParameters", NULL };
     PyObject *listOfArguments, *keywordArguments, *returnType, *results, *name;
@@ -1559,6 +1590,7 @@ static PyObject *Cursor_CallProc(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("Cursor_CallProc");
     static char *keywordList[] = { "name", "parameters", "keywordParameters",
             NULL };
     PyObject *listOfArguments, *keywordArguments, *results, *var, *temp, *name;
@@ -1602,6 +1634,7 @@ static PyObject *Cursor_Execute(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keywords
 {
+    TRACE("Cursor_Execute");
     PyObject *statement, *executeArgs;
     int isQuery;
 
@@ -1676,6 +1709,7 @@ static PyObject *Cursor_ExecuteMany(
     udt_Cursor *self,                   // cursor to execute
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_ExecuteMany");
     PyObject *arguments, *listOfArguments, *statement;
     int i, numRows;
 
@@ -1737,6 +1771,7 @@ static PyObject *Cursor_ExecuteManyPrepared(
     udt_Cursor *self,                   // cursor to execute
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_ExecuteManyPrepared");
     int numIters;
 
     // expect number of times to execute the statement
@@ -1779,6 +1814,7 @@ static PyObject *Cursor_ExecuteManyPrepared(
 static int Cursor_VerifyFetch(
     udt_Cursor *self)                   // cursor to fetch from
 {
+    TRACE("Cursor_VerifyFetch");
     // make sure the cursor is open
     if (Cursor_IsOpen(self) < 0)
         return -1;
@@ -1805,6 +1841,7 @@ static int Cursor_InternalFetch(
     udt_Cursor *self,                   // cursor to fetch from
     int numRows)                        // number of rows to fetch
 {
+    TRACE("Cursor_InternalFetch");
     udt_Variable *var;
     sword status;
     ub4 rowCount;
@@ -1850,6 +1887,7 @@ static int Cursor_InternalFetch(
 static int Cursor_MoreRows(
     udt_Cursor *self)                   // cursor to fetch from
 {
+    TRACE("Cursor_MoreRows");
     if (self->rowNum >= self->actualRows) {
         if (self->actualRows < 0 || self->actualRows == self->fetchArraySize) {
             if (Cursor_InternalFetch(self, self->fetchArraySize) < 0)
@@ -1871,6 +1909,7 @@ static PyObject *Cursor_MultiFetch(
     udt_Cursor *self,                   // cursor to fetch from
     int rowLimit)                       // row limit
 {
+    TRACE("Cursor_MultiFetch");
     PyObject *results, *row;
     int rowNum, status;
 
@@ -1914,6 +1953,7 @@ static PyObject *Cursor_FetchOne(
     udt_Cursor *self,                   // cursor to fetch from
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_FetchOne");
     int status;
 
     // verify fetch can be performed
@@ -1941,6 +1981,7 @@ static PyObject *Cursor_FetchMany(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("Cursor_FetchMany");
     static char *keywordList[] = { "numRows", NULL };
     int rowLimit;
 
@@ -1966,6 +2007,7 @@ static PyObject *Cursor_FetchAll(
     udt_Cursor *self,                   // cursor to fetch from
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_FetchAll");
     if (Cursor_VerifyFetch(self) < 0)
         return NULL;
     return Cursor_MultiFetch(self, 0);
@@ -1981,6 +2023,7 @@ static PyObject *Cursor_FetchRaw(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("Cursor_FetchRaw");
     static char *keywordList[] = { "numRows", NULL };
     int numRowsToFetch, numRowsFetched;
 
@@ -2020,6 +2063,7 @@ static PyObject *Cursor_SetInputSizes(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("Cursor_SetInputSizes");
     int numPositionalArgs;
     PyObject *key, *value;
     udt_Variable *var;
@@ -2088,6 +2132,7 @@ static PyObject *Cursor_SetOutputSize(
     udt_Cursor *self,                   // cursor to fetch from
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_SetOutputSize");
     self->outputSizeColumn = -1;
     if (!PyArg_ParseTuple(args, "i|i", &self->outputSize,
             &self->outputSizeColumn))
@@ -2107,6 +2152,7 @@ static PyObject *Cursor_Var(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("Cursor_Var");
     static char *keywordList[] = { "type", "size", "arraysize",
             "inconverter", "outconverter", "typename", NULL };
     PyObject *inConverter, *outConverter, *typeNameObj;
@@ -2169,6 +2215,7 @@ static PyObject *Cursor_ArrayVar(
     udt_Cursor *self,                   // cursor to fetch from
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_ArrayVar");
     udt_VariableType *varType;
     PyObject *type, *value;
     int size, numElements;
@@ -2226,6 +2273,7 @@ static PyObject *Cursor_BindNames(
     udt_Cursor *self,                   // cursor to fetch from
     PyObject *args)                     // arguments
 {
+    TRACE("Cursor_BindNames");
     PyObject *names;
     int result;
 
@@ -2250,6 +2298,7 @@ static PyObject *Cursor_BindNames(
 static PyObject *Cursor_GetIter(
     udt_Cursor *self)                   // cursor
 {
+    TRACE("Cursor_GetIter");
     if (Cursor_VerifyFetch(self) < 0)
         return NULL;
     Py_INCREF(self);
@@ -2264,6 +2313,7 @@ static PyObject *Cursor_GetIter(
 static PyObject *Cursor_GetNext(
     udt_Cursor *self)                   // cursor
 {
+    TRACE("Cursor_GetNext");
     int status;
 
     if (Cursor_VerifyFetch(self) < 0)

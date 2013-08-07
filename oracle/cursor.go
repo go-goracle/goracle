@@ -86,6 +86,9 @@ func (cur *Cursor) allocateHandle() error {
 
 //freeHandle frees the handle which may be reallocated if necessary.
 func (cur *Cursor) freeHandle() error {
+	if CTrace {
+		ctrace("%s.freeHandle", cur)
+	}
 	if cur.handle == nil {
 		return nil
 	}
@@ -129,6 +132,9 @@ func FromOraText(textp *C.OraText, length int) string {
 
 //IsOpen checks whether the cursor is open
 func (cur *Cursor) IsOpen() bool {
+	if CTrace {
+		ctrace("%s.IsOpen")
+	}
 	if !cur.isOpen {
 		return false
 	}
@@ -144,8 +150,8 @@ func NewCursor(conn *Connection) *Cursor {
 }
 
 //String implements Stringer on Cursor
-func (cur Cursor) String() string {
-	return fmt.Sprintf("<goracle.Cursor %x on %s>", cur.handle, cur.connection)
+func (cur *Cursor) String() string {
+	return fmt.Sprintf("<goracle.Cursor %x on %p>", cur.handle, cur.connection.handle)
 }
 
 //getBindNames returns a list of bind variable names. At this point the cursor must have
@@ -268,11 +274,12 @@ func (cur *Cursor) performDefine() error {
 
 // setRowCount sets the rowcount variable.
 func (cur *Cursor) setRowCount() error {
+	if CTrace {
+		ctrace("%s.setRowCount statementType=%d", cur, cur.statementType)
+	}
+
 	var rowCount, x C.ub4
 
-	if CTrace {
-		ctrace("setRowCount statementType=%d", cur.statementType)
-	}
 	if cur.statementType == C.OCI_STMT_SELECT {
 		cur.rowCount = 0
 		cur.actualRows = -1
@@ -335,6 +342,10 @@ func (cur *Cursor) setErrorOffset(err error) {
 // internalExecute performs the work of executing a cursor and
 // sets the rowcount appropriately regardless of whether an error takes place.
 func (cur *Cursor) internalExecute(numIters uint) error {
+	if CTrace {
+		ctrace("%s.internalExecute(%d)", cur, numIters)
+	}
+
 	var mode C.ub4
 
 	if cur.connection.autocommit {
@@ -587,7 +598,7 @@ func (cur *Cursor) GetDescription() (descs []VariableDescription, err error) {
 // Close the cursor.
 func (cur *Cursor) Close() {
 	if CTrace {
-		ctrace("closing %#v", cur)
+		ctrace("%s.Close", cur)
 	}
 	// make sure we are actually open
 	if !cur.isOpen {
@@ -606,6 +617,10 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 	value interface{}, // value to bind
 	origVar *Variable, // original variable bound
 ) (newVar *Variable, err error) {
+	if CTrace {
+		ctrace("%s.setBindVariableHelper", cur)
+	}
+
 	var isValueVar bool
 
 	// initialization
@@ -709,6 +724,11 @@ func (cur *Cursor) setBindVariablesByPos(parameters []interface{}, // parameters
 	arrayPos uint, // array position to set
 	deferTypeAssignment bool) ( // defer type assignment if null?
 	err error) {
+
+	if CTrace {
+		ctrace("%s.setBindVariablesByPos", cur)
+	}
+
 	var origNumParams int
 	// PyObject *key, *value, *origVar;
 	var origVar, newVar *Variable // udt_Variable *newVar;
@@ -778,6 +798,9 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 
 // performBind performs the binds on the cursor.
 func (cur *Cursor) performBind() (err error) {
+	if CTrace {
+		ctrace("%s.performBind", cur)
+	}
 	// PyObject *key, *var;
 	// Py_ssize_t pos;
 	// ub2 i;
@@ -887,6 +910,10 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 	// make sure we don't get a situation where nothing is to be executed
 	if statement == "" && cur.statement == nil {
 		return ProgrammingError("no statement specified and no prior statement prepared")
+	}
+
+	if CTrace {
+		ctrace("%s.internalPrepare(%q)", cur, statement)
 	}
 
 	// but go ahead and prepare anyway for create, alter and drop statments
@@ -1221,6 +1248,10 @@ func (cur *Cursor) CallProc(name string,
 // Execute the statement.
 func (cur *Cursor) Execute(statement string,
 	listArgs []interface{}, keywordArgs map[string]interface{}) error {
+
+	if CTrace {
+		ctrace("%s.Execute; IsOpen? %t", cur, cur.isOpen)
+	}
 
 	// make sure the cursor is open
 	if !cur.isOpen {

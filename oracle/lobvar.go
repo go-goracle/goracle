@@ -47,6 +47,9 @@ var (
 
 // Initialize the variable.
 func lobVarInitialize(v *Variable, cur *Cursor) error {
+	if CTrace {
+		ctrace("%s.lobVarInitialize", v)
+	}
 	// initialize members
 	v.connection = cur.connection
 	// v.isFile = v.typ == BFileVarType
@@ -230,6 +233,9 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 
 // Returns the value stored at the given array position.
 func lobVarGetValue(v *Variable, pos uint) (interface{}, error) {
+	if CTrace {
+		ctrace("lobVarGetValue(%s, %d)", v, pos)
+	}
 	return NewExternalLobVar(v, pos), nil
 }
 

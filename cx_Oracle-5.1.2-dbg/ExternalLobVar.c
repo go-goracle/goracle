@@ -115,6 +115,7 @@ PyObject *ExternalLobVar_New(
     udt_LobVar *var,                    // variable to encapsulate
     unsigned pos)                       // position in array to encapsulate
 {
+    TRACE("ExternalLobVar_New");
     udt_ExternalLobVar *self;
 
     self = (udt_ExternalLobVar*)
@@ -140,6 +141,7 @@ PyObject *ExternalLobVar_New(
 static void ExternalLobVar_Free(
     udt_ExternalLobVar *self)           // variable to free
 {
+    TRACE("ExternalLobVar_Free");
     Py_CLEAR(self->lobVar);
     Py_TYPE(self)->tp_free((PyObject*) self);
 }
@@ -152,6 +154,7 @@ static void ExternalLobVar_Free(
 static int ExternalLobVar_Verify(
     udt_ExternalLobVar *var)            // variable to verify
 {
+    TRACE("ExternalLobVar_Verify");
     PySys_WriteStderr("ExternalLobVar_Verify(%d =?= %d)\n",
             var->internalFetchNum, var->lobVar->internalFetchNum);
     if (var->internalFetchNum != var->lobVar->internalFetchNum) {
@@ -174,6 +177,7 @@ static int ExternalLobVar_InternalRead(
     ub4 *length,                        // length of data (IN/OUT)
     int offset)                         // offset
 {
+    TRACE("ExternalLobVar_InternalRead");
     ub2 charsetId;
     sword status;
 
@@ -240,6 +244,7 @@ static void printStackTrace() {
 int ExternalLobVar_InternalSize(
     udt_ExternalLobVar *var)            // variable to return the size of
 {
+    TRACE("ExternalLobVar_InternalSize");
     sword status;
     ub4 length;
 
@@ -269,6 +274,7 @@ static PyObject *ExternalLobVar_Value(
     int offset,                         // offset into LOB
     int amount)                         // amount to read from LOB
 {
+    TRACE("ExternalLobVar_Value");
     ub4 length, bufferSize;
     PyObject *result;
     char *buffer;
@@ -330,6 +336,7 @@ static PyObject *ExternalLobVar_Size(
     udt_ExternalLobVar *var,            // variable to return the size of
     PyObject *args)                     // arguments
 {
+    TRACE("ExternalLobVar_Size");
     int length;
 
     if (ExternalLobVar_Verify(var) < 0)
@@ -349,6 +356,7 @@ static PyObject *ExternalLobVar_Open(
     udt_ExternalLobVar *var,            // variable to return the size of
     PyObject *args)                     // arguments
 {
+    TRACE("ExternalLobVar_Open");
     sword status;
 
     if (ExternalLobVar_Verify(var) < 0)
@@ -374,6 +382,7 @@ static PyObject *ExternalLobVar_Close(
     udt_ExternalLobVar *var,            // variable to return the size of
     PyObject *args)                     // arguments
 {
+    TRACE("ExternalLobVar_Close");
     sword status;
 
     if (ExternalLobVar_Verify(var) < 0)
@@ -400,6 +409,7 @@ static PyObject *ExternalLobVar_Read(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("ExternalLobVar_Read");
     static char *keywordList[] = { "offset", "amount", NULL };
     int offset, amount;
 
@@ -422,6 +432,7 @@ static PyObject *ExternalLobVar_Read(
 static PyObject *ExternalLobVar_Str(
     udt_ExternalLobVar *var)            // variable to return the string for
 {
+    TRACE("ExternalLobVar_Str");
     if (ExternalLobVar_Verify(var) < 0)
         return NULL;
     return ExternalLobVar_Value(var, 1, -1);
@@ -437,6 +448,7 @@ static PyObject *ExternalLobVar_Write(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("ExternalLobVar_Write");
     static char *keywordList[] = { "data", "offset", NULL };
     PyObject *dataObj;
     ub4 amount;
@@ -470,6 +482,7 @@ static PyObject *ExternalLobVar_Trim(
     PyObject *args,                     // arguments
     PyObject *keywordArgs)              // keyword arguments
 {
+    TRACE("ExternalLobVar_Trim");
     static char *keywordList[] = { "newSize", NULL };
     sword status;
     ub4 newSize;
@@ -505,6 +518,7 @@ static PyObject *ExternalLobVar_Trim(
 static PyObject *ExternalLobVar_Reduce(
     udt_ExternalLobVar *self)           // variable to dump
 {
+    TRACE("ExternalLobVar_Reduce");
     PyObject *result, *value;
 
     value = ExternalLobVar_Str(self);
@@ -525,6 +539,7 @@ static PyObject *ExternalLobVar_GetChunkSize(
     udt_ExternalLobVar *var,            // variable to get chunk size for
     PyObject *args)                     // arguments
 {
+    TRACE("ExternalLobVar_GetChunkSize");
     ub4 chunkSize;
     sword status;
 
@@ -548,6 +563,7 @@ static PyObject *ExternalLobVar_IsOpen(
     udt_ExternalLobVar *var,            // variable to get chunk size for
     PyObject *args)                     // arguments
 {
+    TRACE("ExternalLobVar_IsOpen");
     boolean isOpen;
     sword status;
 
@@ -573,6 +589,7 @@ static PyObject *ExternalLobVar_GetFileName(
     udt_ExternalLobVar *var,            // variable to get file name for
     PyObject *args)                     // arguments
 {
+    TRACE("ExternalLobVar_GetFileName");
     char dirAlias[120], name[1020];
     ub2 dirAliasLength, nameLength;
     PyObject *result, *temp;
@@ -621,6 +638,7 @@ static PyObject *ExternalLobVar_SetFileName(
     udt_ExternalLobVar *var,            // variable to set file name for
     PyObject *args)                     // arguments
 {
+    TRACE("ExternalLobVar_SetFileName");
     int dirAliasLength, nameLength;
     char *dirAlias, *name;
     sword status;
@@ -655,6 +673,7 @@ static PyObject *ExternalLobVar_FileExists(
     udt_ExternalLobVar *var,            // variable to perform write against
     PyObject *args)                     // arguments
 {
+    TRACE("ExternalLobVar_FileExists");
     PyObject *result;
     sword status;
     boolean flag;

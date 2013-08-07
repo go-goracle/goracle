@@ -224,6 +224,7 @@ static int LobVar_Initialize(
     udt_LobVar *var,                    // variable to initialize
     udt_Cursor *cursor)                 // cursor created by
 {
+    TRACE("LobVar_Initialize");
     sword status;
     ub4 i;
     ub4 length;
@@ -269,6 +270,7 @@ static int LobVar_Initialize(
 static int LobVar_PreFetch(
     udt_LobVar *var)                    // variable to free
 {
+    TRACE("LobVar_PreFetch");
     boolean isTemporary;
     sword status;
     ub4 i;
@@ -303,6 +305,7 @@ static int LobVar_PreFetch(
 static void LobVar_Finalize(
     udt_LobVar *var)                    // variable to free
 {
+    TRACE("LobVar_Finalize");
     boolean isTemporary;
     ub4 i;
 
@@ -334,6 +337,7 @@ static int LobVar_Write(
     ub4 offset,                         // offset into variable
     ub4 *amount)                        // amount to write
 {
+    TRACE("LobVar_Write");
     udt_Buffer buffer;
     sword status;
 
@@ -391,6 +395,7 @@ static PyObject *LobVar_GetValue(
     udt_LobVar *var,                    // variable to determine value for
     unsigned pos)                       // array position
 {
+    TRACE("LobVar_GetValue");
     return ExternalLobVar_New(var, pos);
 }
 
@@ -404,6 +409,7 @@ static int LobVar_SetValue(
     unsigned position,                  // array position
     PyObject *value)                    // value to set
 {
+    TRACE("LobVar_SetValue");
     boolean isTemporary;
     sword status;
     ub1 lobType;
