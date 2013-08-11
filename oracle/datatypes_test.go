@@ -477,6 +477,7 @@ END;`
 		t.Errorf("error reading LOB: %s", err)
 		t.FailNow()
 	}
+	t.Logf("read %q (%d)", buf, len(buf))
 	if len(buf) != len(str) {
 		t.Errorf("read %q from the buffer (%d bytes), awaited %q (%d bytes)",
 			buf, len(buf), str, len(str))

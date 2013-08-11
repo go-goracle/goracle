@@ -112,34 +112,69 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 	} else {
 		charsetID = 0
 	}
-	var byteLen = C.oraub8(len(p))
-	var charLen = C.oraub8(0)
-	if CTrace {
-		ctrace("OCILobRead2(conn=%p, lob=%x, byteLen=%d, charLen=%d, off=%d, &p=%p "+
-			"len(p)=%d, piece=%d, csID=%d, csF=%d",
-			lv.lobVar.connection.handle,
-			lv.getHandleBytes(), byteLen, charLen, off+1,
-			&p[0], byteLen, C.OCI_ONE_PIECE,
-			charsetID, lv.lobVar.typ.charsetForm)
-	}
-	if err = lv.lobVar.environment.CheckStatus(
-		C.OCILobRead2(lv.lobVar.connection.handle,
-			lv.lobVar.environment.errorHandle,
-			lv.getHandle(), &byteLen, &charLen, C.oraub8(off+1),
-			unsafe.Pointer(&p[0]), C.oraub8(len(p)), C.OCI_ONE_PIECE,
-			nil, nil, charsetID, lv.lobVar.typ.charsetForm),
-		"LobRead"); err != nil {
-		// Py_END_ALLOW_THREADS
-		if CTrace {
-			ctrace("OCILobFileClose(conn=%p, lob=%p)",
-				lv.lobVar.connection.handle, lv.getHandleBytes())
+	var (
+		oLength = C.ub4(len(p))
+		byteLen = C.oraub8(len(p))
+		charLen = C.oraub8(0)
+		status  C.sword
+		pos     = int(0)
+	)
+	for {
+		if false {
+			if CTrace {
+				ctrace("OCILobRead2(conn=%p, lob=%x, byteLen=%d, charLen=%d, off=%d, &p=%p "+
+					"len(p)=%d, piece=%d, csID=%d, csF=%d",
+					lv.lobVar.connection.handle,
+					lv.getHandleBytes(), byteLen, charLen, off+1,
+					&p[pos], len(p)-pos, C.OCI_ONE_PIECE,
+					charsetID, lv.lobVar.typ.charsetForm)
+			}
+			status = C.OCILobRead2(lv.lobVar.connection.handle,
+				lv.lobVar.environment.errorHandle,
+				lv.getHandle(), &byteLen, &charLen, C.oraub8(off+1),
+				unsafe.Pointer(&p[pos]), C.oraub8(len(p)-pos), C.OCI_ONE_PIECE,
+				nil, nil, charsetID, lv.lobVar.typ.charsetForm)
+		} else {
+			if CTrace {
+				//log.Printf("p=%q len(p)=%d pos=%d oLength=%d", p, len(p), pos, oLength)
+				ctrace("OCILobRead(conn=%p, lob=%x, oLength=%d, off=%d, &p=%p "+
+					"len(p)=%d, csID=%d, csF=%d",
+					lv.lobVar.connection.handle,
+					lv.getHandleBytes(), oLength, off+1,
+					&p[pos], len(p)-pos,
+					charsetID, lv.lobVar.typ.charsetForm)
+			}
+			status = C.OCILobRead(lv.lobVar.connection.handle,
+				lv.lobVar.environment.errorHandle,
+				lv.getHandle(), &oLength, C.ub4(off+1),
+				unsafe.Pointer(&p[pos]), C.ub4(len(p)-pos),
+				nil, nil,
+				charsetID, lv.lobVar.typ.charsetForm)
 		}
-		C.OCILobFileClose(lv.lobVar.connection.handle,
-			lv.lobVar.environment.errorHandle,
-			lv.getHandle())
-		return
+		if !(status == C.OCI_SUCCESS || status == C.OCI_NEED_DATA) {
+			err = lv.lobVar.environment.CheckStatus(status, "LobRead")
+			if CTrace {
+				ctrace("OCILobFileClose(conn=%p, lob=%p)",
+					lv.lobVar.connection.handle, lv.getHandleBytes())
+			}
+			C.OCILobFileClose(lv.lobVar.connection.handle,
+				lv.lobVar.environment.errorHandle,
+				lv.getHandle())
+			return
+		}
+
+		//off += int64(byteLen)
+		//length += int64(byteLen)
+		off += int64(oLength)
+		length += int64(oLength)
+		if status == C.OCI_SUCCESS {
+			break
+		}
+		//pos += int(byteLen)
+		//byteLen = C.oraub8(len(p) - pos)
+		pos += int(oLength)
+		oLength = C.ub4(len(p) - pos)
 	}
-	length = int64(byteLen)
 
 	if lv.isFile {
 		// Py_BEGIN_ALLOW_THREADS
@@ -159,7 +194,7 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 	return
 }
 
-// internalSize returns the size of the LOB variable for internal comsumption.
+// internalSize returns the size in bytes (!) of the LOB variable for internal comsumption.
 func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
 	if CTrace {
 		ctrace("%s.internalSize", lv)
@@ -182,6 +217,11 @@ func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
 		return
 	}
 	// Py_END_ALLOW_THREADS
+	if lv.lobVar.typ == ClobVarType {
+		length *= C.ub4(lv.lobVar.environment.MaxBytesPerCharacter)
+	} else if lv.lobVar.typ == NClobVarType {
+		length *= 2
+	}
 
 	return
 }
