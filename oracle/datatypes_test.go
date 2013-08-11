@@ -23,6 +23,8 @@ import (
 	"time"
 )
 
+var accented = "árvíztűrő tükörfúrógép"
+
 var dataTypesTests = []struct {
 	in  string
 	out string
@@ -440,6 +442,7 @@ func TestLobOut(t *testing.T) {
 		t.FailNow()
 	}
 
+	str := "before line break\nafter line break\n" + accented
 	qry := `DECLARE
   clobvar CLOB;
   len     BINARY_INTEGER;
@@ -447,7 +450,7 @@ func TestLobOut(t *testing.T) {
 BEGIN
   dbms_lob.createtemporary(clobvar, TRUE);
   dbms_lob.open(clobvar, dbms_lob.lob_readwrite);
-  x := 'before line break' || CHR(10) || 'after line break';
+  x := '` + str + `';
   len := length(x);
   dbms_lob.writeappend(clobvar, len, x);
   :1 := clobvar;
@@ -474,5 +477,9 @@ END;`
 		t.Errorf("error reading LOB: %s", err)
 		t.FailNow()
 	}
-	t.Logf("buf=%s", buf)
+	if len(buf) != len(str) {
+		t.Errorf("read %q from the buffer (%d bytes), awaited %q (%d bytes)",
+			buf, len(buf), str, len(str))
+		t.Fail()
+	}
 }

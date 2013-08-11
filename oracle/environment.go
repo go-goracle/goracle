@@ -154,6 +154,15 @@ func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at st
 	return nil
 }
 
+func (env *Environment) ociDescrAlloc(dst *unsafe.Pointer, typ C.ub4, at string) error {
+	if err := checkStatus(
+		C.OCIDescriptorAlloc(unsafe.Pointer(env.handle), dst, typ, C.size_t(0), nil),
+		false); err != nil {
+		return errors.New(at + ": " + err.Error())
+	}
+	return nil
+}
+
 //AttrSet sets an attribute on the given parent pointer
 func (env *Environment) AttrSet(parent unsafe.Pointer, parentTyp C.ub4,
 	key C.ub4, value unsafe.Pointer, valueLength int) error {

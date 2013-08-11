@@ -88,59 +88,96 @@ package oracle
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <oci.h>
 
-sword _testLobOut(
+sword _lobAlloc(OCIEnv *envhp, dvoid* data, int allocatedElements) {
+    int i;
+    sword status;
+	for (i = 0; i < allocatedElements; i++) {
+		if ((status = OCIDescriptorAlloc(envhp,
+                (void**)((OCILobLocator**)data + i),
+                OCI_DTYPE_LOB, 0, NULL)) != OCI_SUCCESS) {
+            return status;
+        }
+    }
+    return status;
+}
+
+char *_testLobOut(
     OCIEnv *envhp,
     OCIError *errhp,
 	OCISvcCtx *svchp,
     OCIStmt *stmthp,
-    text *sql
+    text *sql,
+    sword *status
 )
 {
     OCIBind *bindhp = NULL;
     OCILobLocator *clob = NULL;
+    //OCIInd ind = OCI_IND_NULL;
     ub4 loblen;
-    sword status;
 
-    if ((status = OCIDescriptorAlloc((dvoid*)envhp, (dvoid **)&clob,
-                     (ub4)OCI_DTYPE_LOB, (size_t)0, (dvoid**)0)) != OCI_SUCCESS) {
-        return status;
-    }
-    if ((status = OCIStmtPrepare(stmthp, errhp, sql, strlen((char*)sql),
+    printf(">>> OCIStmtPrepare2(%p, %p, %p, %s, %d)\n", svchp, &stmthp, errhp,
+        sql, (int)strlen((char*)sql));
+    if ((*status = OCIStmtPrepare2(svchp, &stmthp, errhp, sql, strlen((char*)sql),
+                    0, 0,
                  (ub4) OCI_NTV_SYNTAX, (ub4) OCI_DEFAULT)) != OCI_SUCCESS) {
-        return status;
+        return "Prepare";
     }
-    if ((status = OCIBindByPos(stmthp, &bindhp, errhp, 1, (dvoid *)clob, 8000,
+    printf("<<< stmthp=%p\n", stmthp);
+    printf(">>> OCIDescriptorAlloc(%p, %p)\n", envhp, &clob);
+    if (0) {
+        if ((*status = OCIDescriptorAlloc((dvoid*)envhp, (dvoid **)&clob,
+                         (ub4)OCI_DTYPE_LOB, (size_t)0, (dvoid**)0)) != OCI_SUCCESS) {
+            return "Alloc Clob";
+        }
+    } else {
+        if ((*status = _lobAlloc(envhp, (dvoid*)&clob, 1)) != OCI_SUCCESS) {
+            return "Alloc CLob";
+        }
+    }
+    printf("<<< clob=%p\n", clob);
+    printf(">>> OCIBindByPos(%p, %p, %p, %p)\n", stmthp, &bindhp, errhp, clob);
+    if ((*status = OCIBindByPos(stmthp, &bindhp, errhp, 1,
+               (void*)(&clob), sizeof(OCILobLocator *),
                  SQLT_CLOB, 0, 0, 0, 0, 0, (ub4) OCI_DEFAULT)) != OCI_SUCCESS) {
-        return status;
+        return "Bind";
     }
-    if ((status = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, 0, 0, OCI_DEFAULT)) != OCI_SUCCESS) {
-        return status;
+    printf("<<< bindhp=%p\n", bindhp);
+    printf(">>> OCIStmtExecute(%p, %p, %p)\n", svchp, stmthp, errhp);
+    if ((*status = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT)) != OCI_SUCCESS) {
+        return "Exec";
     }
-    if ((status = OCILobGetLength(svchp, errhp, clob, &loblen)) != OCI_SUCCESS) {
-        return status;
+    printf(">>> OCILobGetLength(%p, %p, %p, %p)\n", svchp, errhp, clob, &loblen);
+    if ((*status = OCILobGetLength(svchp, errhp, clob, &loblen)) != OCI_SUCCESS) {
+        return "GetLength";
     }
-    return status;
+    printf("<<< loblen=%d\n", loblen);
+    return "OK";
 }
 */
 import "C"
 
 import (
-//"fmt"
-//"log"
+	"fmt"
+	"log"
+
 //"time"
 )
 
 func testLobOutC(cur *Cursor, qry string) (err error) {
 	qryB := []byte(qry)
+	var status C.sword
 
-	if err = cur.environment.CheckStatus(
-		C._testLobOut(cur.environment.handle,
-			cur.environment.errorHandle, cur.connection.handle,
-			cur.handle, (*C.text)(&qryB[0])),
-		"C._testLobOut"); err != nil {
-		return err
+	msgC := C._testLobOut(cur.environment.handle,
+		cur.environment.errorHandle, cur.connection.handle,
+		cur.handle, (*C.text)(&qryB[0]), &status)
+	msg := C.GoString(msgC)
+	log.Printf("status=%d msg=%s", status, msg)
+
+	if err = cur.environment.CheckStatus(status, "C._testLobOut"); err != nil {
+		return fmt.Errorf("%s: %s", msg, err)
 	}
 	return nil
 }

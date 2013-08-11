@@ -23,7 +23,8 @@ import (
 	//"time"
 )
 
-func TestLobOutC(t *testing.T) {
+//comment out - used only for discovering the "invalid handle" error with LOBs
+func _TestLobOutC(t *testing.T) {
 	conn := getConnection(t)
 	if !conn.IsConnected() {
 		t.FailNow()

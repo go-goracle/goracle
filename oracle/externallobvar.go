@@ -28,7 +28,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"runtime"
+	//"runtime"
 	"unsafe"
 )
 
@@ -43,7 +43,8 @@ type ExternalLobVar struct {
 }
 
 func (lv ExternalLobVar) getHandle() *C.OCILobLocator {
-	return (*C.OCILobLocator)(lv.lobVar.getHandle(lv.pos))
+	lob, _ := lv.lobVar.getLobLoc(lv.pos)
+	return lob
 }
 func (lv ExternalLobVar) getHandleBytes() []byte {
 	return lv.lobVar.getHandleBytes(lv.pos)
@@ -87,7 +88,6 @@ func (lv *ExternalLobVar) Verify() error {
 // internalRead returns the size of the LOB variable for internal comsumption.
 func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err error) {
 	var charsetID C.ub2
-	//j := lv.pos * lv.lobVar.typ.size
 
 	if lv.isFile {
 		// Py_BEGIN_ALLOW_THREADS
@@ -98,7 +98,6 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 		if err = lv.lobVar.environment.CheckStatus(
 			C.OCILobFileOpen(lv.lobVar.connection.handle,
 				lv.lobVar.environment.errorHandle,
-				//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[j])),
 				lv.getHandle(), C.OCI_FILE_READONLY),
 			"LobFileOpen"); err != nil {
 			return
@@ -113,35 +112,34 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 	} else {
 		charsetID = 0
 	}
-	length = int64(len(p))
-	olength := C.ub4(length + 1)
+	var byteLen = C.oraub8(len(p))
+	var charLen = C.oraub8(0)
 	if CTrace {
-		ctrace("OCILobRead(conn=%p, lob=%x, olength=%d, off=%d, &p=%p "+
-			"len(p)=%d, csID=%d, csF=%d",
+		ctrace("OCILobRead2(conn=%p, lob=%x, byteLen=%d, charLen=%d, off=%d, &p=%p "+
+			"len(p)=%d, piece=%d, csID=%d, csF=%d",
 			lv.lobVar.connection.handle,
-			//lv.lobVar.dataBytes[j:j+lv.lobVar.typ.size],
-			lv.getHandleBytes(),
-			olength, off+1, &p[0],
-			len(p), charsetID, lv.lobVar.typ.charsetForm)
+			lv.getHandleBytes(), byteLen, charLen, off+1,
+			&p[0], byteLen, C.OCI_ONE_PIECE,
+			charsetID, lv.lobVar.typ.charsetForm)
 	}
 	if err = lv.lobVar.environment.CheckStatus(
-		C.OCILobRead(lv.lobVar.connection.handle,
+		C.OCILobRead2(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[j])),
-			lv.getHandle(), &olength, C.ub4(off+1), unsafe.Pointer(&p[0]),
-			C.ub4(len(p)), nil, nil, charsetID, lv.lobVar.typ.charsetForm),
+			lv.getHandle(), &byteLen, &charLen, C.oraub8(off+1),
+			unsafe.Pointer(&p[0]), C.oraub8(len(p)), C.OCI_ONE_PIECE,
+			nil, nil, charsetID, lv.lobVar.typ.charsetForm),
 		"LobRead"); err != nil {
 		// Py_END_ALLOW_THREADS
 		if CTrace {
-			ctrace("OCILobFileClose(conn=%p, lob=%x)",
+			ctrace("OCILobFileClose(conn=%p, lob=%p)",
 				lv.lobVar.connection.handle, lv.getHandleBytes())
 		}
 		C.OCILobFileClose(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[j])))
 			lv.getHandle())
 		return
 	}
+	length = int64(byteLen)
 
 	if lv.isFile {
 		// Py_BEGIN_ALLOW_THREADS
@@ -152,7 +150,6 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 		if err = lv.lobVar.environment.CheckStatus(
 			C.OCILobFileClose(lv.lobVar.connection.handle,
 				lv.lobVar.environment.errorHandle,
-				//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[j]))),
 				lv.getHandle()),
 			"LobFileClose"); err != nil {
 			return
@@ -173,13 +170,13 @@ func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
 		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
 			lv.lobVar.connection.handle, lv.pos*lv.lobVar.typ.size,
 			lv.getHandleBytes(), &length)
-		buf := make([]byte, 8192)
-		ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
+		//buf := make([]byte, 8192)
+		//ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
+		//ctrace("data[%d]=%p", lv.pos, lob)
 	}
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobGetLength(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.typ.size])),
 			lv.getHandle(), &length),
 		"LobGetLength"); err != nil {
 		return
@@ -266,15 +263,12 @@ func (lv *ExternalLobVar) Open() error {
 	}
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
-		//j := lv.pos * lv.lobVar.typ.size
 		ctrace("OCILobOpen(conn=%p, lob=%x, OCI_LOB_READWRITE)",
 			lv.lobVar.connection.handle, lv.getHandleBytes())
-		//lv.lobVar.dataBytes[j:j+lv.lobVar.typ.size])
 	}
 	return lv.lobVar.environment.CheckStatus(
 		C.OCILobOpen(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.typ.size])),
 			lv.getHandle(), C.OCI_LOB_READWRITE),
 		"LobOpen")
 	// Py_END_ALLOW_THREADS
@@ -287,15 +281,12 @@ func (lv *ExternalLobVar) Close() error {
 	}
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
-		//j := lv.pos * lv.lobVar.typ.size
 		ctrace("OCILobFileClose(conn=%p, lob=%x)",
 			lv.lobVar.connection.handle, lv.getHandleBytes())
-		//lv.lobVar.dataBytes[j:j+lv.lobVar.typ.size])
 	}
 	return lv.lobVar.environment.CheckStatus(
 		C.OCILobClose(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.typ.size]))),
 			lv.getHandle()),
 		"LobClose")
 	// Py_END_ALLOW_THREADS
@@ -319,7 +310,11 @@ func (lv *ExternalLobVar) ReadAll() ([]byte, error) {
 		return nil, fmt.Errorf("cannot get internal size of %s: %s", lv, err)
 	}
 	p := make([]byte, uint(amount))
-	_, err = lv.ReadAt(p, 0)
+	var n int
+	n, err = lv.ReadAt(p, 0)
+	if n >= 0 && n < len(p) {
+		p = p[:n]
+	}
 	return p, err
 }
 
@@ -349,7 +344,6 @@ func (lv *ExternalLobVar) Trim(newSize int) error {
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobTrim(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.typ.size])),
 			lv.getHandle(), C.ub4(newSize)),
 		"LobTrim"); err != nil {
 		return err
@@ -374,7 +368,6 @@ func (lv *ExternalLobVar) GetChunkSize() (int, error) {
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobGetChunkSize(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.size])),
 			lv.getHandle(), &chunkSize),
 		"LobGetChunkSize"); err != nil {
 		return 0, err
@@ -399,7 +392,6 @@ func (lv *ExternalLobVar) IsOpen() (bool, error) {
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobIsOpen(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.size])),
 			lv.getHandle(), &isOpen),
 		"LobIsOpen"); err != nil {
 		return false, err
@@ -428,7 +420,6 @@ func (lv *ExternalLobVar) GetFileName() (string, string, error) {
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobFileGetName(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.size])),
 			lv.getHandle(),
 			(*C.OraText)(&dirAliasB[0]), &dirAliasLength,
 			(*C.OraText)(&nameB[0]), &nameLength),
@@ -454,12 +445,11 @@ func (lv *ExternalLobVar) SetFileName(dirAlias, name string) error {
 			lv.lobVar.connection.handle, lv.getHandleBytes(),
 			dirAliasB, len(dirAlias), nameB, len(nameB))
 	}
-	// FIXME: **C.OCILobLocator
+	lob := lv.getHandle()
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobFileSetName(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(**C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.size])),
-			(**C.OCILobLocator)(unsafe.Pointer(lv.getHandle())),
+			&lob,
 			(*C.OraText)(&dirAliasB[0]), C.ub2(len(dirAliasB)),
 			(*C.OraText)(&nameB[0]), C.ub2(len(nameB))),
 		"LobFileSetName"); err != nil {
@@ -487,7 +477,6 @@ func (lv *ExternalLobVar) FileExists() (bool, error) {
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobFileExists(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
-			//(*C.OCILobLocator)(unsafe.Pointer(&lv.lobVar.dataBytes[lv.pos*lv.lobVar.size])),
 			lv.getHandle(), &flag),
 		"LobFileExists"); err != nil {
 		return false, err

@@ -21,16 +21,37 @@ package oracle
 #cgo LDFLAGS: -lclntsh -L/usr/lib/oracle/11.2/client64/lib
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <oci.h>
 
 const unsigned int sof_OCILobLocatorp = sizeof(OCILobLocator*); // element length
+
+OCILobLocator *getLobLoc(void *data, int pos) {
+    return ((OCILobLocator**)data)[pos];
+}
+
+sword lobAlloc(OCIEnv *envhp, void *data, int allocatedElements) {
+    int i;
+    sword status;
+
+	for (i = 0; i < allocatedElements; i++) {
+        fprintf(stderr, "=== data[%d]=%p\n", i, ((OCILobLocator**)data)[i]);
+		if ((status = OCIDescriptorAlloc(envhp,
+                (void**)((OCILobLocator**)data + i),
+                OCI_DTYPE_LOB, 0, NULL)) != OCI_SUCCESS) {
+            return status;
+        }
+        fprintf(stderr, "=== data[%d]=%p\n", i, ((OCILobLocator**)data)[i]);
+    }
+    return status;
+}
 */
 import "C"
 
 import (
 	"errors"
 	"fmt"
-	"runtime"
+	//"runtime"
 	"unsafe"
 )
 
@@ -55,43 +76,47 @@ func lobVarInitialize(v *Variable, cur *Cursor) error {
 	// v.isFile = v.typ == BFileVarType
 
 	// initialize the LOB locators
-	var (
-		x   unsafe.Pointer
-		err error
-	)
-	for i := uint(0); i < v.allocatedElements; i++ {
-		x = v.getHandle(i)
-		if err = v.environment.CheckStatus(
-			C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
-				&x, C.OCI_DTYPE_LOB, 0, nil),
-			"DescrAlloc"); err != nil {
-			return err
-		}
-		if CTrace {
-			ctrace("lobVarInitialize(x=%p (%x))", x, x)
-		}
-		v.setHandle(i, x)
-		if CTrace {
-			ctrace("lobVarInitialize(env=%p, i=%d, lob=%x)",
-				v.environment.handle, i, v.getHandleBytes(i))
-		}
-		/*
-			for j := 0; j < int(v.typ.size/2); j++ { // reverse
-				v.dataBytes[int(i*v.typ.size)+j], v.dataBytes[int((i+1)*v.typ.size)-j-1] = v.dataBytes[int((i+1)*v.typ.size)-j-1], v.dataBytes[int(i*v.typ.size)+j]
-			}
-		*/
-		/*
-			if n, err = v.getLobInternalSize(i); err != nil {
-				return fmt.Errorf("the freshly initialized LobLocator is bad!? %s", err)
+	//dst := unsafe.Pointer(&v.dataBytes[0])
+	if err := v.environment.CheckStatus(
+		C.lobAlloc(v.environment.handle, unsafe.Pointer(&v.dataBytes[0]), //unsafe.Pointer(&dst),
+			C.int(v.allocatedElements)),
+		"DescrAlloc"); err != nil {
+		return err
+	}
+	/*
+		var (
+			x   **C.OCILobLocator
+			err error
+		)
+		for i := uint(0); i < v.allocatedElements; i++ {
+			x = (**C.OCILobLocator)(v.getHandle(i))
+			if err = v.environment.CheckStatus(
+				C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
+					(*unsafe.Pointer)(unsafe.Pointer(x)), C.OCI_DTYPE_LOB, 0, nil),
+				"DescrAlloc"); err != nil {
+				return err
 			}
 			if CTrace {
-				ctrace("lobVarInitialize(env=%p, i=%d, n=%d, lob=%x)",
-					v.environment.handle, i, n, v.getHandleBytes(i))
+				ctrace("lobVarInitialize(x=%p (%x))", x, x)
 			}
-		*/
-	}
+			v.setHandle(i, unsafe.Pointer(*x))
+			if CTrace {
+				ctrace("lobVarInitialize(env=%p, i=%d, lob=%x)",
+					v.environment.handle, i, v.getHandleBytes(i))
+			}
+		}
+	*/
 
 	return nil
+}
+
+func (v *Variable) getLobLoc(pos uint) (*C.OCILobLocator, error) {
+	switch v.typ {
+	case ClobVarType, NClobVarType, BlobVarType, BFileVarType:
+	default:
+		return nil, fmt.Errorf("getLobLoc is usable only for LOB vars, not for %s", v.typ.Name)
+	}
+	return C.getLobLoc(unsafe.Pointer(&v.dataBytes[0]), C.int(pos)), nil
 }
 
 func (v *Variable) getLobInternalSize(pos uint) (length C.ub4, err error) {
@@ -100,18 +125,20 @@ func (v *Variable) getLobInternalSize(pos uint) (length C.ub4, err error) {
 	default:
 		return 0, fmt.Errorf("getLobInternalSize is usable only for LOB vars! not for %T", v.typ)
 	}
+	lob, _ := v.getLobLoc(pos)
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
 		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
 			v.connection.handle, pos*v.typ.size,
 			v.getHandleBytes(pos), &length)
-		buf := make([]byte, 8192)
-		ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
+		//buf := make([]byte, 8192)
+		//ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
+		//ctrace("data[%d]=%p", pos, lob)
 	}
 	if err = v.environment.CheckStatus(
 		C.OCILobGetLength(v.connection.handle,
-			v.environment.errorHandle,
-			(*C.OCILobLocator)(v.getHandle(pos)), &length),
+			v.environment.errorHandle, lob,
+			&length),
 		"LobGetLength"); err != nil {
 		return
 	}
@@ -131,7 +158,10 @@ func lobVarPreFetch(v *Variable) (err error) {
 		hndl        *C.OCILobLocator
 	)
 	for i := uint(0); i < v.allocatedElements; i++ {
-		hndl = (*C.OCILobLocator)(v.getHandle(i))
+		//hndl = (*C.OCILobLocator)(v.getHandle(i))
+		if hndl, err = v.getLobLoc(i); err != nil {
+			return
+		}
 		if hndl == nil {
 			continue
 		}
