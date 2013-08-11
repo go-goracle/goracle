@@ -7,21 +7,21 @@ compliant wrapper for goracle/oracle - passes github.com/bradfitz/go-sql-test (a
 
 ## There ##
 CHAR, VARCHAR2, NUMBER, DATETIME simple AND array bind/define.
+CURSOR, LOB
 
 ## Not working ##
 INTERVAL
 
 ## Not working ATM ##
-CURSOR
 
 ## Not tested (yet) ##
-LONG, LONG RAW, LOB datatypes.
+LONG, LONG RAW, LOB datatypes (needs test cases, simple CLOB readout works).
 
 
 # Debug #
 You can build the test executable (for debugging with gdb, for example) with
 go test -c
 
-You can build a tracing version with the "trace" build tag 
+You can build a tracing version with the "trace" build tag
 (go build -tags=trace) that will print out everything before calling OCI
 C functions.
