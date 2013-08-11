@@ -26,12 +26,18 @@ go test $TOPTS -work -c -tags trace ./oracle
 ln -sf /tmp/go-build[0-9]* /tmp/go-build-goracle
 
 if [ -e /etc/init.d/oracle-xe ]; then
-    systemctl is-active oracle-xe.service || {
+    if systemctl is-active oracle-xe.service; then
+        echo 'oracle-xe is running'
+    else
         sudo systemctl start oracle-xe.service
-        while [ ! systemctl is-active oracle-xe.service ]; do
+        while true; do
+            if systemctl is-active oracle-xe.service; then
+                break
+            fi
             echo "waiting for Oracle"
             sleep 1
         done
-    }
+    fi
 fi
+echo "./oracle.test -dsn=\$\(cat $(dirname $0)/.dsn\) ""$@"
 ./oracle.test -dsn=$(cat $(dirname $0)/.dsn) "$@"
