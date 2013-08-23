@@ -444,17 +444,16 @@ func TestLobOut(t *testing.T) {
 	}
 	cur := conn.NewCursor()
 	defer cur.Close()
-	out, err := cur.NewVariable(0, ClobVarType, 0)
-	if err != nil {
-		t.Errorf("error getting cursor variable: %s", err)
-		t.FailNow()
-	}
 
 	str := "before line break\nafter line break\n" + accented
-	qry := `DECLARE
+	for i, rec := range []struct {
+		qry  string
+		vtyp *VariableType
+	}{
+		{`DECLARE
   clobvar CLOB;
   len     BINARY_INTEGER;
-  x       VARCHAR2(80);
+  x       VARCHAR2(32767);
 BEGIN
   dbms_lob.createtemporary(clobvar, TRUE);
   dbms_lob.open(clobvar, dbms_lob.lob_readwrite);
@@ -463,32 +462,56 @@ BEGIN
   dbms_lob.writeappend(clobvar, len, x);
   :1 := clobvar;
   dbms_lob.close(clobvar);
-END;`
+END;`, ClobVarType},
+		{`DECLARE
+  blobvar BLOB;
+  len     BINARY_INTEGER;
+  x       RAW(32767);
+BEGIN
+  dbms_lob.createtemporary(blobvar, TRUE);
+  dbms_lob.open(blobvar, dbms_lob.lob_readwrite);
+  x := UTL_RAW.CAST_TO_RAW('` + str + `');
+  len := length(x);
 
-	if err = cur.Execute(qry, []interface{}{out}, nil); err != nil {
-		t.Errorf("error executing `%s`: %s", qry, err)
-		t.FailNow()
-	}
-	outVal, err := out.GetValue(0)
-	if err != nil {
-		t.Errorf("cannot get out value: %s", err)
-		t.FailNow()
-	}
-	log.Printf("outVal: %T %s", outVal, outVal)
-	ext, ok := outVal.(*ExternalLobVar)
-	if !ok {
-		t.Errorf("outVal is not *ExternalLobVar, but %T", outVal)
-		t.FailNow()
-	}
-	buf, err := ext.ReadAll()
-	if err != nil {
-		t.Errorf("error reading LOB: %s", err)
-		t.FailNow()
-	}
-	t.Logf("read %q (%d)", buf, len(buf))
-	if len(buf) != len(str) {
-		t.Errorf("read %q from the buffer (%d bytes), awaited %q (%d bytes)",
-			buf, len(buf), str, len(str))
-		t.Fail()
+  dbms_lob.writeappend(blobvar, len, x);
+
+  :1 := blobvar;
+
+
+  dbms_lob.close(blobvar);
+
+
+END;`, BlobVarType}} {
+		out, err := cur.NewVariable(0, rec.vtyp, 0)
+		if err != nil {
+			t.Errorf("%d. error getting cursor variable: %s", i, err)
+			t.FailNow()
+		}
+		if err = cur.Execute(rec.qry, []interface{}{out}, nil); err != nil {
+			t.Errorf("%d. error executing `%s`: %s", i, rec.qry, err)
+			t.FailNow()
+		}
+		outVal, err := out.GetValue(0)
+		if err != nil {
+			t.Errorf("%d. cannot get out value: %s", i, err)
+			t.FailNow()
+		}
+		log.Printf("%d. outVal: %T %s", i, outVal, outVal)
+		ext, ok := outVal.(*ExternalLobVar)
+		if !ok {
+			t.Errorf("%d. outVal is not *ExternalLobVar, but %T", i, outVal)
+			t.FailNow()
+		}
+		buf, err := ext.ReadAll()
+		if err != nil {
+			t.Errorf("%d. error reading LOB: %s", i, err)
+			t.FailNow()
+		}
+		t.Logf("%d. read %q (%d)", i, buf, len(buf))
+		if len(buf) != len(str) {
+			t.Errorf("%d. read %q from the buffer (%d bytes), awaited %q (%d bytes)",
+				i, buf, len(buf), str, len(str))
+			t.Fail()
+		}
 	}
 }

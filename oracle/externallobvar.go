@@ -32,6 +32,8 @@ import (
 	"unsafe"
 )
 
+const useLobRead2 = false
+
 // Defines the routines for handling LOB variables external to this module.
 
 // ExternalLobVar is an external LOB var type
@@ -113,44 +115,46 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 		charsetID = 0
 	}
 	var (
-		oLength = C.ub4(len(p))
-		byteLen = C.oraub8(len(p))
-		charLen = C.oraub8(0)
+		//byteLen = C.oraub8(len(p))
+		//charLen = C.oraub8(0)
+		byteLen = C.ub4(len(p))
 		status  C.sword
 		pos     = int(0)
 	)
 	for {
-		if false {
-			if CTrace {
-				ctrace("OCILobRead2(conn=%p, lob=%x, byteLen=%d, charLen=%d, off=%d, &p=%p "+
-					"len(p)=%d, piece=%d, csID=%d, csF=%d",
-					lv.lobVar.connection.handle,
-					lv.getHandleBytes(), byteLen, charLen, off+1,
-					&p[pos], len(p)-pos, C.OCI_ONE_PIECE,
-					charsetID, lv.lobVar.typ.charsetForm)
-			}
-			status = C.OCILobRead2(lv.lobVar.connection.handle,
-				lv.lobVar.environment.errorHandle,
-				lv.getHandle(), &byteLen, &charLen, C.oraub8(off+1),
-				unsafe.Pointer(&p[pos]), C.oraub8(len(p)-pos), C.OCI_ONE_PIECE,
-				nil, nil, charsetID, lv.lobVar.typ.charsetForm)
-		} else {
-			if CTrace {
-				//log.Printf("p=%q len(p)=%d pos=%d oLength=%d", p, len(p), pos, oLength)
-				ctrace("OCILobRead(conn=%p, lob=%x, oLength=%d, off=%d, &p=%p "+
-					"len(p)=%d, csID=%d, csF=%d",
-					lv.lobVar.connection.handle,
-					lv.getHandleBytes(), oLength, off+1,
-					&p[pos], len(p)-pos,
-					charsetID, lv.lobVar.typ.charsetForm)
-			}
-			status = C.OCILobRead(lv.lobVar.connection.handle,
-				lv.lobVar.environment.errorHandle,
-				lv.getHandle(), &oLength, C.ub4(off+1),
-				unsafe.Pointer(&p[pos]), C.ub4(len(p)-pos),
-				nil, nil,
+		/*
+			if useLobRead2 {
+				if CTrace {
+					ctrace("OCILobRead2(conn=%p, lob=%x, byteLen=%d, charLen=%d, off=%d, &p=%p "+
+						"len(p)=%d, piece=%d, csID=%d, csF=%d",
+						lv.lobVar.connection.handle,
+						lv.getHandleBytes(), byteLen, charLen, off+1,
+						&p[pos], len(p)-pos, C.OCI_ONE_PIECE,
+						charsetID, lv.lobVar.typ.charsetForm)
+				}
+				status = C.OCILobRead2(lv.lobVar.connection.handle,
+					lv.lobVar.environment.errorHandle,
+					lv.getHandle(), &byteLen, &charLen, C.oraub8(off+1),
+					unsafe.Pointer(&p[pos]), C.oraub8(len(p)-pos), C.OCI_ONE_PIECE,
+					nil, nil, charsetID, lv.lobVar.typ.charsetForm)
+			} else {
+		*/
+		if CTrace {
+			//log.Printf("p=%q len(p)=%d pos=%d byteLen=%d", p, len(p), pos, byteLen)
+			ctrace("OCILobRead(conn=%p, lob=%x, byteLen=%d, off=%d, &p=%p "+
+				"len(p)=%d, csID=%d, csF=%d",
+				lv.lobVar.connection.handle,
+				lv.getHandleBytes(), byteLen, off+1,
+				&p[pos], len(p)-pos,
 				charsetID, lv.lobVar.typ.charsetForm)
 		}
+		status = C.OCILobRead(lv.lobVar.connection.handle,
+			lv.lobVar.environment.errorHandle,
+			lv.getHandle(), &byteLen, C.ub4(off+1),
+			unsafe.Pointer(&p[pos]), C.ub4(len(p)-pos),
+			nil, nil,
+			charsetID, lv.lobVar.typ.charsetForm)
+		//}
 		if !(status == C.OCI_SUCCESS || status == C.OCI_NEED_DATA) {
 			err = lv.lobVar.environment.CheckStatus(status, "LobRead")
 			if CTrace {
@@ -163,17 +167,14 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int64, err e
 			return
 		}
 
-		//off += int64(byteLen)
-		//length += int64(byteLen)
-		off += int64(oLength)
-		length += int64(oLength)
+		off += int64(byteLen)
+		length += int64(byteLen)
 		if status == C.OCI_SUCCESS {
 			break
 		}
-		//pos += int(byteLen)
+		pos += int(byteLen)
 		//byteLen = C.oraub8(len(p) - pos)
-		pos += int(oLength)
-		oLength = C.ub4(len(p) - pos)
+		byteLen = C.ub4(len(p) - pos)
 	}
 
 	if lv.isFile {
