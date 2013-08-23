@@ -56,8 +56,6 @@ import (
 )
 
 var (
-	//IntervalWorks should be true only if Interval datatype works
-	IntervalWorks = false
 	//DateTimeVarType is the variable type for DateTime
 	DateTimeVarType *VariableType
 	//IntervalVarType is the variable type for Interval

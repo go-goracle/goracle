@@ -23,6 +23,14 @@ import (
 	"time"
 )
 
+/*
+declare
+  ival interval day(0) to second(0);
+begin
+  select interval '05:30' hour to minute into ival from dual;
+  dbms_output.put_line( ival );
+end;
+*/
 var accented = "árvíztűrő tükörfúrógép"
 
 var dataTypesTests = []struct {
@@ -37,7 +45,7 @@ var dataTypesTests = []struct {
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
 	{"SELECT HEXTORAW('00') FROM DUAL", "\x00"},
-	// {"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
+	{"SELECT INTERVAL '05:30' HOUR TO MINUTE FROM DUAL", "05:30"},
 }
 
 func TestSimpleTypes(t *testing.T) {

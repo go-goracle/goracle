@@ -236,8 +236,8 @@ func (cur *Cursor) performDefine() error {
 
 	// determine number of items in select-list
 	if CTrace {
-		ctrace("performDefine.OCIAttrGet", cur.handle, "HTYPE_STMT", &numParams, &x,
-			"PARAM_COUNT", cur.environment.errorHandle)
+		ctrace("performDefine.OCIAttrGet(cur=%p, HTYPE_STMT, numParams=%p, &x=%p, PARAM_COUNT, env=%p)",
+			cur.handle, &numParams, &x, cur.environment.errorHandle)
 	}
 	if err := cur.environment.CheckStatus(
 		C.OCIAttrGet(unsafe.Pointer(cur.handle),
@@ -1400,10 +1400,13 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 	if cur.fetchVariables == nil {
 		return errors.New("query not executed")
 	}
-	// debug("fetchVars=%v", cur.fetchVariables)
+	debug("fetchVars=%v", cur.fetchVariables)
 	var err error
 	for _, v := range cur.fetchVariables {
-		// debug("fetchvar %d=%s", v.internalFetchNum, v)
+		if CTrace {
+			ctrace("fetchvar %d=%s", v.internalFetchNum, v)
+			ctrace("typ=%v", v.typ)
+		}
 		v.internalFetchNum++
 		// debug("typ=%s", v.typ)
 		// debug("preFetch=%s", v.typ.preFetch)
@@ -1416,8 +1419,8 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 	// debug("StmtFetch numRows=%d", numRows)
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
-		ctrace("OCIStmtFetch", cur.handle, cur.environment.errorHandle,
-			numRows, "FETCH_NEXT", "DEFAULT")
+		ctrace("OCIStmtFetch(cur=%p, env=%p, numRows=%d, FETCH_NEXT, DEFAULT)",
+			cur.handle, cur.environment.errorHandle, numRows)
 	}
 	if err = cur.environment.CheckStatus(
 		C.OCIStmtFetch(cur.handle, cur.environment.errorHandle,

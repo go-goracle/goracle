@@ -128,7 +128,7 @@ func TestCursor(t *testing.T) {
 	}
 	t.Logf("%03d: %v", 0, row)
 
-	if IntervalWorks {
+	if CTrace {
 		qry = `SELECT TO_DSINTERVAL('2 10:20:30.456') FROM DUAL`
 		if err = cur.Execute(qry, nil, nil); err != nil {
 			t.Logf(`error with "%s": %s`, qry, err)

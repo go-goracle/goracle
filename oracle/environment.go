@@ -310,7 +310,8 @@ func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 	dst unsafe.Pointer, errText string) (int, error) {
 	var osize C.ub4
 	if CTrace {
-		ctrace("OCIAttrGet", parent, C.ub4(parentType), dst, &osize, C.ub4(key), env.errorHandle)
+		ctrace("OCIAttrGet(parent=%p, parentType=%d, dst=%p, osize=%p, key=%d, env=%p)",
+			parent, C.ub4(parentType), dst, &osize, C.ub4(key), env.errorHandle)
 	}
 	if err := env.CheckStatus(
 		C.OCIAttrGet(parent, C.ub4(parentType), dst, &osize, C.ub4(key),
