@@ -13,6 +13,7 @@ CHAR, VARCHAR2, NUMBER, DATETIME simple AND array bind/define.
 CURSOR, LOB, INTERVAL
 
 ## Not working ##
+BLOB read
 
 ## Not working ATM ##
 

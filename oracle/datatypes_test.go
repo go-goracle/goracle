@@ -470,7 +470,7 @@ END;`, ClobVarType},
 BEGIN
   dbms_lob.createtemporary(blobvar, TRUE);
   dbms_lob.open(blobvar, dbms_lob.lob_readwrite);
-  x := UTL_RAW.CAST_TO_RAW('` + str + `');
+  x := UTL_RAW.CAST_TO_RAW('AAA');
   len := length(x);
 
   dbms_lob.writeappend(blobvar, len, x);
@@ -481,7 +481,8 @@ BEGIN
   dbms_lob.close(blobvar);
 
 
-END;`, BlobVarType}} {
+END;`, BlobVarType},
+	} {
 		out, err := cur.NewVariable(0, rec.vtyp, 0)
 		if err != nil {
 			t.Errorf("%d. error getting cursor variable: %s", i, err)
