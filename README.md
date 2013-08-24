@@ -10,10 +10,9 @@ compliant wrapper for goracle/oracle - passes github.com/bradfitz/go-sql-test
 
 ## There ##
 CHAR, VARCHAR2, NUMBER, DATETIME simple AND array bind/define.
-CURSOR, LOB
+CURSOR, LOB, INTERVAL
 
 ## Not working ##
-INTERVAL
 
 ## Not working ATM ##
 

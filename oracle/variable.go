@@ -764,7 +764,9 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 			log.Printf("error getting data size: %+v", err)
 			return nil, err
 		}
-		// log.Printf("size of %v @ %d: %d", param, position, sizeFromOracle)
+		if CTrace {
+			log.Printf("size of %p[%d] @ %d: %d", param, varType, position, sizeFromOracle)
+		}
 
 		// use the length from Oracle directly if available
 		if uint(sizeFromOracle) > 0 {

@@ -127,6 +127,38 @@ func dateTimeVarGetValue(v *Variable, pos uint) (interface{}, error) {
 		int(hour), int(minute), int(second), 0, time.Local), nil
 }
 
+// intervalVarInitialize initializes the variable.
+func intervalVarInitialize(v *Variable, cur *Cursor) (err error) {
+	var handle unsafe.Pointer
+	// initialize the interval locators
+	for i := uint(0); i < v.allocatedElements; i++ {
+		handle = v.getHandle(i)
+		if err = cur.environment.CheckStatus(
+			C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
+				&handle, C.OCI_DTYPE_INTERVAL_DS, 0, nil),
+			"interval Alloc"); err != nil {
+			return
+		}
+		v.setHandle(i, handle)
+	}
+	return nil
+}
+
+// intervalVarFinalize prepares for variable destruction.
+func intervalVarFinalize(v *Variable) error {
+	var status C.sword
+	var handle unsafe.Pointer
+	for i := uint(0); i < v.allocatedElements; i++ {
+		if handle = v.getHandle(i); handle != nil {
+			if status = C.OCIDescriptorFree(handle, C.OCI_DTYPE_INTERVAL_DS); status != C.OCI_SUCCESS {
+				return fmt.Errorf("error freeing Interval %d. handle %p: %d",
+					i, handle, status)
+			}
+		}
+	}
+	return nil
+}
+
 // intervalVarSetValue sets the value of the variable.
 func intervalVarSetValue(v *Variable, pos uint, value interface{}) error {
 	var days, hours, minutes, seconds, microseconds C.sb4
@@ -141,6 +173,13 @@ func intervalVarSetValue(v *Variable, pos uint, value interface{}) error {
 	minutes = C.sb4(x.Minutes() - x.Hours()*60)
 	seconds = C.sb4(x.Seconds()-x.Minutes()) * 60
 	microseconds = C.sb4(float64(x.Nanoseconds()/1000) - x.Seconds()*1000*1000)
+	if CTrace {
+		ctrace("OCIIntervalSetDaySecond(env=%p, err=%p, days=%d, hours=%d, min=%d, sec=%d, micro=%d, handle=%p)",
+			v.environment.handle,
+			v.environment.errorHandle,
+			days, hours, minutes, seconds, microseconds,
+			v.getHandle(pos))
+	}
 	return v.environment.CheckStatus(
 		C.OCIIntervalSetDaySecond(unsafe.Pointer(v.environment.handle),
 			v.environment.errorHandle,
@@ -153,11 +192,15 @@ func intervalVarSetValue(v *Variable, pos uint, value interface{}) error {
 func intervalVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	var days, hours, minutes, seconds, microseconds C.sb4
 
+	if CTrace {
+		ctrace("OCIIntervalGetDaySecond(env=%p, err=%p, handle=%p)",
+			v.environment.handle, v.environment.errorHandle, v.getHandle(pos))
+	}
 	if err := v.environment.CheckStatus(
 		C.OCIIntervalGetDaySecond(unsafe.Pointer(v.environment.handle),
 			v.environment.errorHandle,
 			&days, &hours, &minutes, &seconds, &microseconds,
-			(*C.OCIInterval)(unsafe.Pointer((&v.dataBytes[pos*v.typ.size])))),
+			(*C.OCIInterval)(v.getHandle(pos))),
 		"internalVar_GetValue"); err != nil {
 		return nil, err
 	}
@@ -183,6 +226,8 @@ func init() {
 	}
 	IntervalVarType = &VariableType{
 		Name:             "Interval",
+		initialize:       intervalVarInitialize,
+		finalize:         intervalVarFinalize,
 		setValue:         intervalVarSetValue,
 		getValue:         intervalVarGetValue,
 		oracleType:       C.SQLT_INTERVAL_DS,       // Oracle type
