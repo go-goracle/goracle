@@ -23,6 +23,14 @@ import (
 	"time"
 )
 
+/*
+declare
+  ival interval day(0) to second(0);
+begin
+  select interval '05:30' hour to minute into ival from dual;
+  dbms_output.put_line( ival );
+end;
+*/
 var accented = "árvíztűrő tükörfúrógép"
 
 var dataTypesTests = []struct {
@@ -37,6 +45,7 @@ var dataTypesTests = []struct {
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
 	{"SELECT HEXTORAW('00') FROM DUAL", "\x00"},
+	{"SELECT INTERVAL '05:30' HOUR TO MINUTE FROM DUAL", "05:30"},
 	{"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
 }
 
@@ -470,7 +479,7 @@ END;`, ClobVarType},
 BEGIN
   dbms_lob.createtemporary(blobvar, TRUE);
   dbms_lob.open(blobvar, dbms_lob.lob_readwrite);
-  x := UTL_RAW.CAST_TO_RAW('` + str + `');
+  x := UTL_RAW.CAST_TO_RAW('AAA');
   len := length(x);
 
   dbms_lob.writeappend(blobvar, len, x);
@@ -481,7 +490,8 @@ BEGIN
   dbms_lob.close(blobvar);
 
 
-END;`, BlobVarType}} {
+END;`, BlobVarType},
+	} {
 		out, err := cur.NewVariable(0, rec.vtyp, 0)
 		if err != nil {
 			t.Errorf("%d. error getting cursor variable: %s", i, err)

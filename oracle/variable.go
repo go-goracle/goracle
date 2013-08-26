@@ -764,7 +764,9 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 			log.Printf("error getting data size: %+v", err)
 			return nil, err
 		}
-		// log.Printf("size of %v @ %d: %d", param, position, sizeFromOracle)
+		if CTrace {
+			log.Printf("size of %p[%d] @ %d: %d", param, varType, position, sizeFromOracle)
+		}
 
 		// use the length from Oracle directly if available
 		if uint(sizeFromOracle) > 0 {
@@ -805,9 +807,10 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 	// perform the define
 	aL, rC := v.aLrC()
 	if CTrace {
-		ctrace("OCIDefineByPos", cur.handle, &v.defineHandle, v.environment.errorHandle,
+		ctrace("OCIDefineByPos(cur=%p, defineHandle=%p, env=%p, position=%d, dataArr=%v, bufferSize=%d, oracleType=%d indicator=%v, aL=%v rC=%v, DEFAULT)",
+			cur.handle, &v.defineHandle, v.environment.errorHandle,
 			position, v.getDataArr(), v.bufferSize, v.typ.oracleType, v.indicator,
-			aL, rC, "DEFAULT")
+			aL, rC)
 	}
 	if err = cur.environment.CheckStatus(
 		C.OCIDefineByPos(cur.handle,
@@ -839,7 +842,8 @@ func (cur *Cursor) varDefine(numElements, position uint) (*Variable, error) {
 	}
 	// log.Printf("retrieve parameter descriptor cur.handle=%s pos=%d", cur.handle, position)
 	if CTrace {
-		ctrace("OCIParamGet", cur.handle, "HTYPE_STMT", cur.environment.errorHandle,
+		ctrace("OCIParamGet(cur=%p, HTYPE_STMT, env=%p, param=%p, position=%d)",
+			cur.handle, "HTYPE_STMT", cur.environment.errorHandle,
 			&param, position)
 	}
 	if err := cur.environment.CheckStatus(
@@ -856,7 +860,7 @@ func (cur *Cursor) varDefine(numElements, position uint) (*Variable, error) {
 	v, err := cur.variableDefineHelper(param, position, numElements)
 	// log.Printf("variable defined err=%s nil?%s", err, err == nil)
 	if CTrace {
-		ctrace("OCIDescriptorFree", param, "DTYPE_PARAM")
+		ctrace("OCIDescriptorFree(%p, DTYPE_PARAM)", param)
 	}
 	C.OCIDescriptorFree(unsafe.Pointer(param), C.OCI_DTYPE_PARAM)
 	return v, err
@@ -887,11 +891,12 @@ func (v *Variable) internalBind() (err error) {
 			if m > 40 {
 				m = 40
 			}
-			ctrace("internalBind.OCIBindByName", v.boundCursorHandle, &v.bindHandle,
-				v.environment.errorHandle, "name="+string(bname), len(bname),
-				v.dataBytes[:m],
-				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
-				allElts, pActElts, "DEFAULT")
+			ctrace("internalBind.OCIBindByName(cur=%p, bind=%p, env=%p, name=%q, bufferSize=%d, oracleType=%d, data[:%d]=%v, indicator=%v, aL=%v, rC=%v, allElts=%v, pActElts=%v, DEFAULT)",
+				v.boundCursorHandle, &v.bindHandle,
+				v.environment.errorHandle, bname,
+				v.bufferSize, v.typ.oracleType, m, v.dataBytes[:m],
+				v.indicator, aL, rC,
+				allElts, pActElts)
 		}
 		status = C.OCIBindByName(v.boundCursorHandle,
 			&v.bindHandle,
@@ -906,8 +911,8 @@ func (v *Variable) internalBind() (err error) {
 			if m > 40 {
 				m = 40
 			}
-			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data=%v, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
-				v.boundCursorHandle, v.boundPos, v.dataBytes[:m],
+			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data[:%d]=%v, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
+				v.boundCursorHandle, v.boundPos, m, v.dataBytes[:m],
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
 				allElts, pActElts)
 		}
@@ -957,7 +962,11 @@ func (v *Variable) Bind(cur *Cursor, name string, pos uint) error {
 	}
 
 	// nothing to do if already bound
-	if v.bindHandle != nil && name == v.boundName && pos == v.boundPos {
+	if v.boundCursorHandle == cur.handle && v.bindHandle != nil &&
+		name == v.boundName && pos == v.boundPos {
+		if CTrace {
+			ctrace("already bound!")
+		}
 		return nil
 	}
 	if cur == nil {
