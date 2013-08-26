@@ -37,7 +37,7 @@ var dataTypesTests = []struct {
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
 	{"SELECT HEXTORAW('00') FROM DUAL", "\x00"},
-	// {"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
+	{"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
 }
 
 func TestSimpleTypes(t *testing.T) {
@@ -69,7 +69,15 @@ func TestSimpleTypes(t *testing.T) {
 			if row, err = cur.FetchOne(); err != nil {
 				t.Errorf("cannot fetch row: %s", err)
 			} else {
-				repr = fmt.Sprintf("%s", row[0])
+				if ex, ok := row[0].(*ExternalLobVar); ok {
+					var reprB []byte
+					if reprB, err = ex.ReadAll(); err != nil {
+						t.Errorf("error reading LOB %s: %s", ex, err)
+					}
+					repr = string(reprB)
+				} else {
+					repr = fmt.Sprintf("%s", row[0])
+				}
 				if repr != tt.out {
 					t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, repr, tt.out)
 				}

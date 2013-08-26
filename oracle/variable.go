@@ -883,9 +883,13 @@ func (v *Variable) internalBind() (err error) {
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {
+			m := v.bufferSize
+			if m > 40 {
+				m = 40
+			}
 			ctrace("internalBind.OCIBindByName", v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, "name="+string(bname), len(bname),
-				v.getDataArr(),
+				v.dataBytes[:m],
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
 				allElts, pActElts, "DEFAULT")
 		}
@@ -898,8 +902,12 @@ func (v *Variable) internalBind() (err error) {
 			aL, rC, allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
+			m := v.bufferSize
+			if m > 40 {
+				m = 40
+			}
 			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data=%v, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
-				v.boundCursorHandle, v.boundPos, v.dataBytes[:v.bufferSize],
+				v.boundCursorHandle, v.boundPos, v.dataBytes[:m],
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
 				allElts, pActElts)
 		}
