@@ -9,16 +9,15 @@ compliant wrapper for goracle/oracle - passes github.com/bradfitz/go-sql-test
 (as github.com/tgulacsi/go-sql-test).
 
 ## There ##
-CHAR, VARCHAR2, NUMBER, DATETIME simple AND array bind/define.
-CURSOR, LOB, INTERVAL
+CHAR, VARCHAR2, NUMBER, DATETIME, INTERVAL simple AND array bind/define.
+CURSOR, CLOB, BLOB
 
 ## Not working ##
-BLOB read
 
 ## Not working ATM ##
 
 ## Not tested (yet) ##
-LONG, LONG RAW, LOB datatypes (needs test cases, simple CLOB readout works).
+LONG, LONG RAW, BFILE
 
 
 # Debug #

@@ -479,17 +479,14 @@ END;`, ClobVarType},
 BEGIN
   dbms_lob.createtemporary(blobvar, TRUE);
   dbms_lob.open(blobvar, dbms_lob.lob_readwrite);
-  x := UTL_RAW.CAST_TO_RAW('AAA');
-  len := length(x);
+  x := UTL_RAW.CAST_TO_RAW('` + str + `');
+  len := UTL_RAW.length(x);
 
-  dbms_lob.writeappend(blobvar, len, x);
+  DBMS_LOB.writeappend(blobvar, len, x);
 
   :1 := blobvar;
 
-
   dbms_lob.close(blobvar);
-
-
 END;`, BlobVarType},
 	} {
 		out, err := cur.NewVariable(0, rec.vtyp, 0)
