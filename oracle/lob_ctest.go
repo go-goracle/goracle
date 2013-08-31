@@ -83,8 +83,8 @@ package oracle
 // }
 
 /*
-#cgo CFLAGS: -I/usr/include/oracle/11.2/client64
-#cgo LDFLAGS: -lclntsh -L/usr/lib/oracle/11.2/client64/lib
+
+#cgo LDFLAGS: -lclntsh
 
 #include <stdlib.h>
 #include <string.h>

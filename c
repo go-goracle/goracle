@@ -4,11 +4,14 @@ echo fmt
 go fmt ./...
 echo vet
 go vet ./...
-which golint >/dev/null || {
-    echo 'No golint installed: to install, run'
-    echo 'go get github.com/golang/lint/golint'
-    exit $?
-}
+if ! which golint >/dev/null; then
+    PATH=$GOPATH/bin:$PATH
+    if ! which golint >/dev/null; then
+        echo 'No golint installed: to install, run'
+        echo 'go get github.com/golang/lint/golint'
+        exit $?
+    fi
+fi
 set +e
 echo lint
 golint ./godrv | grep -v 'LastInsertID'
