@@ -25,7 +25,15 @@ if [ -n "$TRACE" ]; then
   TOPTS="$TOPTS -tags trace"
 fi
 rm -rf /tmp/go-build[0-9]*
-go test $TOPTS -work -c -tags trace ./oracle
+
+if [ -z "$CGO_CFLAGS" ]; then
+    export CGO_CFLAGS=-I$(dirname $(find $ORACLE_HOME -type f -name oci.h))
+    export CGO_LDFLAGS=-L$(dirname $(find $ORACLE_HOME -type f -name libclntsh.so\*))
+fi
+go test $TOPTS -work -c -tags trace ./oracle || {
+    echo "CFLAGS=$CGO_CFLAGS LDFLAGS=$CGO_LDFLAGS"
+    exit $?
+}
 ln -sf /tmp/go-build[0-9]* /tmp/go-build-goracle
 
 if [ -e /etc/init.d/oracle-xe ]; then

@@ -38,8 +38,8 @@ OR the Oracle's
 [InstantClient](http://www.oracle.com/technetwork/database/features/instant-client/index-097480.html) installed
 AND you have set proper environment variables:
 
-    CGO_CFLAGS=-I$(basename $(find $ORACLE_HOME -type f -name oci.h))
-    CGO_LDFLAGS=-L$(basename $(find $ORACLE_HOME -type f -name libclntsh.so\*))
+    export CGO_CFLAGS=-I$(dirname $(find $ORACLE_HOME -type f -name oci.h))
+    export CGO_LDFLAGS=-L$(dirname $(find $ORACLE_HOME -type f -name libclntsh.so\*))
     go get github.com/tgulacsi/goracle
 
 For example, with my [XE](http://www.oracle.com/technetwork/products/express-edition/downloads/index.html):

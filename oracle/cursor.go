@@ -17,7 +17,7 @@ limitations under the License.
 */
 
 /*
-#cgo LDFLAGS: -lclnts
+#cgo LDFLAGS: -lclntsh
 
 #include <stdlib.h>
 #include <oci.h>
