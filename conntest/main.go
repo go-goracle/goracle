@@ -82,7 +82,7 @@ func getConnection(t *testing.T) oracle.Connection {
 	user, passw, sid := oracle.SplitDsn(*dsn)
 	var err error
 	log.Printf("connecting to %s", *dsn)
-	conn, err = oracle.NewConnection(user, passw, sid)
+	conn, err = oracle.NewConnection(user, passw, sid, false)
 	if err != nil {
 		t.Logf("error creating connection to %s: %s", *dsn, err)
 		t.Fail()
