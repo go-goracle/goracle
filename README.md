@@ -21,6 +21,21 @@ Nothing I know of.
 ## Not tested (yet) ##
 LONG, LONG RAW, BFILE
 
+# Usage and intentions #
+I haven't had the pressure to force me understanding database/sql - yet.
+I've ported cx_Oracle because I'm using Python with Oracle most of,
+and no featureful OCI binding has existed for Go that time.
+Thus I'm fluent with cx_Oracle and that means goracle/oracle.
+
+BUT I'd start and stick with database/sql as long as it is possible
+- my impression is that Go's standard library is very high quality.
+
+Of course if you need to use Oracle's non-standard features
+(out bind variables, returning cursors, sending and receiving
+PL/SQL associative tables...) then goracle/oracle is the straight choice.
+
+For simple (connection, Ping, Select) usage, and testing connection
+(DSN can be tricky), see [conntest](conntest/main.go).
 
 # Debug #
 You can build the test executable (for debugging with gdb, for example) with
