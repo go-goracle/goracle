@@ -540,7 +540,7 @@ func max(numbers ...int) int {
 //SplitDsn splits username/password@sid
 func SplitDsn(dsn string) (username, password, sid string) {
 	if i := strings.LastIndex(dsn, "@"); i >= 0 {
-		fmt.Printf("dsn=%q (%d) i=%d\n", dsn, len(dsn), i)
+		//fmt.Printf("dsn=%q (%d) i=%d\n", dsn, len(dsn), i)
 		if i > 0 {
 			username = dsn[:i]
 		}
@@ -551,7 +551,7 @@ func SplitDsn(dsn string) (username, password, sid string) {
 		username = dsn
 	}
 	if i := strings.Index(username, "/"); i >= 0 {
-		fmt.Printf("username=%q (%d) i=%d\n", username, len(username), i)
+		//fmt.Printf("username=%q (%d) i=%d\n", username, len(username), i)
 		if i > 0 {
 			if i < len(username) {
 				password = username[i+1:]

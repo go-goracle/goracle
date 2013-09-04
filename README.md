@@ -35,7 +35,11 @@ C functions.
 It is `go get`'able iff you have
 [Oracle DB](http://www.oracle.com/technetwork/database/enterprise-edition/index.html) installed
 OR the Oracle's
-[InstantClient](http://www.oracle.com/technetwork/database/features/instant-client/index-097480.html) installed
+[InstantClient](http://www.oracle.com/technetwork/database/features/instant-client/index-097480.html)
+*both* the Basic Client and the SDK (for the header files), too!
+- installed
+
+## Linux ##
 AND you have set proper environment variables:
 
     export CGO_CFLAGS=-I$(dirname $(find $ORACLE_HOME -type f -name oci.h))
@@ -51,4 +55,21 @@ With InstantClient:
 
     CGO_CFLAGS=-I/usr/include/oracle/11.2/client64
     CGO_LDFLAGS=-L/usr/include/oracle/11.2/client64
+
+## Mac OS X ##
+For Mac OS X I did the following:
+
+You have to get both the Instant Client Package Basic and the Instant Client Package SDK (for the header files).
+
+Then set the env vars as this (note the SDK here was unpacked into the base directory of the Basic package)
+
+    export CGO_CFLAGS=-I/Users/dfils/src/oracle/instantclient_11_2/sdk/include
+    export CGO_LDFLAGS=-L/Users/dfils/src/oracle/instantclient_11_2
+    export DYLD_LIBRARY_PATH=/Users/dfils/src/oracle/instantclient_11_2:$DYLD_LIBRARY_PATH
+
+Perhaps this export would work too, but I did not try it.  I understand this is another way to do this
+
+    export DYLD_FALLBACK_LIBRARY_PATH=/Users/dfils/src/oracle/instantclient_11_2
+
+The DYLD vars are needed to run the binary, not to compile it.
 

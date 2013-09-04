@@ -16,6 +16,7 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"log"
 	"os"
@@ -71,6 +72,7 @@ func TestCursor(t *testing.T) {
 }
 
 var conn oracle.Connection
+var dsn string
 
 func getConnection(t *testing.T) oracle.Connection {
 	if conn.IsConnected() {
@@ -95,7 +97,7 @@ func getConnection(t *testing.T) oracle.Connection {
 			sid = oracle.MakeDSN(*fHost, *fPort, "", *fServiceName)
 		}
 	}
-	dsn := user + "/" + passw + "@" + sid
+	dsn = user + "/" + passw + "@" + sid
 	var err error
 	log.Printf("connecting to %s", dsn)
 	conn, err = oracle.NewConnection(user, passw, sid, false)
@@ -110,6 +112,22 @@ func getConnection(t *testing.T) oracle.Connection {
 	return conn
 }
 
+// TestSqlPing tests Ping function, through the stdlib's database/sql
+func TestSqlPing(t *testing.T) {
+	getConnection(t) //for dsn fill-up
+
+	conn, err := sql.Open("goracle", dsn)
+	if err != nil {
+		log.Printf("There was an error establishing the connection")
+	}
+	defer conn.Close()
+	err = conn.Ping()
+
+	if err != nil { /* error handling */
+		log.Printf("There was a ping error")
+	}
+}
+
 func main() {
 	flag.Parse()
 	if *fDsn == "" {
@@ -117,6 +135,7 @@ func main() {
 	}
 	t := new(testing.T)
 	if *fWait {
+		TestSqlPing(t)
 		c := make(chan os.Signal)
 		var wg sync.WaitGroup
 		wg.Add(1)
