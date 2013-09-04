@@ -17,26 +17,28 @@ package main
 
 import (
 	"flag"
-	"github.com/tgulacsi/goracle/oracle"
 	"log"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"testing"
+
+	"github.com/tgulacsi/goracle/oracle"
 )
 
 var (
-	dsn  = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
-	wait = flag.Bool("wait", false, "wait for USR1 signal?")
-)
+	fDsn = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
 
-func init() {
-	flag.Parse()
-	if *dsn == "" {
-		*dsn = os.Getenv("DSN")
-	}
-}
+	fUsername    = flag.String("username", "", "username to connect as (if you don't provide the dsn")
+	fPassword    = flag.String("password", "", "password to connect with (if you don't provide the dsn")
+	fHost        = flag.String("host", "", "Oracle DB's host (if you don't provide the dsn")
+	fPort        = flag.Int("port", 1521, "Oracle DB's port (if you don't provide the dsn) - defaults to 1521")
+	fSid         = flag.String("sid", "", "Oracle DB's SID (if you don't provide the dsn)")
+	fServiceName = flag.String("service", "", "Oracle DB's ServiceName (if you don't provide the dsn and the sid)")
+
+	fWait = flag.Bool("wait", false, "wait for USR1 signal?")
+)
 
 func TestCursor(t *testing.T) {
 	conn := getConnection(t)
@@ -75,16 +77,30 @@ func getConnection(t *testing.T) oracle.Connection {
 		return conn
 	}
 
-	if !(dsn != nil && *dsn != "") {
-		t.Logf("cannot test connection without dsn!")
-		return conn
+	var user, passw, sid string
+	if !(fDsn == nil || *fDsn == "") {
+		user, passw, sid = oracle.SplitDsn(*fDsn)
+		log.Printf("user=%q passw=%q sid=%q", user, passw, sid)
 	}
-	user, passw, sid := oracle.SplitDsn(*dsn)
+	if user == "" && fUsername != nil && *fUsername != "" {
+		user = *fUsername
+	}
+	if passw == "" && fPassword != nil && *fPassword != "" {
+		passw = *fPassword
+	}
+	if sid == "" {
+		if fSid != nil && *fSid != "" {
+			sid = *fSid
+		} else {
+			sid = oracle.MakeDSN(*fHost, *fPort, "", *fServiceName)
+		}
+	}
+	dsn := user + "/" + passw + "@" + sid
 	var err error
-	log.Printf("connecting to %s", *dsn)
+	log.Printf("connecting to %s", dsn)
 	conn, err = oracle.NewConnection(user, passw, sid, false)
 	if err != nil {
-		t.Logf("error creating connection to %s: %s", *dsn, err)
+		t.Logf("error creating connection to %s: %s", dsn, err)
 		t.Fail()
 	}
 	if err = conn.Connect(0, false); err != nil {
@@ -95,8 +111,12 @@ func getConnection(t *testing.T) oracle.Connection {
 }
 
 func main() {
+	flag.Parse()
+	if *fDsn == "" {
+		*fDsn = os.Getenv("DSN")
+	}
 	t := new(testing.T)
-	if *wait {
+	if *fWait {
 		c := make(chan os.Signal)
 		var wg sync.WaitGroup
 		wg.Add(1)
