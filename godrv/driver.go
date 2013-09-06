@@ -22,15 +22,16 @@ import (
 	"database/sql/driver"
 	"errors"
 	// "fmt"
-	"github.com/tgulacsi/goracle/oracle"
 	// "io"
 	// "math"
 	// "net"
 	"log"
 	// "reflect"
-	"strings"
+	//"strings"
 	// "time"
 	"unsafe"
+
+	"github.com/tgulacsi/goracle/oracle"
 )
 
 var (
@@ -210,16 +211,7 @@ type Driver struct {
 //
 // SID (database identifier) can be a DSN (see goracle/oracle.MakeDSN)
 func (d *Driver) Open(uri string) (driver.Conn, error) {
-	p := strings.Index(uri, "/")
-	d.user = uri[:p]
-	q := strings.Index(uri[p+1:], "@")
-	if q < 0 {
-		q = len(uri) - 1
-	} else {
-		q += p + 1
-	}
-	d.passwd = uri[p+1 : q]
-	d.db = uri[q+1:]
+	d.user, d.passwd, d.db = oracle.SplitDsn(uri)
 
 	// Establish the connection
 	cx, err := oracle.NewConnection(d.user, d.passwd, d.db, d.autocommit)
