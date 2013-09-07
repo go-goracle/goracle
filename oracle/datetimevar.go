@@ -20,6 +20,7 @@ limitations under the License.
 
 #cgo LDFLAGS: -lclntsh
 
+//#include <stdio.h>
 #include <stdlib.h>
 #include <oci.h>
 #include <orl.h>
@@ -46,6 +47,26 @@ void setDateTime(OCIDate *date, sb2 year, ub1 month, ub1 day,
      (date)->OCIDateTime.OCITimeMI = min;
      (date)->OCIDateTime.OCITimeSS = sec;
 }
+
+sword intervalAlloc(OCIEnv *envhp, void *data, int allocatedElements) {
+    int i;
+    sword status;
+
+	for (i = 0; i < allocatedElements; i++) {
+        //fprintf(stderr, "=== data[%d]=%p\n", i, ((OCIInterval**)data)[i]);
+		if ((status = OCIDescriptorAlloc(envhp,
+                (void**)((OCIInterval**)data + i),
+                OCI_DTYPE_INTERVAL_DS, 0, NULL)) != OCI_SUCCESS) {
+            return status;
+        }
+        //fprintf(stderr, "=== data[%d]=%p\n", i, ((OCIInterval**)data)[i]);
+    }
+    return status;
+}
+
+OCIInterval *getIntervalHandle(void *data, int pos) {
+    return ((OCIInterval**)data)[pos];
+}
 */
 import "C"
 
@@ -68,6 +89,10 @@ func (t *VariableType) IsDate() bool {
 		return true
 	}
 	return false
+}
+
+func getIntervalHandle(v *Variable, pos uint) *C.OCIInterval {
+	return C.getIntervalHandle(unsafe.Pointer(&v.dataBytes[0]), C.int(pos))
 }
 
 func dateTimeVarSetValue(v *Variable, pos uint, value interface{}) error {
@@ -129,18 +154,31 @@ func dateTimeVarGetValue(v *Variable, pos uint) (interface{}, error) {
 
 // intervalVarInitialize initializes the variable.
 func intervalVarInitialize(v *Variable, cur *Cursor) (err error) {
-	var handle unsafe.Pointer
 	// initialize the interval locators
-	for i := uint(0); i < v.allocatedElements; i++ {
-		handle = v.getHandle(i)
-		if err = cur.environment.CheckStatus(
-			C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
-				&handle, C.OCI_DTYPE_INTERVAL_DS, 0, nil),
-			"interval Alloc"); err != nil {
-			return
-		}
-		v.setHandle(i, handle)
+	/*
+		var handle unsafe.Pointer
+			for i := uint(0); i < v.allocatedElements; i++ {
+				handle = v.getHandle(i)
+				if err = cur.environment.CheckStatus(
+					C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
+						&handle, C.OCI_DTYPE_INTERVAL_DS, 0, nil),
+					"interval Alloc"); err != nil {
+					return
+				}
+				v.setHandle(i, handle)
+				if CTrace {
+					ctrace("intervalVarInitialize setHandle(%d, %p) => %p",
+						i, handle, v.getHandle(i))
+				}
+			}
+	*/
+	if err = cur.environment.CheckStatus(
+		C.intervalAlloc(v.environment.handle, unsafe.Pointer(&v.dataBytes[0]), //unsafe.Pointer(&dst),
+			C.int(v.allocatedElements)),
+		"interval Alloc"); err != nil {
+		return
 	}
+	//}
 	return nil
 }
 
@@ -149,7 +187,7 @@ func intervalVarFinalize(v *Variable) error {
 	var status C.sword
 	var handle unsafe.Pointer
 	for i := uint(0); i < v.allocatedElements; i++ {
-		if handle = v.getHandle(i); handle != nil {
+		if handle = unsafe.Pointer(getIntervalHandle(v, i)); handle != nil {
 			if status = C.OCIDescriptorFree(handle, C.OCI_DTYPE_INTERVAL_DS); status != C.OCI_SUCCESS {
 				return fmt.Errorf("error freeing Interval %d. handle %p: %d",
 					i, handle, status)
@@ -184,7 +222,7 @@ func intervalVarSetValue(v *Variable, pos uint, value interface{}) error {
 		C.OCIIntervalSetDaySecond(unsafe.Pointer(v.environment.handle),
 			v.environment.errorHandle,
 			days, hours, minutes, seconds, microseconds,
-			(*C.OCIInterval)(v.getHandle(pos))),
+			getIntervalHandle(v, pos)),
 		"IntervalSetDaySecond")
 }
 
@@ -200,7 +238,8 @@ func intervalVarGetValue(v *Variable, pos uint) (interface{}, error) {
 		C.OCIIntervalGetDaySecond(unsafe.Pointer(v.environment.handle),
 			v.environment.errorHandle,
 			&days, &hours, &minutes, &seconds, &microseconds,
-			(*C.OCIInterval)(v.getHandle(pos))),
+			//(*C.OCIInterval)(v.getHandle(pos))),
+			getIntervalHandle(v, pos)),
 		"internalVar_GetValue"); err != nil {
 		return nil, err
 	}

@@ -45,7 +45,7 @@ var dataTypesTests = []struct {
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
 	{"SELECT HEXTORAW('00') FROM DUAL", "\x00"},
-	{"SELECT INTERVAL '05:30' HOUR TO MINUTE FROM DUAL", "05:30"},
+	{"SELECT INTERVAL '05:30' HOUR TO MINUTE FROM DUAL", "5h30m0s"},
 	{"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
 }
 

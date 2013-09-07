@@ -16,7 +16,7 @@ CURSOR, CLOB, BLOB
 Nothing I know of.
 
 ## Not working ATM ##
-INTERVAL
+Nothing I know of.
 
 ## Not tested (yet) ##
 LONG, LONG RAW, BFILE

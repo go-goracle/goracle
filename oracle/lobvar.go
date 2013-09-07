@@ -20,7 +20,7 @@ package oracle
 
 #cgo LDFLAGS: -lclntsh
 
-#include <stdlib.h>
+//#include <stdlib.h>
 #include <stdio.h>
 #include <oci.h>
 
@@ -35,13 +35,13 @@ sword lobAlloc(OCIEnv *envhp, void *data, int allocatedElements) {
     sword status;
 
 	for (i = 0; i < allocatedElements; i++) {
-        fprintf(stderr, "=== data[%d]=%p\n", i, ((OCILobLocator**)data)[i]);
+        //fprintf(stderr, "=== data[%d]=%p\n", i, ((OCILobLocator**)data)[i]);
 		if ((status = OCIDescriptorAlloc(envhp,
                 (void**)((OCILobLocator**)data + i),
                 OCI_DTYPE_LOB, 0, NULL)) != OCI_SUCCESS) {
             return status;
         }
-        fprintf(stderr, "=== data[%d]=%p\n", i, ((OCILobLocator**)data)[i]);
+        //fprintf(stderr, "=== data[%d]=%p\n", i, ((OCILobLocator**)data)[i]);
     }
     return status;
 }
