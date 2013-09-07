@@ -76,7 +76,7 @@ func TestSimpleTypes(t *testing.T) {
 			t.Errorf("error executing `%s`: %s", tt.in, err)
 		} else {
 			if row, err = cur.FetchOne(); err != nil {
-				t.Errorf("cannot fetch row: %s", err)
+				t.Errorf("cannot fetch row (%q): %s", tt.in, err)
 			} else {
 				if ex, ok := row[0].(*ExternalLobVar); ok {
 					var reprB []byte

@@ -16,7 +16,7 @@ CURSOR, CLOB, BLOB
 Nothing I know of.
 
 ## Not working ATM ##
-Nothing I know of.
+INTERVAL
 
 ## Not tested (yet) ##
 LONG, LONG RAW, BFILE
@@ -39,11 +39,13 @@ For simple (connection, Ping, Select) usage, and testing connection
 
 # Debug #
 You can build the test executable (for debugging with gdb, for example) with
-go test -c
+`go test -c`
 
 You can build a tracing version with the "trace" build tag
 (go build -tags=trace) that will print out everything before calling OCI
 C functions.
+
+See [c](./c) for example.
 
 
 # Install #
@@ -54,6 +56,8 @@ OR the Oracle's
 *both* the Basic Client and the SDK (for the header files), too!
 - installed
 
+For environment variables, you can try [env](./env)
+
 ## Linux ##
 AND you have set proper environment variables:
 
@@ -63,6 +67,7 @@ AND you have set proper environment variables:
 
 For example, with my [XE](http://www.oracle.com/technetwork/products/express-edition/downloads/index.html):
 
+    ORACLE_HOME=/u01/app/oracle/product/11.2.0/xe
     CGO_CFLAGS=-I/u01/app/oracle/product/11.2.0/xe/rdbms/public
     CGO_LDFLAGS=-L/u01/app/oracle/product/11.2.0/xe/lib
 

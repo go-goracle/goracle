@@ -135,7 +135,7 @@ func TestCursor(t *testing.T) {
 			t.Fail()
 		}
 		if row, err = cur.FetchOne(); err != nil {
-			t.Logf("error fetching: %s", err)
+			t.Logf("error fetching INTERVAL: %s", err)
 			t.Fail()
 		}
 		t.Logf("%03d: %v", 0, row)

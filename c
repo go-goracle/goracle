@@ -26,7 +26,7 @@ if [ -n "$TRACE" ]; then
 fi
 rm -rf /tmp/go-build[0-9]*
 
-. $(dirname $0)/.env
+. $(dirname $0)/env
 go test $TOPTS -work -c -tags trace ./oracle || {
     echo "CFLAGS=$CGO_CFLAGS LDFLAGS=$CGO_LDFLAGS"
     exit $?
@@ -49,3 +49,7 @@ if [ -e /etc/init.d/oracle-xe ]; then
 fi
 echo "./oracle.test -dsn=\$\(cat $(dirname $0)/.dsn\) ""$@"
 ./oracle.test -dsn=$(cat $(dirname $0)/.dsn) "$@"
+
+echo -----------------------------------------------------------------------
+
+go test ./godrv/ -dsn=$(cat $(dirname $0)/.dsn) "$@"
