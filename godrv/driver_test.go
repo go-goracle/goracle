@@ -19,6 +19,9 @@ package godrv
 import (
 	"database/sql"
 	"flag"
+	"io"
+	"io/ioutil"
+	//"log"
 	"strings"
 	"testing"
 	//"time"
@@ -51,13 +54,20 @@ func TestSimple(t *testing.T) {
 		}
 		t.Logf("%d. %q result: %#v", i, qry, dst)
 		if strings.Index(qry, " TO_CLOB(") >= 0 {
-			clob := dst.(*oracle.ExternalLobVar)
-            b, e := clob.ReadAll()
-            if e != nil {
-                t.Errorf("error reading clob (%v): %s", clob, e)
-            } else {
-			t.Logf("clob=%s", b)
-        }
+			var b []byte
+			var e error
+			if true {
+				r := dst.(io.Reader)
+				b, e = ioutil.ReadAll(r)
+			} else {
+				clob := dst.(*oracle.ExternalLobVar)
+				b, e = clob.ReadAll()
+			}
+			if e != nil {
+				t.Errorf("error reading clob (%v): %s", dst, e)
+			} else {
+				t.Logf("clob=%s", b)
+			}
 		}
 	}
 
