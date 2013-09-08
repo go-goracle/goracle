@@ -211,7 +211,7 @@ type Driver struct {
 //
 // SID (database identifier) can be a DSN (see goracle/oracle.MakeDSN)
 func (d *Driver) Open(uri string) (driver.Conn, error) {
-	d.user, d.passwd, d.db = oracle.SplitDsn(uri)
+	d.user, d.passwd, d.db = oracle.SplitDSN(uri)
 
 	// Establish the connection
 	cx, err := oracle.NewConnection(d.user, d.passwd, d.db, d.autocommit)

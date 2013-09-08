@@ -45,7 +45,7 @@ func GetDSN() string {
 
 	var user, passw, sid string
 	if !(fDsn == nil || *fDsn == "") {
-		user, passw, sid = oracle.SplitDsn(*fDsn)
+		user, passw, sid = oracle.SplitDSN(*fDsn)
 		//log.Printf("user=%q passw=%q sid=%q", user, passw, sid)
 	}
 	if user == "" && fUsername != nil && *fUsername != "" {
@@ -70,4 +70,18 @@ func GetConnection(dsn string) (*sql.DB, error) {
 		dsn = GetDSN()
 	}
 	return sql.Open("goracle", dsn)
+}
+
+// GetRawConnection returns a raw (*oracle.Connection) connection
+// - using GetDSN if dsn is empty
+func GetRawConnection(dsn string) (oracle.Connection, error) {
+	if dsn == "" {
+		dsn = GetDSN()
+	}
+	user, passw, sid := oracle.SplitDSN(dsn)
+	conn, err := oracle.NewConnection(user, passw, sid, false)
+	if err != nil {
+		return conn, err
+	}
+	return conn, conn.Connect(0, false)
 }

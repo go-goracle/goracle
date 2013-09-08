@@ -537,8 +537,8 @@ func max(numbers ...int) int {
 	return m
 }
 
-//SplitDsn splits username/password@sid
-func SplitDsn(dsn string) (username, password, sid string) {
+//SplitDSN splits username/password@sid
+func SplitDSN(dsn string) (username, password, sid string) {
 	if i := strings.LastIndex(dsn, "@"); i >= 0 {
 		//fmt.Printf("dsn=%q (%d) i=%d\n", dsn, len(dsn), i)
 		if i > 0 {

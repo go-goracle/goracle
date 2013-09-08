@@ -170,7 +170,7 @@ func getConnection(t *testing.T) Connection {
 		t.Logf("cannot test connection without dsn!")
 		return conn
 	}
-	user, passw, sid := SplitDsn(*dsn)
+	user, passw, sid := SplitDSN(*dsn)
 	var err error
 	conn, err = NewConnection(user, passw, sid, false)
 	if err != nil {
