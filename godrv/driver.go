@@ -21,14 +21,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	// "fmt"
-	// "io"
-	// "math"
-	// "net"
 	"log"
-	// "reflect"
-	//"strings"
-	// "time"
 	"unsafe"
 
 	"github.com/tgulacsi/goracle/oracle"
@@ -50,13 +43,24 @@ type stmt struct {
 	statement string
 }
 
+// filterErr filters the error, returns driver.ErrBadConn if appropriate
+func filterErr(err error) error {
+	if oraErr, ok := err.(*oracle.Error); ok {
+		switch oraErr.Code {
+		case 115, 451, 452, 609, 1090, 1092, 1073, 3113, 3135, 3136, 12153, 12161, 12170, 12224, 12230, 12233, 12510, 12511, 12514, 12518, 12526, 12527, 12528, 12539:
+			return driver.ErrBadConn
+		}
+	}
+	return err
+}
+
 // Prepare the query for execution, return a prepared statement and error
 func (c conn) Prepare(query string) (driver.Stmt, error) {
 	cu := c.cx.NewCursor()
 	debug("%p.Prepare(%s)", cu, query)
 	err := cu.Prepare(query, "")
 	if err != nil {
-		return nil, err
+		return nil, filterErr(err)
 	}
 	return stmt{cu: cu, statement: query}, nil
 }
@@ -76,7 +80,7 @@ type tx struct {
 func (c conn) Begin() (driver.Tx, error) {
 	if !c.cx.IsConnected() {
 		if err := c.cx.Connect(0, false); err != nil {
-			return nil, err
+			return nil, filterErr(err)
 		}
 	}
 	return tx{cx: c.cx}, nil
@@ -138,7 +142,7 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 	a := (*[]interface{})(unsafe.Pointer(&args))
 	debug("%p.run(%s, %v)", s.cu, s.statement, *a)
 	if err = s.cu.Execute(s.statement, *a, nil); err != nil {
-		return nil, err
+		return nil, filterErr(err)
 	}
 
 	var cols []oracle.VariableDescription
