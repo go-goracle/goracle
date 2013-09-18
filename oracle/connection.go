@@ -301,12 +301,13 @@ func (conn *Connection) Commit() error {
 	}
 
 	conn.srvMtx.Lock()
-	defer conn.srvMtx.Unlock()
 	// perform the commit
 	//Py_BEGIN_ALLOW_THREADS
-	if err := conn.environment.CheckStatus(
+	err := conn.environment.CheckStatus(
 		C.OCITransCommit(conn.handle, conn.environment.errorHandle,
-			C.ub4(conn.commitMode)), "Commit"); err != nil {
+			C.ub4(conn.commitMode)), "Commit")
+	conn.srvMtx.Unlock()
+	if err != nil {
 		return err
 	}
 	conn.commitMode = C.OCI_DEFAULT
@@ -377,10 +378,11 @@ func (conn *Connection) Begin(formatID int, transactionID, branchID string) erro
 	// start the transaction
 	//Py_BEGIN_ALLOW_THREADS
 	conn.srvMtx.Lock()
-	defer conn.srvMtx.Unlock()
-	if err = conn.environment.CheckStatus(
+	err = conn.environment.CheckStatus(
 		C.OCITransStart(conn.handle, conn.environment.errorHandle, 0, C.OCI_TRANS_NEW),
-		"start transaction"); err != nil {
+		"start transaction")
+	conn.srvMtx.Unlock()
+	if err != nil {
 		return errors.New("Connection.Begin(): start transaction: " + err.Error())
 	}
 
@@ -396,10 +398,10 @@ func (conn *Connection) Prepare() (bool, error) {
 	}
 
 	conn.srvMtx.Lock()
-	defer conn.srvMtx.Unlock()
 	// perform the prepare
 	//Py_BEGIN_ALLOW_THREADS
 	status := C.OCITransPrepare(conn.handle, conn.environment.errorHandle, C.OCI_DEFAULT)
+	conn.srvMtx.Unlock()
 	// if nothing available to prepare, return False in order to allow for
 	// avoiding the call to commit() which will fail with ORA-24756
 	// (transaction does not exist)
@@ -417,37 +419,40 @@ func (conn *Connection) Prepare() (bool, error) {
 // Rollback rolls back the transaction
 func (conn *Connection) Rollback() error {
 	conn.srvMtx.Lock()
-	defer conn.srvMtx.Unlock()
-	return conn.environment.CheckStatus(
-		C.OCITransRollback(conn.handle, conn.environment.errorHandle,
-			C.OCI_DEFAULT), "Rollback")
+	err := conn.environment.CheckStatus(conn.rollback(), "Rollback")
+	conn.srvMtx.Unlock()
+	return err
+}
+
+func (conn *Connection) rollback() C.sword {
+	return C.OCITransRollback(conn.handle, conn.environment.errorHandle,
+		C.OCI_DEFAULT)
 }
 
 // Free deallocates the connection, disconnecting from the database if necessary.
 func (conn *Connection) Free(freeEnvironment bool) {
 	if conn.release {
 		// Py_BEGIN_ALLOW_THREADS
-		conn.Rollback()
 		conn.srvMtx.Lock()
+		conn.rollback()
 		C.OCISessionRelease(conn.handle, conn.environment.errorHandle, nil,
 			0, C.OCI_DEFAULT)
 		// Py_END_ALLOW_THREADS
 		conn.srvMtx.Unlock()
 	} else if !conn.attached {
+		conn.srvMtx.Lock()
 		if conn.sessionHandle != nil {
 			// Py_BEGIN_ALLOW_THREADS
-			conn.Rollback()
-			conn.srvMtx.Lock()
+			conn.rollback()
 			C.OCISessionEnd(conn.handle, conn.environment.errorHandle,
 				conn.sessionHandle, C.OCI_DEFAULT)
 			// Py_END_ALLOW_THREADS
-			conn.srvMtx.Unlock()
 		}
 		if conn.serverHandle != nil {
 			C.OCIServerDetach(conn.serverHandle,
 				conn.environment.errorHandle, C.OCI_DEFAULT)
-			conn.serverHandle = nil
 		}
+		conn.srvMtx.Unlock()
 	}
 	if conn.sessionHandle != nil {
 		C.OCIHandleFree(unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION)
@@ -476,39 +481,27 @@ func (conn *Connection) Close() (err error) {
 		return nil //?
 	}
 
-	// perform a rollback
-	if err = conn.Rollback(); err != nil {
-		setErrAt(err, "Close[rollback]")
-		return
-	}
 	conn.srvMtx.Lock()
-	defer conn.srvMtx.Unlock()
+	// perform a rollback
+	conn.rollback()
 
 	// logoff of the server
-	if conn.handle != nil {
-		if conn.sessionHandle != nil {
-			// Py_BEGIN_ALLOW_THREADS
-			if err = conn.environment.CheckStatus(C.OCISessionEnd((conn.handle),
-				conn.environment.errorHandle, conn.sessionHandle,
-				C.OCI_DEFAULT), "Close[end session]"); err != nil {
-				return
-			}
-			C.OCIHandleFree(unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION)
-			conn.sessionHandle = nil
-		}
-		C.OCIHandleFree(unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX)
-		conn.handle = nil
+	if conn.handle != nil && conn.sessionHandle != nil {
+		// Py_BEGIN_ALLOW_THREADS
+		err = conn.environment.CheckStatus(C.OCISessionEnd((conn.handle),
+			conn.environment.errorHandle, conn.sessionHandle,
+			C.OCI_DEFAULT), "Close[end session]")
 	}
 	if conn.serverHandle != nil {
-		if err = conn.environment.CheckStatus(
+		if err2 := conn.environment.CheckStatus(
 			C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT),
-			"Close[server detach]"); err != nil {
-			return
+			"Close[server detach]"); err2 != nil && err == nil {
+			err = err2
 		}
-		C.OCIHandleFree(unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER)
-		conn.serverHandle = nil
 	}
-	return nil
+	conn.srvMtx.Unlock()
+	conn.Free(true)
+	return err
 }
 
 // Cancel executes an OCIBreak() to cause an immediate (asynchronous) abort of any
