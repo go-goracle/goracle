@@ -49,7 +49,7 @@ type stmt struct {
 func filterErr(err error) error {
 	if oraErr, ok := err.(*oracle.Error); ok {
 		switch oraErr.Code {
-		case 115, 451, 452, 609, 1090, 1092, 1073, 3113, 3135, 3136, 12153, 12161, 12170, 12224, 12230, 12233, 12510, 12511, 12514, 12518, 12526, 12527, 12528, 12539: //connection errors - try again!
+		case 115, 451, 452, 609, 1090, 1092, 1073, 3113, 3114, 3135, 3136, 12153, 12161, 12170, 12224, 12230, 12233, 12510, 12511, 12514, 12518, 12526, 12527, 12528, 12539: //connection errors - try again!
 			return driver.ErrBadConn
 		}
 	}

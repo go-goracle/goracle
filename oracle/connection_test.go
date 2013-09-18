@@ -16,9 +16,13 @@
 package oracle
 
 import (
+	"bytes"
 	"flag"
 	"log"
+	"os"
+	"os/exec"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -185,6 +189,8 @@ func getConnection(t *testing.T) Connection {
 }
 
 var alloc uint64
+var memkb int
+var memcmd []string
 
 func gcMem() {
 	ms := new(runtime.MemStats)
@@ -194,7 +200,22 @@ func gcMem() {
 		alloc = ms.Alloc
 		return
 	}
-	log.Printf("mem += %.3db = %db", ms.Alloc-alloc, ms.Alloc)
+	if memcmd == nil {
+		memcmd = []string{"-o", "rss=", strconv.Itoa(os.Getpid())}
+	}
+	omemkb := memkb
+	out, err := exec.Command("ps", memcmd...).Output()
+	if err != nil {
+		log.Printf("error running ps %s: %s", memcmd, err)
+	} else {
+		if x, err := strconv.Atoi(string(bytes.TrimSpace(out))); err != nil {
+			log.Printf("not number: %q (%s)", out, err)
+		} else {
+			memkb = x
+		}
+	}
+	log.Printf("mem += %.3db = %db - RSS += %dkb = %dkb", ms.Alloc-alloc, ms.Alloc,
+		memkb-omemkb, memkb)
 	alloc = ms.Alloc
 }
 
