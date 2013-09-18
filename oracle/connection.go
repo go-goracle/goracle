@@ -143,21 +143,12 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	)
 	defer func() {
 		if err != nil {
-			if conn.sessionHandle != nil {
-				C.OCIHandleFree(unsafe.Pointer(conn.sessionHandle),
-					C.OCI_HTYPE_SESSION)
-			}
-			if conn.handle != nil {
-				C.OCIHandleFree(unsafe.Pointer(conn.handle),
-					C.OCI_HTYPE_SVCCTX)
-			}
-			if conn.serverHandle != nil {
-				C.OCIHandleFree(unsafe.Pointer(conn.serverHandle),
-					C.OCI_HTYPE_SERVER)
-			}
+			conn.Free(false)
 		}
 	}()
 
+	// free handles
+	conn.Free(false)
 	// allocate the server handle
 	if ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
 		C.OCI_HTYPE_SERVER,
@@ -433,7 +424,7 @@ func (conn *Connection) Rollback() error {
 }
 
 // Free deallocates the connection, disconnecting from the database if necessary.
-func (conn *Connection) Free() {
+func (conn *Connection) Free(freeEnvironment bool) {
 	if conn.release {
 		// Py_BEGIN_ALLOW_THREADS
 		conn.Rollback()
@@ -455,6 +446,26 @@ func (conn *Connection) Free() {
 		if conn.serverHandle != nil {
 			C.OCIServerDetach(conn.serverHandle,
 				conn.environment.errorHandle, C.OCI_DEFAULT)
+			conn.serverHandle = nil
+		}
+	}
+	if conn.sessionHandle != nil {
+		C.OCIHandleFree(unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION)
+		conn.sessionHandle = nil
+	}
+	if conn.handle != nil {
+		C.OCIHandleFree(unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX)
+		conn.handle = nil
+	}
+	if conn.serverHandle != nil {
+		C.OCIHandleFree(unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER)
+		conn.serverHandle = nil
+	}
+	if freeEnvironment {
+		// Free env (Issue #10)
+		if conn.environment != nil {
+			conn.environment.Free()
+			conn.environment = nil
 		}
 	}
 }
@@ -474,22 +485,27 @@ func (conn *Connection) Close() (err error) {
 	defer conn.srvMtx.Unlock()
 
 	// logoff of the server
-	if conn.sessionHandle != nil {
-		// Py_BEGIN_ALLOW_THREADS
-		if err = conn.environment.CheckStatus(C.OCISessionEnd((conn.handle),
-			conn.environment.errorHandle, conn.sessionHandle,
-			C.OCI_DEFAULT), "Close[end session]"); err != nil {
-			return
+	if conn.handle != nil {
+		if conn.sessionHandle != nil {
+			// Py_BEGIN_ALLOW_THREADS
+			if err = conn.environment.CheckStatus(C.OCISessionEnd((conn.handle),
+				conn.environment.errorHandle, conn.sessionHandle,
+				C.OCI_DEFAULT), "Close[end session]"); err != nil {
+				return
+			}
+			C.OCIHandleFree(unsafe.Pointer(conn.sessionHandle), C.OCI_HTYPE_SESSION)
+			conn.sessionHandle = nil
 		}
 		C.OCIHandleFree(unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX)
+		conn.handle = nil
 	}
-	conn.handle = nil
 	if conn.serverHandle != nil {
 		if err = conn.environment.CheckStatus(
 			C.OCIServerDetach(conn.serverHandle, conn.environment.errorHandle, C.OCI_DEFAULT),
 			"Close[server detach]"); err != nil {
 			return
 		}
+		C.OCIHandleFree(unsafe.Pointer(conn.serverHandle), C.OCI_HTYPE_SERVER)
 		conn.serverHandle = nil
 	}
 	return nil

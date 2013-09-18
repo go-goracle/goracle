@@ -18,7 +18,9 @@ package oracle
 import (
 	"flag"
 	"log"
+	"runtime"
 	"testing"
+	"time"
 )
 
 var dsn = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
@@ -180,4 +182,38 @@ func getConnection(t *testing.T) Connection {
 		log.Panicf("error connecting: %s", err)
 	}
 	return conn
+}
+
+var alloc uint64
+
+func gcMem() {
+	ms := new(runtime.MemStats)
+	runtime.GC()
+	runtime.ReadMemStats(ms)
+	if alloc == 0 {
+		alloc = ms.Alloc
+		return
+	}
+	log.Printf("mem += %.3db = %db", ms.Alloc-alloc, ms.Alloc)
+	alloc = ms.Alloc
+}
+
+func TestReConnect(t *testing.T) {
+	var err error
+	tick := time.Tick(100 * time.Millisecond)
+	for i := 0; i < 300; i++ {
+		<-tick
+		log.Printf("%d. reconnection", i)
+		conn = getConnection(t)
+		if err = conn.Connect(0, false); err != nil {
+			t.Errorf("error connection with 0 to db: %s", err)
+			t.FailNow()
+			break
+		}
+		conn.Close()
+		if i%10 == 0 {
+			gcMem()
+		}
+	}
+	gcMem()
 }

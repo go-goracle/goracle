@@ -146,6 +146,24 @@ func NewEnvironment() (*Environment, error) {
 	return env, nil
 }
 
+// Free frees the used handles
+func (env *Environment) Free() error {
+	if env.errorHandle != nil {
+		C.OCIHandleFree(unsafe.Pointer(env.errorHandle), C.OCI_HTYPE_ERROR)
+		env.errorHandle = nil
+	}
+	//if !env.cloneEnv {
+	if env.handle != nil {
+		C.OCIHandleFree(unsafe.Pointer(env.handle), C.OCI_HTYPE_ENV)
+		env.handle = nil
+	}
+	env.numberToStringFormatBuffer = nil
+	env.numberFromStringFormatBuffer = nil
+	env.nlsNumericCharactersBuffer = nil
+	//}
+	return nil
+}
+
 func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at string) error {
 	// var vsize C.ub4
 	if err := checkStatus(C.OCIHandleAlloc(parent, dst, typ, C.size_t(0), nil), false); err != nil {
