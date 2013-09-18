@@ -22,6 +22,8 @@ import (
 	"database/sql/driver"
 	"errors"
 	"log"
+	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/tgulacsi/goracle/oracle"
@@ -47,7 +49,7 @@ type stmt struct {
 func filterErr(err error) error {
 	if oraErr, ok := err.(*oracle.Error); ok {
 		switch oraErr.Code {
-		case 115, 451, 452, 609, 1090, 1092, 1073, 3113, 3135, 3136, 12153, 12161, 12170, 12224, 12230, 12233, 12510, 12511, 12514, 12518, 12526, 12527, 12528, 12539:
+		case 115, 451, 452, 609, 1090, 1092, 1073, 3113, 3135, 3136, 12153, 12161, 12170, 12224, 12230, 12233, 12510, 12511, 12514, 12518, 12526, 12527, 12528, 12539: //connection errors - try again!
 			return driver.ErrBadConn
 		}
 	}
@@ -57,6 +59,17 @@ func filterErr(err error) error {
 // Prepare the query for execution, return a prepared statement and error
 func (c conn) Prepare(query string) (driver.Stmt, error) {
 	cu := c.cx.NewCursor()
+	if strings.Index(query, ":1") < 0 && strings.Index(query, "?") >= 0 {
+		q := strings.Split(query, "?")
+		q2 := make([]string, 0, 2*len(q)-1)
+		for i := 0; i < len(q); i++ {
+			if i > 0 {
+				q2 = append(q2, ":"+strconv.Itoa(i+1))
+			}
+			q2 = append(q2, q[i])
+		}
+		query = strings.Join(q2, "")
+	}
 	debug("%p.Prepare(%s)", cu, query)
 	err := cu.Prepare(query, "")
 	if err != nil {

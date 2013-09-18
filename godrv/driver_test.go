@@ -21,10 +21,8 @@ import (
 	"flag"
 	"io"
 	"io/ioutil"
-	//"log"
 	"strings"
 	"testing"
-	//"time"
 
 	"github.com/tgulacsi/goracle/oracle"
 )
@@ -98,7 +96,22 @@ func TestSimple(t *testing.T) {
 func TestClob(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
+}
 
+func TestPrepared(t *testing.T) {
+	conn := getConnection(t)
+	defer conn.Close()
+	stmt, err := conn.Prepare("SELECT ? FROM DUAL")
+	if err != nil {
+		t.Errorf("error preparing query: %s", stmt)
+		t.FailNow()
+	}
+	rows, err := stmt.Query("a")
+	if err != nil {
+		t.Errorf("error executing query: %s", err)
+		t.FailNow()
+	}
+	defer rows.Close()
 }
 
 var testDB *sql.DB

@@ -47,9 +47,10 @@ if [ -e /etc/init.d/oracle-xe ]; then
         done
     fi
 fi
+
+go test -i ./godrv/
+go test ./godrv/ -dsn=$(cat $(dirname $0)/.dsn) "$@"
+echo -----------------------------------------------------------------------
 echo "./oracle.test -dsn=\$\(cat $(dirname $0)/.dsn\) ""$@"
 ./oracle.test -dsn=$(cat $(dirname $0)/.dsn) "$@"
 
-echo -----------------------------------------------------------------------
-
-go test ./godrv/ -dsn=$(cat $(dirname $0)/.dsn) "$@"
