@@ -163,7 +163,7 @@ import (
 	"fmt"
 	"log"
 
-//"time"
+	//"time"
 )
 
 func testLobOutC(cur *Cursor, qry string) (err error) {

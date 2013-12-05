@@ -103,7 +103,7 @@ func TestPrepared(t *testing.T) {
 	defer conn.Close()
 	stmt, err := conn.Prepare("SELECT ? FROM DUAL")
 	if err != nil {
-		t.Errorf("error preparing query: %s", stmt)
+		t.Errorf("error preparing query: %v", stmt)
 		t.FailNow()
 	}
 	rows, err := stmt.Query("a")

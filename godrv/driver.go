@@ -64,7 +64,7 @@ func (c conn) Prepare(query string) (driver.Stmt, error) {
 		q2 := make([]string, 0, 2*len(q)-1)
 		for i := 0; i < len(q); i++ {
 			if i > 0 {
-				q2 = append(q2, ":"+strconv.Itoa(i+1))
+				q2 = append(q2, ":"+strconv.Itoa(i))
 			}
 			q2 = append(q2, q[i])
 		}

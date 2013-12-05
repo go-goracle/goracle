@@ -765,7 +765,7 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 			return nil, err
 		}
 		if CTrace {
-			log.Printf("size of %p[%d] @ %d: %d", param, varType, position, sizeFromOracle)
+			log.Printf("size of %p[%s] @ %d: %d", param, varType, position, sizeFromOracle)
 		}
 
 		// use the length from Oracle directly if available
@@ -884,6 +884,7 @@ func (v *Variable) internalBind() (err error) {
 		pActElts = nil
 	}
 	//log.Printf("%v isArray? %b allElts=%d", v.typ.Name, v.isArray, allElts)
+	var bindName string
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {
@@ -898,6 +899,7 @@ func (v *Variable) internalBind() (err error) {
 				v.indicator, aL, rC,
 				allElts, pActElts)
 		}
+		bindName = fmt.Sprintf("%q", bname)
 		status = C.OCIBindByName(v.boundCursorHandle,
 			&v.bindHandle,
 			v.environment.errorHandle,
@@ -916,13 +918,14 @@ func (v *Variable) internalBind() (err error) {
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
 				allElts, pActElts)
 		}
+		bindName = fmt.Sprintf("%d", v.boundPos)
 		status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
 			v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
 			C.sb4(v.bufferSize), v.typ.oracleType,
 			unsafe.Pointer(&v.indicator[0]), aL, rC,
 			allElts, pActElts, C.OCI_DEFAULT)
 	}
-	if err = v.environment.CheckStatus(status, "BindBy"); err != nil {
+	if err = v.environment.CheckStatus(status, fmt.Sprintf("BindBy(%s)", bindName)); err != nil {
 		return
 	}
 
@@ -1217,6 +1220,10 @@ func (v *Variable) setArrayReflectValue(value reflect.Value) error {
 
 // SetValue sets the value of the variable.
 func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
+	if x, ok := value.(*Variable); ok && x != nil {
+		*v = *x
+		return nil
+	}
 	if v.isArray {
 		if arrayPos > 0 {
 			return errors.New("arrays of arrays are not supported by the OCI")
