@@ -34,6 +34,7 @@ import (
 	"log"
 	// "reflect"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -1286,6 +1287,40 @@ func (cur *Cursor) Execute(statement string,
 		numIters = 0
 	}
 	if err = cur.internalExecute(numIters); err != nil {
+		if oraErr, ok := err.(*Error); ok && oraErr.Code == 1008 { // ORA-1008: not all variables bound
+			inStmt := FindStatementVars(statement)
+			unnecessary := make([]string, 0, len(listArgs)+len(keywordArgs))
+			if len(listArgs) > 0 {
+				for i := range listArgs {
+					k := strconv.Itoa(i + 1)
+					if _, ok := inStmt[k]; ok {
+						delete(inStmt, k)
+					} else {
+						unnecessary = append(unnecessary, k)
+					}
+				}
+			} else {
+				for k := range keywordArgs {
+					if _, ok := inStmt[k]; ok {
+						delete(inStmt, k)
+					} else {
+						unnecessary = append(unnecessary, k)
+					}
+				}
+			}
+			missing := make([]string, len(inStmt))
+			i := 0
+			for k := range inStmt {
+				missing[i] = k
+				i++
+			}
+			sort.Strings(missing)
+			sort.Strings(unnecessary)
+			oraErr.Message = (oraErr.Message +
+				"\nmissing var: " + strings.Join(missing, ",") +
+				"\nunnecessary: " + strings.Join(unnecessary, ","))
+			//err = oraErr
+		}
 		return err
 	}
 	// debug("executed, calling performDefine")
@@ -1302,6 +1337,31 @@ func (cur *Cursor) Execute(statement string,
 	cur.outputSizeColumn = -1
 
 	return nil
+}
+
+// FindStatementVars returns a mapping of the variable names found in statement,
+// with the number of occurence as the map value
+func FindStatementVars(statement string) map[string]int {
+	inStmt := make(map[string]int, 16)
+	state := 0
+	nm := make([]rune, 0, 30)
+	for _, r := range statement {
+		switch {
+		case state == 0 && r == ':':
+			state++
+		case state == 1:
+			if '0' <= r && r <= '9' || 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || r == '_' || r == '#' {
+				nm = append(nm, r)
+			} else {
+				if len(nm) > 0 {
+					inStmt[string(nm)] += 1
+					nm = nm[:0]
+				}
+				state = 0
+			}
+		}
+	}
+	return inStmt
 }
 
 // ExecuteMany executes the statement many times.

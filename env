@@ -7,7 +7,9 @@ ldir=
 if [ -z "$ORACLE_HOME" ]; then
     nm=$(find /u01/app/oracle/product /usr/lib/oracle -name 'oracle_env.sh' \
         -type f 2>/dev/null | head -n1)
-    . $nm
+    if [ -n "$nm" ]; then
+        . $nm
+    fi
 fi
 for bdn in $ORACLE_HOME /usr/include; do
     cdir=$(find $bdn -type f -name oci.h | head -n1)
