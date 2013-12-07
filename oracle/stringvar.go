@@ -66,46 +66,48 @@ func stringVarInitialize(v *Variable, cur *Cursor) error {
 
 // Set the value of the variable.
 func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
+	if value == nil {
+		v.actualLength[pos] = C.ub2(0)
+		return nil
+	}
 	var (
-		text   string
 		buf    []byte
-		ok     bool
 		length int
 	)
-	if text, ok = value.(string); !ok {
-		if buf, ok = value.([]byte); !ok {
-			if arr, ok := value.([]string); ok {
-				for i := range arr {
-					if err = stringVarSetValue(v, pos+uint(i), arr[i]); err != nil {
-						return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
-					}
-				}
-				return nil
-			} else if arr, ok := value.([]byte); ok {
-				for i := range arr {
-					if err = stringVarSetValue(v, pos+uint(i), arr[i]); err != nil {
-						return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
-					}
-				}
-				return nil
-			}
-			// return fmt.Errorf("string or []byte required, got %T", value)
-			log.Panicf("string or []byte required, got %T", value)
-		} else {
-			if v.typ.isCharData {
-				text = string(buf)
-				length = len(text)
-			} else {
-				length = len(buf)
+
+	switch x := value.(type) {
+	case string:
+		buf = []byte(x)
+		length = len(buf)
+	case []byte:
+		buf = x
+		length = len(buf)
+	case []string:
+		for i := range x {
+			if err = stringVarSetValue(v, pos+uint(i), x[i]); err != nil {
+				return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
 			}
 		}
-	} else {
-		if v.typ.isCharData {
-			length = len(text)
-		} else {
-			length = len(buf)
+		return nil
+	case [][]byte:
+		for i := range x {
+			if err = stringVarSetValue(v, pos+uint(i), x[i]); err != nil {
+				return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
+			}
 		}
-		buf = []byte(text)
+		return nil
+	case *Variable:
+		switch {
+		case x == nil:
+		case x.actualLength != nil:
+			length = int(x.actualLength[pos])
+			buf = v.dataBytes[int(v.bufferSize*pos):]
+		default:
+			length = len(v.dataBytes) / int(v.bufferSize)
+			buf = v.dataBytes
+		}
+	default:
+		log.Panicf("string or []byte required, got %T", value)
 	}
 	if v.typ.isCharData && length > MaxStringChars {
 		return errors.New("string data too large")

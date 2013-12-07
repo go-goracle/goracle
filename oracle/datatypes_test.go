@@ -429,7 +429,7 @@ END;`
 	}
 	outVal, err := out.GetValue(0)
 	if err != nil {
-		t.Errorf("cannor get out value: %s", err)
+		t.Errorf("cannot get out value: %s", err)
 		t.FailNow()
 	}
 	outCur, ok := outVal.(*Cursor)
