@@ -222,7 +222,15 @@ func gcMem() {
 func TestReConnect(t *testing.T) {
 	var err error
 	tick := time.Tick(100 * time.Millisecond)
-	for i := 0; i < 300; i++ {
+	N := 300
+	if testing.Short() {
+		N = 3
+	} else {
+		if s := os.Getenv("RECONNECTS"); s != "" {
+			N, _ = strconv.Atoi(s)
+		}
+	}
+	for i := 0; i < N; i++ {
 		<-tick
 		log.Printf("%d. reconnection", i)
 		conn = getConnection(t)
