@@ -381,7 +381,7 @@ func (cur *Cursor) getStatementType() error {
 	var statementType C.ub2
 	var vsize C.ub4
 	if CTrace {
-		ctrace("getStatementType.OCIAttrGet",
+		ctrace("getStatementType.OCIAttrGet(%p, HTYPE_STMT, &stt=%p, &vsize=%p, ATTR_SMT_TYPE, errh=%p)",
 			cur.handle, "HTYPE_STMT", &statementType, &vsize,
 			"ATTR_STMT_TYPE", cur.environment.errorHandle)
 	}
@@ -394,7 +394,7 @@ func (cur *Cursor) getStatementType() error {
 	}
 	cur.statementType = int(statementType)
 	if CTrace {
-		ctrace("statement type is ", cur.statementType)
+		ctrace("statement type is %d", cur.statementType)
 	}
 	if cur.fetchVariables != nil {
 		cur.fetchVariables = nil
@@ -764,7 +764,7 @@ func (cur *Cursor) setBindVariablesByPos(parameters []interface{}, // parameters
 	return
 }
 
-// setBindVaruablesByName creates or sets bind variables by name (nap).
+// setBindVariablesByName creates or sets bind variables by name (nap).
 func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // parameters to bind
 	numElements, // number of elements to create
 	arrayPos uint, // array position to set
@@ -816,6 +816,17 @@ func (cur *Cursor) performBind() (err error) {
 		for k, v := range cur.bindVarsMap {
 			if err = v.Bind(cur, k, 0); err != nil {
 				return err
+			}
+		}
+		log.Printf("statementVars: %v", FindStatementVars(string(cur.statement)))
+		for k, num := range FindStatementVars(string(cur.statement)) {
+			if num <= 1 {
+				continue
+			}
+			for i := 1; i < num; i++ {
+				if err = cur.bindVarsMap[k].Bind(cur, k, uint(i)); err != nil {
+					return err
+				}
 			}
 		}
 	} else if cur.bindVarsArr != nil {

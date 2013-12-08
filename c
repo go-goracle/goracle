@@ -20,7 +20,7 @@ set -e
 . $(dirname $0)/env
 echo build
 go build ./...
-if [ $# -ge 1 ]; then exit $?; fi
+#if [ $# -ge 1 ]; then exit $?; fi
 #go build -tags trace ./...
 echo test
 TOPTS="${TOPTS} -test.v"
@@ -53,6 +53,6 @@ fi
 go test -i ./godrv/
 go test ./godrv/ -dsn=$(cat $(dirname $0)/.dsn) "$@"
 echo -----------------------------------------------------------------------
-RECONNECTS=3 echo "./oracle.test -dsn=\$\(cat $(dirname $0)/.dsn\) ""$@"
-./oracle.test -dsn=$(cat $(dirname $0)/.dsn) "$@"
+echo "./oracle.test -dsn=\$\(cat $(dirname $0)/.dsn\) ""$@"
+RECONNECTS=${RECONNECTS:-3} ./oracle.test -dsn=$(cat $(dirname $0)/.dsn) "$@"
 
