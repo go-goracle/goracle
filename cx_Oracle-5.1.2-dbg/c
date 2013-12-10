@@ -49,6 +49,7 @@ import sys
 cx = cx_Oracle.connect('$DSN')
 cu = cx.cursor()
 params = {'inp': [1, 2], 'out': cu.arrayvar(cx_Oracle.STRING, ['']*1000)}
+params['out##1'] = params['out']
 #cu.execute("ALTER SESSION SET cursor_sharing='EXACT'")
 cu.execute("""DECLARE
     TYPE in_tabTyp IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
@@ -63,7 +64,7 @@ BEGIN
 		v_idx := in_tab.NEXT(v_idx);
 	END LOOP;
 	:out := out_tab;
-    DBMS_OUTPUT.PUT_LINE(:out.COUNT);
+    :out##1 := out_tab;
 END;""", params)
 out = params['out'].getvalue()
 print repr(out)

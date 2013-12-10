@@ -40,6 +40,11 @@ import (
 	"unsafe"
 )
 
+// BypassMultipleArgs induces a bypass agains ORA-1008 when a keyword
+// is used more than once in the statement
+// It is false by default, as it makes Execute change the statement!
+var BypassMultipleArgs = false
+
 // func init() {
 // debug("bindInfo_elementSize=%d", C.bindInfo_elementSize)
 // }
@@ -103,7 +108,7 @@ func (cur *Cursor) freeHandle() error {
 	} else if cur.connection.handle != nil &&
 		cur.statementTag != nil && len(cur.statementTag) > 0 {
 		if CTrace {
-			ctrace("OCIStmtRelease(cur=%p, env=%p, stmtT=%s, len(stmtT)=%v)",
+			ctrace("OCIStmtRelease(cur=%p, env=%p, stmtT=%q, len(stmtT)=%d)",
 				cur.handle, cur.environment.errorHandle,
 				cur.statementTag, len(cur.statementTag))
 		}
@@ -1275,6 +1280,31 @@ func (cur *Cursor) Execute(statement string,
 		return CursorIsClosed
 	}
 
+	if BypassMultipleArgs && len(listArgs) == 0 && len(keywordArgs) > 0 {
+		// make bind names unique (against ORA-1008)
+		toBeChanged := make(map[int][2]string, 8)
+		positions := make([]int, 0, 8)
+		for k, pos := range FindStatementVars(statement) {
+			if len(pos) <= 1 {
+				continue
+			}
+			for i, p := range pos[1:] {
+				positions = append(positions, p)
+				toBeChanged[p] = [2]string{k, k + "##" + strconv.Itoa(i+1)}
+			}
+		}
+		if len(positions) > 0 {
+			sort.Ints(positions)
+			for i := len(positions) - 1; i >= 0; i-- {
+				p := positions[i]
+				log.Printf("changing %q to %q at %d", toBeChanged[p][0], toBeChanged[p][1], p)
+				statement = statement[:p+1] + toBeChanged[p][1] + statement[p+1+len(toBeChanged[p][0]):]
+				keywordArgs[toBeChanged[p][1]] = keywordArgs[toBeChanged[p][0]]
+			}
+			log.Printf("statement=%q", statement)
+		}
+	}
+
 	var err error
 	// prepare the statement, if applicable
 	if err = cur.internalPrepare(statement, ""); err != nil {
@@ -1305,8 +1335,9 @@ func (cur *Cursor) Execute(statement string,
 	}
 	if err = cur.internalExecute(numIters); err != nil {
 		if oraErr, ok := err.(*Error); ok && oraErr.Code == 1008 { // ORA-1008: not all variables bound
-			inStmt := FindStatementVars(statement)
+			inStmt := CountStatementVars(statement)
 			unnecessary := make([]string, 0, len(listArgs)+len(keywordArgs))
+			morethanonce := make([]string, 0, len(inStmt))
 			if len(listArgs) > 0 {
 				for i := range listArgs {
 					k := strconv.Itoa(i + 1)
@@ -1318,8 +1349,11 @@ func (cur *Cursor) Execute(statement string,
 				}
 			} else {
 				for k := range keywordArgs {
-					if _, ok := inStmt[k]; ok {
+					if i, ok := inStmt[k]; ok {
 						delete(inStmt, k)
+						if i > 1 {
+							morethanonce = append(morethanonce, k)
+						}
 					} else {
 						unnecessary = append(unnecessary, k)
 					}
@@ -1333,9 +1367,11 @@ func (cur *Cursor) Execute(statement string,
 			}
 			sort.Strings(missing)
 			sort.Strings(unnecessary)
+			sort.Strings(morethanonce)
 			oraErr.Message = (oraErr.Message +
 				"\nmissing var: " + strings.Join(missing, ",") +
-				"\nunnecessary: " + strings.Join(unnecessary, ","))
+				"\nunnecessary: " + strings.Join(unnecessary, ",") +
+				"\nmorethanonce: " + strings.Join(morethanonce, ","))
 			//err = oraErr
 		}
 		return err
@@ -1356,13 +1392,25 @@ func (cur *Cursor) Execute(statement string,
 	return nil
 }
 
+// CountStatementVars returns a mapping of the variable names found in statement,
+// with the number of occurence as the map value
+func CountStatementVars(statement string) map[string]int {
+	positions := FindStatementVars(statement)
+	inStmt := make(map[string]int, len(positions))
+	for k, pos := range positions {
+		inStmt[k] = len(pos)
+	}
+	return inStmt
+}
+
 // FindStatementVars returns a mapping of the variable names found in statement,
 // with the number of occurence as the map value
-func FindStatementVars(statement string) map[string]int {
-	inStmt := make(map[string]int, 16)
+func FindStatementVars(statement string) map[string][]int {
+	inStmt := make(map[string][]int, 16)
 	state := 0
 	nm := make([]rune, 0, 30)
-	for _, r := range statement {
+	for i := 0; i < len(statement); i++ {
+		r := rune(statement[i])
 		switch {
 		case state == 0 && r == ':':
 			state++
@@ -1371,7 +1419,8 @@ func FindStatementVars(statement string) map[string]int {
 				nm = append(nm, r)
 			} else {
 				if len(nm) > 0 {
-					inStmt[string(nm)] += 1
+					name := string(nm)
+					inStmt[name] = append(inStmt[name], i-1-len(name))
 					nm = nm[:0]
 				}
 				state = 0
