@@ -1,4 +1,5 @@
 #!/bin/sh
+[ -f ../env ] && . ../env
 DSN=${1:-$(cat ../.dsn)}
 PYTHONPATH=build/lib.linux-x86_64-2.7-11g:$PYTHONPATH python <<EOF
 import cx_Oracle_dbg as cx_Oracle
@@ -41,3 +42,29 @@ clob = params[0].getvalue()
 print clob.size(), repr(clob.read())
 EOF
 
+echo '----------------------------------------------------------'
+PYTHONPATH=build/lib.linux-x86_64-2.7-11g:$PYTHONPATH python <<EOF
+import cx_Oracle_dbg as cx_Oracle
+import sys
+cx = cx_Oracle.connect('$DSN')
+cu = cx.cursor()
+params = {'inp': [1, 2], 'out': cu.arrayvar(cx_Oracle.STRING, ['']*1000)}
+#cu.execute("ALTER SESSION SET cursor_sharing='EXACT'")
+cu.execute("""DECLARE
+    TYPE in_tabTyp IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
+	in_tab in_tabTyp := :inp;
+	TYPE out_tabTyp IS TABLE OF VARCHAR2(1000) INDEX BY PLS_INTEGER;
+	out_tab out_tabTyp;
+	v_idx PLS_INTEGER;
+BEGIN
+	v_idx := in_tab.FIRST;
+	WHILE v_idx IS NOT NULL LOOP
+	    SELECT SUBSTR(DUMP(in_tab(v_idx)), 1, 1000) INTO out_tab(v_idx) FROM DUAL;
+		v_idx := in_tab.NEXT(v_idx);
+	END LOOP;
+	:out := out_tab;
+    DBMS_OUTPUT.PUT_LINE(:out.COUNT);
+END;""", params)
+out = params['out'].getvalue()
+print repr(out)
+EOF

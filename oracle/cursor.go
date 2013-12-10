@@ -783,7 +783,7 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 
 	// handle named binds
 	for k, v := range parameters {
-		origVar, _ = cur.bindVarsMap[k]
+		origVar = cur.bindVarsMap[k]
 		if newVar, err = cur.setBindVariableHelper(numElements, arrayPos, deferTypeAssignment,
 			v, origVar); err != nil {
 			return err
@@ -811,24 +811,30 @@ func (cur *Cursor) performBind() (err error) {
 	// spurious errors will not occur
 	cur.setInputSizes = 0
 
+	if CTrace {
+		ctrace("bindVarsArr=%v", cur.bindVarsArr)
+		ctrace("bindVarsMap=%v", cur.bindVarsMap)
+	}
 	// set values and perform binds for all bind variables
 	if cur.bindVarsMap != nil {
 		for k, v := range cur.bindVarsMap {
-			if err = v.Bind(cur, k, 0); err != nil {
+			if err = v.Bind(cur, k, 1); err != nil {
 				return err
 			}
 		}
-		log.Printf("statementVars: %v", FindStatementVars(string(cur.statement)))
-		for k, num := range FindStatementVars(string(cur.statement)) {
-			if num <= 1 {
-				continue
-			}
-			for i := 1; i < num; i++ {
-				if err = cur.bindVarsMap[k].Bind(cur, k, uint(i)); err != nil {
-					return err
+		/*
+			log.Printf("statementVars: %v", FindStatementVars(string(cur.statement)))
+			for k, num := range FindStatementVars(string(cur.statement)) {
+				if num <= 1 {
+					continue
+				}
+				for i := 1; i < num; i++ {
+					if err = cur.bindVarsMap[k].Bind(cur, k, uint(i+1)); err != nil {
+						return err
+					}
 				}
 			}
-		}
+		*/
 	} else if cur.bindVarsArr != nil {
 		for i, v := range cur.bindVarsArr {
 			if err = v.Bind(cur, "", uint(i+1)); err != nil {

@@ -729,12 +729,13 @@ static udt_Variable *Variable_NewByOutputTypeHandler(
 }
 */
 
-func (v *Variable) aLrC() (aL, rC *C.ub2) {
+func (v *Variable) aLrC() (indic unsafe.Pointer, aL, rC *C.ub2) {
+	indic = unsafe.Pointer(&v.indicator[0])
 	if v.actualLength != nil {
 		aL = &v.actualLength[0]
 		rC = &v.returnCode[0]
 	}
-	return aL, rC
+	return
 }
 
 // Helper routine for Variable_Define() used so that constant calls to
@@ -805,7 +806,7 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 	}
 
 	// perform the define
-	aL, rC := v.aLrC()
+	indic, aL, rC := v.aLrC()
 	if CTrace {
 		ctrace("OCIDefineByPos(cur=%p, defineHandle=%p, env=%p, position=%d, dataArr=%v, bufferSize=%d, oracleType=%d indicator=%v, aL=%v rC=%v, DEFAULT)",
 			cur.handle, &v.defineHandle, v.environment.errorHandle,
@@ -817,8 +818,7 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 			&v.defineHandle,
 			v.environment.errorHandle, C.ub4(position), v.getDataArr(),
 			C.sb4(v.bufferSize), v.typ.oracleType,
-			unsafe.Pointer(&v.indicator[0]),
-			aL, rC, C.OCI_DEFAULT),
+			indic, aL, rC, C.OCI_DEFAULT),
 		"define"); err != nil {
 		return nil, fmt.Errorf("error defining: %s", err)
 	}
@@ -874,9 +874,8 @@ func (v *Variable) internalBind() (err error) {
 
 	var status C.sword
 	// perform the bind
-	aL, rC := v.aLrC()
+	indic, aL, rC := v.aLrC()
 	allElts := C.ub4(0)
-	//actElts := C.ub4(v.actualElements)
 	pActElts := &v.actualElements
 	if v.isArray {
 		allElts = C.ub4(v.allocatedElements)
@@ -904,9 +903,9 @@ func (v *Variable) internalBind() (err error) {
 			&v.bindHandle,
 			v.environment.errorHandle,
 			(*C.OraText)(&bname[0]), C.sb4(len(bname)),
-			v.getDataArr(), C.sb4(v.bufferSize),
-			v.typ.oracleType, unsafe.Pointer(&v.indicator[0]),
-			aL, rC, allElts, pActElts, C.OCI_DEFAULT)
+			v.getDataArr(), C.sb4(v.bufferSize), v.typ.oracleType,
+			indic, aL, rC,
+			allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
 			m := v.bufferSize
@@ -922,7 +921,7 @@ func (v *Variable) internalBind() (err error) {
 		status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
 			v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
 			C.sb4(v.bufferSize), v.typ.oracleType,
-			unsafe.Pointer(&v.indicator[0]), aL, rC,
+			indic, aL, rC,
 			allElts, pActElts, C.OCI_DEFAULT)
 	}
 	if err = v.environment.CheckStatus(status, fmt.Sprintf("BindBy(%s)", bindName)); err != nil {
