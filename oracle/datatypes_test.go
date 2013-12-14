@@ -375,7 +375,6 @@ BEGIN
 		v_idx := in_tab.NEXT(v_idx);
 	END LOOP;
 	:out := out_tab;
-    v_idx := :inp.COUNT;
 END;`
 		if err = cur.Execute(qry, nil,
 			map[string]interface{}{"inp": tt.in, "out": out}); err != nil {

@@ -152,11 +152,18 @@ type VariableType struct {
 
 // FIXME: proper Into, not just this dummy
 // getValueInto fetches value into the dest pointer
-func (t *VariableType) getValueInto(dest *interface{}, v *Variable, pos uint) error {
-	var err error
-	*dest, err = t.getValue(v, pos)
+func (t *VariableType) getValueInto(dest interface{}, v *Variable, pos uint) error {
+	rval := reflect.ValueOf(dest)
+	if rval.Kind() != reflect.Ptr {
+		return fmt.Errorf("%s.getValueInto: a pointer is needed, got %T", v, dest)
+	}
+	val, err := t.getValue(v, pos)
+	if err != nil {
+		return err
+	}
+	reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(val))
 	// log.Printf("%s.getValueInto dest=%+v err=%s", t, *dest, err)
-	return err
+	return nil
 }
 
 // isVariable returns a boolean indicating if the object is a variable.
