@@ -12,14 +12,14 @@ if [ -z "$ORACLE_HOME" ]; then
     fi
 fi
 for bdn in $ORACLE_HOME /usr/include; do
-    cdir=$(find $bdn -type f -name oci.h | head -n1)
+    cdir=$(find $bdn -type f -name oci.h 2>/dev/null | head -n1)
     if [ -n "$cdir" ]; then
         cdir=$(dirname $cdir)
         break
     fi
 done
 for bdn in $ORACLE_HOME /usr/lib; do
-    ldir=$(find $bdn -type f -name libclntsh.so\* | head -n1)
+    ldir=$(find $bdn -type f -name libclntsh.so\* 2>/dev/null | head -n1)
     if [ -n "$ldir" ]; then
         ldir=$(dirname $ldir)
         break
