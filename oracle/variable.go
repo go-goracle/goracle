@@ -370,10 +370,7 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return StringVarType, uint(len(x)), 0, nil
 	case []string:
 		numElements = uint(len(x))
-		if numElements == 0 {
-			return nil, 0, 0, ListIsEmpty
-		}
-		vt, size, _, err = VarTypeByValue(x[0])
+		vt, size, _, err = VarTypeByValue("")
 		return
 	case bool:
 		return BooleanVarType, 0, 0, nil
@@ -382,47 +379,32 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return Int32VarType, 0, 0, nil
 	case []int32:
 		numElements = uint(len(x))
-		if numElements == 0 {
-			return nil, 0, 0, ListIsEmpty
-		}
-		vt, size, _, err = VarTypeByValue(x[0])
+		vt, size, _, err = VarTypeByValue(int32(0))
 		return
 
 	case int64, uint64:
 		return Int64VarType, 0, 0, nil
 	case []int64:
 		numElements = uint(len(x))
-		if numElements == 0 {
-			return nil, 0, 0, ListIsEmpty
-		}
-		vt, size, _, err = VarTypeByValue(x[0])
+		vt, size, _, err = VarTypeByValue(int64(0))
 		return
 
 	case float32, float64:
 		return FloatVarType, 0, 0, nil
 	case []float32:
 		numElements = uint(len(x))
-		if numElements == 0 {
-			return nil, 0, 0, ListIsEmpty
-		}
-		vt, size, _, err = VarTypeByValue(x[0])
+		vt, size, _, err = VarTypeByValue(float32(0))
 		return
 	case []float64:
 		numElements = uint(len(x))
-		if numElements == 0 {
-			return nil, 0, 0, ListIsEmpty
-		}
-		vt, size, _, err = VarTypeByValue(x[0])
+		vt, size, _, err = VarTypeByValue(float64(0))
 		return
 
 	case time.Time:
 		return DateTimeVarType, 0, 0, nil
 	case []time.Time:
 		numElements = uint(len(x))
-		if numElements == 0 {
-			return nil, 0, 0, ListIsEmpty
-		}
-		vt, size, _, err = VarTypeByValue(x[0])
+		vt, size, _, err = VarTypeByValue(time.Time{})
 		return
 
 	case time.Duration:
@@ -435,10 +417,7 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return BinaryVarType, uint(len(x)), 0, nil
 	case [][]byte:
 		numElements = uint(len(x))
-		if numElements == 0 {
-			return nil, 0, 0, ListIsEmpty
-		}
-		vt, size, _, err = VarTypeByValue(x[0])
+		vt, size, _, err = VarTypeByValue([]byte{})
 		return
 
 	case []interface{}:
@@ -1129,6 +1108,11 @@ func (v *Variable) getArrayValueInto(dest interface{}, numElements uint) error {
 	}
 
 	return nil
+}
+
+// Len returns the array's actual length
+func (v *Variable) Len() int {
+	return int(v.actualElements)
 }
 
 // GetValue returns the value of the variable.

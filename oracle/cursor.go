@@ -1751,6 +1751,7 @@ func (cur *Cursor) NewVar(value interface{}, /*inconverter, outconverter, typena
 	// determine the type of variable
 	// varType = Variable_TypeByPythonType(self, type);
 	varType, size, numElements, err := VarTypeByValue(value)
+	//log.Printf("varType=%v size=%d numElements=%d", varType, size, numElements)
 	if err != nil {
 		return nil, err
 	}
@@ -1785,6 +1786,8 @@ func (cur *Cursor) NewVar(value interface{}, /*inconverter, outconverter, typena
 	   }
 	*/
 
+	// set the value, if applicable
+	err = v.SetValue(0, value)
 	return
 }
 
@@ -1806,10 +1809,7 @@ func (cur *Cursor) NewArrayVar(varType *VariableType, values []interface{}, size
 	}
 
 	// set the value, if applicable
-	if err = v.setArrayValue(values); err != nil {
-		return
-	}
-
+	err = v.setArrayValue(values)
 	return
 }
 
