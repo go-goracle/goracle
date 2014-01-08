@@ -218,7 +218,7 @@ func init() {
 		setValue:         stringVarSetValue,
 		getValue:         stringVarGetValue,
 		getBufferSize:    stringVarGetBufferSize,
-		oracleType:       C.SQLT_CHR,       // Oracle type
+		oracleType:       C.SQLT_RDD,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             18,               // element length (default)
 		isCharData:       true,             // is character data

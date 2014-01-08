@@ -717,7 +717,7 @@ static udt_Variable *Variable_NewByOutputTypeHandler(
 
 func (v *Variable) aLrC() (indic unsafe.Pointer, aL, rC *C.ub2) {
 	indic = unsafe.Pointer(&v.indicator[0])
-	if v.actualLength != nil {
+	if v.actualLength != nil && v.returnCode != nil {
 		aL = &v.actualLength[0]
 		rC = &v.returnCode[0]
 	}
@@ -779,6 +779,7 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 	               numElements);
 	   else
 	*/
+    //log.Printf("varType=%#v size=%d", varType, size)
 	v, err = cur.NewVariable(numElements, varType, uint(size))
 	if err != nil {
 		return nil, fmt.Errorf("error creating variable: %s", err)
@@ -792,6 +793,7 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 	}
 
 	// perform the define
+    //log.Printf("v=%#v", v)
 	indic, aL, rC := v.aLrC()
 	if CTrace {
 		ctrace("OCIDefineByPos(cur=%p, defineHandle=%p, env=%p, position=%d, dataArr=%v, bufferSize=%d, oracleType=%d indicator=%v, aL=%v rC=%v, DEFAULT)",
