@@ -1268,6 +1268,7 @@ func (cur *Cursor) CallProc(name string,
 }
 
 // Execute the statement.
+// For pointer-backed Variables, get their values, too.
 func (cur *Cursor) Execute(statement string,
 	listArgs []interface{}, keywordArgs map[string]interface{}) error {
 
@@ -1388,6 +1389,10 @@ func (cur *Cursor) Execute(statement string,
 	// reset the values of setoutputsize()
 	cur.outputSize = -1
 	cur.outputSizeColumn = -1
+
+	if !isQuery {
+		return cur.getPtrValues()
+	}
 
 	return nil
 }
@@ -1743,74 +1748,6 @@ func (cur *Cursor) SetInputSizesByName(types map[string]VariableType) error {
 func (cur *Cursor) SetOutputSize(outputSize, outputSizeColumn int) {
 	cur.outputSize = outputSize
 	cur.outputSizeColumn = outputSizeColumn
-}
-
-// NewVar creates a bind variable and return it.
-func (cur *Cursor) NewVar(value interface{}, /*inconverter, outconverter, typename*/
-) (v *Variable, err error) {
-	// determine the type of variable
-	// varType = Variable_TypeByPythonType(self, type);
-	varType, size, numElements, err := VarTypeByValue(value)
-	//log.Printf("varType=%v size=%d numElements=%d", varType, size, numElements)
-	if err != nil {
-		return nil, err
-	}
-	if varType.isVariableLength && size == 0 {
-		size = varType.size
-	}
-	/*
-	   if (type == (PyObject*) &g_ObjectVarType && !typeNameObj) {
-	       PyErr_SetString(PyExc_TypeError,
-	               "expecting type name for object variables");
-	       return NULL;
-	   }
-	*/
-
-	// create the variable
-	v, err = cur.NewVariable(numElements, varType, size)
-	/*
-	   var->inConverter = inConverter;
-	   var->outConverter = outConverter;
-	*/
-
-	// define the object type if needed
-	/*
-	   if (type == (PyObject*) &g_ObjectVarType) {
-	       objectVar = (udt_ObjectVar*) var;
-	       objectVar->objectType = ObjectType_NewByName(self->connection,
-	               typeNameObj);
-	       if (!objectVar->objectType) {
-	           Py_DECREF(var);
-	           return NULL;
-	       }
-	   }
-	*/
-
-	// set the value, if applicable
-	err = v.SetValue(0, value)
-	return
-}
-
-// NewArrayVar creates an array bind variable and return it.
-func (cur *Cursor) NewArrayVar(varType *VariableType, values []interface{}, size uint) (v *Variable, err error) {
-	if varType.isVariableLength && size == 0 {
-		size = varType.size
-	}
-
-	// determine the number of elements to create
-	numElements := len(values)
-
-	// create the variable
-	if v, err = cur.NewVariable(uint(numElements), varType, size); err != nil {
-		return
-	}
-	if err = v.makeArray(); err != nil {
-		return
-	}
-
-	// set the value, if applicable
-	err = v.setArrayValue(values)
-	return
 }
 
 // GetBindNames returns a list of bind variable names.

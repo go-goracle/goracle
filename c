@@ -50,9 +50,11 @@ if [ -e /etc/init.d/oracle-xe ]; then
     fi
 fi
 
+dsn=${DSN:-$(cat $(dirname $0)/.dsn)}
+
 go test -i ./godrv/
-go test ./godrv/ -dsn=$(cat $(dirname $0)/.dsn) "$@"
+go test ./godrv/ -dsn="${dsn}" "$@"
 echo -----------------------------------------------------------------------
 echo "./oracle.test -dsn=\$\(cat $(dirname $0)/.dsn\) ""$@"
-RECONNECTS=${RECONNECTS:-3} ./oracle.test -dsn=$(cat $(dirname $0)/.dsn) "$@"
+RECONNECTS=${RECONNECTS:-3} ./oracle.test -dsn="$dsn" "$@"
 

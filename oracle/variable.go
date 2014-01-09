@@ -65,6 +65,7 @@ type Variable struct {
 	dataInts                       []int64
 	dataFloats                     []float64
 	cursors                        []*Cursor
+	destination                    reflect.Value
 }
 
 // NewVariable allocates a new variable
@@ -181,6 +182,81 @@ func isVariable(value interface{}) bool {
 // NewVariable returns a new Variable of the given VariableType
 func (t *VariableType) NewVariable(cur *Cursor, numElements uint, size uint) (*Variable, error) {
 	return cur.NewVariable(numElements, t, size)
+}
+
+// NewVar creates a bind variable and returns it.
+// If value is a pointer, then after cur.Execute, data will be returned into it
+// automatically, no need to call v.GetValue.
+func (cur *Cursor) NewVar(value interface{}, /*inconverter, outconverter, typename*/
+) (v *Variable, err error) {
+	// determine the type of variable
+	// varType = Variable_TypeByPythonType(self, type);
+	rval := reflect.ValueOf(value)
+	val := value
+	if rval.Kind() == reflect.Ptr {
+		val = rval.Elem().Interface()
+	}
+	varType, size, numElements, err := VarTypeByValue(val)
+	//log.Printf("varType=%v size=%d numElements=%d", varType, size, numElements)
+	if err != nil {
+		return nil, err
+	}
+	if varType.isVariableLength && size == 0 {
+		size = varType.size
+	}
+	/*
+	   if (type == (PyObject*) &g_ObjectVarType && !typeNameObj) {
+	       PyErr_SetString(PyExc_TypeError,
+	               "expecting type name for object variables");
+	       return NULL;
+	   }
+	*/
+
+	// create the variable
+	v, err = cur.NewVariable(numElements, varType, size)
+	/*
+	   var->inConverter = inConverter;
+	   var->outConverter = outConverter;
+	*/
+
+	// define the object type if needed
+	/*
+	   if (type == (PyObject*) &g_ObjectVarType) {
+	       objectVar = (udt_ObjectVar*) var;
+	       objectVar->objectType = ObjectType_NewByName(self->connection,
+	               typeNameObj);
+	       if (!objectVar->objectType) {
+	           Py_DECREF(var);
+	           return NULL;
+	       }
+	   }
+	*/
+
+	// set the value, if applicable
+	err = v.SetValue(0, value)
+	return
+}
+
+// NewArrayVar creates an array bind variable and return it.
+func (cur *Cursor) NewArrayVar(varType *VariableType, values []interface{}, size uint) (v *Variable, err error) {
+	if varType.isVariableLength && size == 0 {
+		size = varType.size
+	}
+
+	// determine the number of elements to create
+	numElements := len(values)
+
+	// create the variable
+	if v, err = cur.NewVariable(uint(numElements), varType, size); err != nil {
+		return
+	}
+	if err = v.makeArray(); err != nil {
+		return
+	}
+
+	// set the value, if applicable
+	err = v.setArrayValue(values)
+	return
 }
 
 // String returns a string representation of the VariableType
@@ -779,7 +855,7 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 	               numElements);
 	   else
 	*/
-    //log.Printf("varType=%#v size=%d", varType, size)
+	//log.Printf("varType=%#v size=%d", varType, size)
 	v, err = cur.NewVariable(numElements, varType, uint(size))
 	if err != nil {
 		return nil, fmt.Errorf("error creating variable: %s", err)
@@ -793,7 +869,7 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 	}
 
 	// perform the define
-    //log.Printf("v=%#v", v)
+	//log.Printf("v=%#v", v)
 	indic, aL, rC := v.aLrC()
 	if CTrace {
 		ctrace("OCIDefineByPos(cur=%p, defineHandle=%p, env=%p, position=%d, dataArr=%v, bufferSize=%d, oracleType=%d indicator=%v, aL=%v rC=%v, DEFAULT)",
@@ -1211,24 +1287,59 @@ func (v *Variable) setArrayReflectValue(value reflect.Value) error {
 }
 
 // SetValue sets the value of the variable.
+// If value is a pointer, then v will put its gained data into it.
 func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	if x, ok := value.(*Variable); ok && x != nil {
 		*v = *x
 		return nil
 	}
+	if v.isArray && arrayPos > 0 {
+		return errors.New("arrays of arrays are not supported by the OCI")
+	}
+	rval := reflect.ValueOf(value)
+	if rval.Kind() == reflect.Ptr {
+		v.destination = rval
+		rval = rval.Elem()
+		value = rval.Interface()
+	} else if v.destination.IsValid() {
+		v.destination = reflect.ValueOf(nil)
+	}
 	if v.isArray {
-		if arrayPos > 0 {
-			return errors.New("arrays of arrays are not supported by the OCI")
-		}
 		//if reflect.TypeOf(value).Kind == reflect.Slice {
 		if x, ok := value.([]interface{}); ok {
 			return v.setArrayValue(x)
 		}
-		return v.setArrayReflectValue(reflect.ValueOf(value))
+		return v.setArrayReflectValue(rval)
 		//return fmt.Errorf("%v is %T, not array!", value, value)
 	}
 	debug("calling %s.setValue(%d, %v (%T))", v.typ, arrayPos, value, value)
 	return v.setSingleValue(arrayPos, value)
+}
+
+// getPtrValues calls GetValue for each variable which has a proper (pointer) destination
+func (cur *Cursor) getPtrValues() error {
+	if len(cur.bindVarsArr) > 0 {
+		for _, v := range cur.bindVarsArr {
+			if v.destination.IsValid() && !v.isArray {
+				val, err := v.GetValue(0)
+				if err != nil {
+					return fmt.Errorf("error getting value of %s: %v", v, err)
+				}
+				v.destination.Elem().Set(reflect.ValueOf(val))
+			}
+		}
+	} else if len(cur.bindVarsMap) > 0 {
+		for k, v := range cur.bindVarsMap {
+			if v.destination.IsValid() && !v.isArray {
+				val, err := v.GetValue(0)
+				if err != nil {
+					return fmt.Errorf("error getting value of %s(%s): %v", k, v, err)
+				}
+				v.destination.Elem().Set(reflect.ValueOf(val))
+			}
+		}
+	}
+	return nil
 }
 
 // externalCopy the contents of the source variable to the destination variable.

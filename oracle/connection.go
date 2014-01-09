@@ -128,9 +128,11 @@ func NewConnection(username, password, dsn string, autocommit bool /*commitMode 
 			conn.environment = pool.environment
 		} else
 	*/
-	conn.environment, err = NewEnvironment()
-
-	return conn, err
+	if conn.environment, err = NewEnvironment(); err != nil {
+		return
+	}
+	err = conn.Connect(0, false)
+	return
 }
 
 // Connect to the database.
