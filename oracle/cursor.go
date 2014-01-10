@@ -744,15 +744,20 @@ func (cur *Cursor) setBindVariablesByPos(parameters []interface{}, // parameters
 	}
 	if cur.bindVarsArr != nil {
 		origNumParams = len(cur.bindVarsArr)
-		if len(parameters) < origNumParams {
-			cur.bindVarsArr = cur.bindVarsArr[:len(parameters)]
+		newNumParams := len(parameters)
+		for _, v := range cur.bindVarsArr {
+			v.unbind()
+		}
+		if newNumParams < origNumParams {
+			cur.bindVarsArr = cur.bindVarsArr[:newNumParams]
 		}
 	} else {
 		cur.bindVarsArr = make([]*Variable, len(parameters))
 	}
 	if len(cur.bindVarsMap) > 0 {
-		for k := range cur.bindVarsMap {
+		for k, v := range cur.bindVarsMap {
 			delete(cur.bindVarsMap, k)
+			v.unbind()
 		}
 	}
 
@@ -792,11 +797,15 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 	if cur.bindVarsMap == nil {
 		cur.bindVarsMap = make(map[string]*Variable, len(parameters))
 	} else if len(cur.bindVarsMap) > 0 {
-		for k := range cur.bindVarsMap {
+		for k, v := range cur.bindVarsMap {
 			delete(cur.bindVarsMap, k)
+			v.unbind()
 		}
 	}
 	if len(cur.bindVarsArr) > 0 {
+		for _, v := range cur.bindVarsArr {
+			v.unbind()
+		}
 		cur.bindVarsArr = cur.bindVarsArr[:0]
 	}
 

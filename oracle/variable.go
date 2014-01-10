@@ -1020,6 +1020,16 @@ func (v *Variable) internalBind() (err error) {
 	return
 }
 
+// unbind undoes the binding
+func (v *Variable) unbind() {
+	if v.bindHandle == nil {
+		return
+	}
+	v.boundCursorHandle = nil
+	v.boundPos = 0
+	v.boundName = ""
+}
+
 // Bind allocates a variable and bind it to the given statement.
 // bind to name or pos
 func (v *Variable) Bind(cur *Cursor, name string, pos uint) error {
