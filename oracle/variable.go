@@ -1346,7 +1346,7 @@ func (cur *Cursor) getPtrValues() error {
 	for k, v := range cur.bindVarsMap {
 		if v.destination.IsValid() && !v.isArray {
 			val, err := v.GetValue(0)
-			log.Printf("%s setting %v to %v %v", v, v.destination, val, err)
+			debug("%s setting %v to %v %v", v, v.destination, val, err)
 			if err != nil {
 				return fmt.Errorf("error getting value of %s(%s): %v", k, v, err)
 			}
