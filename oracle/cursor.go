@@ -744,16 +744,23 @@ func (cur *Cursor) setBindVariablesByPos(parameters []interface{}, // parameters
 	}
 	if cur.bindVarsArr != nil {
 		origNumParams = len(cur.bindVarsArr)
+		if len(parameters) < origNumParams {
+			cur.bindVarsArr = cur.bindVarsArr[:len(parameters)]
+		}
 	} else {
 		cur.bindVarsArr = make([]*Variable, len(parameters))
+	}
+	if len(cur.bindVarsMap) > 0 {
+		for k := range cur.bindVarsMap {
+			delete(cur.bindVarsMap, k)
+		}
 	}
 
 	// handle positional binds
 	for i, v := range parameters {
+		origVar = nil
 		if i < origNumParams {
 			origVar = cur.bindVarsArr[i]
-		} else {
-			origVar = nil
 		}
 		if newVar, err = cur.setBindVariableHelper(numElements, arrayPos, deferTypeAssignment, v, origVar); err != nil {
 			return err
@@ -782,8 +789,15 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 	if parameters == nil || len(parameters) <= 0 {
 		return ListIsEmpty
 	}
-	if cur.bindVarsMap == nil || len(cur.bindVarsMap) > 0 {
+	if cur.bindVarsMap == nil {
 		cur.bindVarsMap = make(map[string]*Variable, len(parameters))
+	} else if len(cur.bindVarsMap) > 0 {
+		for k := range cur.bindVarsMap {
+			delete(cur.bindVarsMap, k)
+		}
+	}
+	if len(cur.bindVarsArr) > 0 {
+		cur.bindVarsArr = cur.bindVarsArr[:0]
 	}
 
 	// handle named binds
@@ -1372,7 +1386,8 @@ func (cur *Cursor) Execute(statement string,
 			oraErr.Message = (oraErr.Message +
 				"\nmissing var: " + strings.Join(missing, ",") +
 				"\nunnecessary: " + strings.Join(unnecessary, ",") +
-				"\nmorethanonce: " + strings.Join(morethanonce, ","))
+				"\nmorethanonce: " + strings.Join(morethanonce, ",") +
+				fmt.Sprintf("\nqry=%q\narr=%s, map=%s", statement, cur.bindVarsArr, cur.bindVarsMap))
 			//err = oraErr
 		}
 		return err

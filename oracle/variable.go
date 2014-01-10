@@ -1318,23 +1318,31 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 
 // getPtrValues calls GetValue for each variable which has a proper (pointer) destination
 func (cur *Cursor) getPtrValues() error {
-	if len(cur.bindVarsArr) > 0 {
-		for _, v := range cur.bindVarsArr {
-			if v.destination.IsValid() && !v.isArray {
-				val, err := v.GetValue(0)
-				if err != nil {
-					return fmt.Errorf("error getting value of %s: %v", v, err)
-				}
+	debug("getPtrValues %v %v", cur.bindVarsArr, cur.bindVarsMap)
+	for _, v := range cur.bindVarsArr {
+		if v.destination.IsValid() && !v.isArray {
+			val, err := v.GetValue(0)
+			debug("%s setting %v to %v %v", v, v.destination, val, err)
+			if err != nil {
+				return fmt.Errorf("error getting value of %s: %v", v, err)
+			}
+			if val == nil {
+				v.destination.Elem().Set(reflect.Zero(v.destination.Elem().Type()))
+			} else {
 				v.destination.Elem().Set(reflect.ValueOf(val))
 			}
 		}
-	} else if len(cur.bindVarsMap) > 0 {
-		for k, v := range cur.bindVarsMap {
-			if v.destination.IsValid() && !v.isArray {
-				val, err := v.GetValue(0)
-				if err != nil {
-					return fmt.Errorf("error getting value of %s(%s): %v", k, v, err)
-				}
+	}
+	for k, v := range cur.bindVarsMap {
+		if v.destination.IsValid() && !v.isArray {
+			val, err := v.GetValue(0)
+			log.Printf("%s setting %v to %v %v", v, v.destination, val, err)
+			if err != nil {
+				return fmt.Errorf("error getting value of %s(%s): %v", k, v, err)
+			}
+			if val == nil {
+				v.destination.Elem().Set(reflect.Zero(v.destination.Elem().Type()))
+			} else {
 				v.destination.Elem().Set(reflect.ValueOf(val))
 			}
 		}
