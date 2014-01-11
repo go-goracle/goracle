@@ -45,6 +45,8 @@ import (
 // It is false by default, as it makes Execute change the statement!
 var BypassMultipleArgs = false
 
+const usePrepare2 = true
+
 // func init() {
 // debug("bindInfo_elementSize=%d", C.bindInfo_elementSize)
 // }
@@ -92,30 +94,34 @@ func (cur *Cursor) allocateHandle() error {
 //freeHandle frees the handle which may be reallocated if necessary.
 func (cur *Cursor) freeHandle() error {
 	if CTrace {
-		ctrace("%s.freeHandle", cur)
+		ctrace("%s.freeHandle(%p)", cur, cur.handle)
 	}
 	if cur.handle == nil {
 		return nil
 	}
 	//debug("freeing cursor handle %v", cur.handle)
-	if cur.isOwned {
-		if CTrace {
-			ctrace("OCIHandleFree(cur=%p)", cur.handle, "htype_stmt")
-		}
-		return cur.environment.CheckStatus(
-			C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
-			"freeCursor")
-	} else if cur.connection.handle != nil &&
+	if !cur.isOwned && cur.connection.handle != nil &&
 		cur.statementTag != nil && len(cur.statementTag) > 0 {
 		if CTrace {
 			ctrace("OCIStmtRelease(cur=%p, env=%p, stmtT=%q, len(stmtT)=%d)",
 				cur.handle, cur.environment.errorHandle,
 				cur.statementTag, len(cur.statementTag))
 		}
-		return cur.environment.CheckStatus(C.OCIStmtRelease(cur.handle,
+		if err := cur.environment.CheckStatus(C.OCIStmtRelease(cur.handle,
 			cur.environment.errorHandle, (*C.OraText)(&cur.statementTag[0]),
 			C.ub4(len(cur.statementTag)), C.OCI_DEFAULT),
-			"statement release")
+			"statement release"); err != nil {
+			return err
+		}
+	} else {
+		if CTrace {
+			ctrace("OCIHandleFree(cur=%p, htype_stmt)", cur.handle)
+		}
+		if err := cur.environment.CheckStatus(
+			C.OCIHandleFree(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT),
+			"freeCursor"); err != nil {
+			return err
+		}
 	}
 	cur.handle = nil
 	return nil
@@ -387,8 +393,7 @@ func (cur *Cursor) getStatementType() error {
 	var vsize C.ub4
 	if CTrace {
 		ctrace("getStatementType.OCIAttrGet(%p, HTYPE_STMT, &stt=%p, &vsize=%p, ATTR_SMT_TYPE, errh=%p)",
-			cur.handle, "HTYPE_STMT", &statementType, &vsize,
-			"ATTR_STMT_TYPE", cur.environment.errorHandle)
+			cur.handle, &statementType, &vsize, cur.environment.errorHandle)
 	}
 	if err := cur.environment.CheckStatus(
 		C.OCIAttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
@@ -988,27 +993,56 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 
 	// prepare statement
 	cur.isOwned = false
-	debug(`%p.Prepare2 for "%s" [%x]`, cur, cur.statement, cur.statementTag)
-	// Py_BEGIN_ALLOW_THREADS
-	if CTrace {
-		ctrace("internalPrepare.OCIStmtPrepare2(conn=%p, &cur=%p, env=%p, "+
-			"statement=%q, len=%d, tag=%v, tagLen=%d, NTV_SYNTAX, DEFAULT)",
-			cur.connection.handle, &cur.handle, cur.environment.errorHandle,
-			cur.statement, len(cur.statement), cur.statementTag, len(cur.statementTag))
-	}
-	if err := cur.environment.CheckStatus(
-		C.OCIStmtPrepare2(cur.connection.handle, &cur.handle,
-			cur.environment.errorHandle,
-			(*C.OraText)(unsafe.Pointer(&cur.statement[0])), C.ub4(len(cur.statement)),
-			(*C.OraText)(unsafe.Pointer(&cur.statementTag[0])), C.ub4(len(cur.statementTag)),
-			C.OCI_NTV_SYNTAX, C.OCI_DEFAULT),
-		"internalPrepare"); err != nil {
-		// Py_END_ALLOW_THREADS
-		// this is needed to avoid "invalid handle" errors since Oracle doesn't
-		// seem to leave the pointer alone when an error is raised but the
-		// resulting handle is still invalid
-		cur.handle = nil
-		return err
+	if usePrepare2 {
+		debug(`%p.Prepare2 for "%s" [%x]`, cur, cur.statement, cur.statementTag)
+		// Py_BEGIN_ALLOW_THREADS
+		if CTrace {
+			ctrace("internalPrepare.OCIStmtPrepare2(conn=%p, &cur=%p, env=%p, "+
+				"statement=%q, len=%d, tag=%v, tagLen=%d, NTV_SYNTAX, DEFAULT)",
+				cur.connection.handle, &cur.handle, cur.environment.errorHandle,
+				cur.statement, len(cur.statement), cur.statementTag, len(cur.statementTag))
+		}
+		if err := cur.environment.CheckStatus(
+			C.OCIStmtPrepare2(cur.connection.handle, &cur.handle,
+				cur.environment.errorHandle,
+				(*C.OraText)(unsafe.Pointer(&cur.statement[0])), C.ub4(len(cur.statement)),
+				(*C.OraText)(unsafe.Pointer(&cur.statementTag[0])), C.ub4(len(cur.statementTag)),
+				C.OCI_NTV_SYNTAX, C.OCI_DEFAULT),
+			"internalPrepare"); err != nil {
+			// Py_END_ALLOW_THREADS
+			// this is needed to avoid "invalid handle" errors since Oracle doesn't
+			// seem to leave the pointer alone when an error is raised but the
+			// resulting handle is still invalid
+			cur.handle = nil
+			return err
+		}
+	} else {
+		if cur.handle == nil {
+			if err := cur.allocateHandle(); err != nil {
+				return err
+			}
+		}
+		debug(`%p.Prepare for "%s"`, cur)
+		// Py_BEGIN_ALLOW_THREADS
+		if CTrace {
+			ctrace("internalPrepare.OCIStmtPrepare(conn=%p, &cur=%p, env=%p, "+
+				"statement=%q, len=%d, NTV_SYNTAX, DEFAULT)",
+				cur.connection.handle, &cur.handle, cur.environment.errorHandle,
+				cur.statement, len(cur.statement))
+		}
+		if err := cur.environment.CheckStatus(
+			C.OCIStmtPrepare(cur.handle,
+				cur.environment.errorHandle,
+				(*C.OraText)(unsafe.Pointer(&cur.statement[0])), C.ub4(len(cur.statement)),
+				C.OCI_NTV_SYNTAX, C.OCI_DEFAULT),
+			"internalPrepare"); err != nil {
+			// Py_END_ALLOW_THREADS
+			// this is needed to avoid "invalid handle" errors since Oracle doesn't
+			// seem to leave the pointer alone when an error is raised but the
+			// resulting handle is still invalid
+			cur.handle = nil
+			return err
+		}
 	}
 	if CTrace {
 		ctrace("internalPrepare done, cur.handle=%x", cur.handle)
@@ -1016,7 +1050,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 	// debug("prepared")
 
 	// clear bind variables, if applicable
-	if cur.setInputSizes < 0 {
+	if cur.setInputSizes <= 1 {
 		cur.bindVarsArr = nil
 		cur.bindVarsMap = nil
 	}

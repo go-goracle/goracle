@@ -188,41 +188,6 @@ func TestOutBinds(t *testing.T) {
 	}
 }
 
-func TestReuseBinds(t *testing.T) {
-	conn := getConnection(t)
-	if !conn.IsConnected() {
-		t.FailNow()
-	}
-	cur := conn.NewCursor()
-	defer cur.Close()
-
-	var (
-		err             error
-		qry             string
-		timVar, textVar *Variable
-		tim             time.Time = time.Now()
-		text            string
-	)
-	if timVar, err = cur.NewVar(&tim); err != nil {
-		t.Errorf("error creating variable for %s(%T): %s", tim, tim, err)
-	}
-	qry = `BEGIN SELECT SYSDATE INTO :1 FROM DUAL; END;`
-	if err = cur.Execute(qry, []interface{}{timVar}, nil); err != nil {
-		t.Errorf("error executing `%s`: %s", qry, err)
-		return
-	}
-	t.Logf("1. tim=%q", tim)
-	if textVar, err = cur.NewVar(&text); err != nil {
-		t.Errorf("error creating variable for %s(%T): %s", tim, tim, err)
-	}
-	qry = `BEGIN SELECT SYSDATE, TO_CHAR(SYSDATE) INTO :1, :2 FROM DUAL; END;`
-	if err = cur.Execute(qry, []interface{}{timVar, textVar}, nil); err != nil {
-		t.Errorf("error executing `%s`: %s", qry, err)
-		return
-	}
-	t.Logf("2. tim=%q text=%q", tim, text)
-}
-
 var inOutBindsTests = []struct {
 	inTyp string
 	in    interface{}
