@@ -37,6 +37,9 @@ PL/SQL associative tables...) then goracle/oracle is the straight choice.
 For simple (connection, Ping, Select) usage, and testing connection
 (DSN can be tricky), see [conntest](conntest/main.go).
 
+# Changes #
+With b0219c8f we can reuse statements with different number of bind variables!
+
 # Debug #
 You can build the test executable (for debugging with gdb, for example) with
 `go test -c`
