@@ -444,12 +444,16 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 			return LongStringVarType, uint(len(x)), 0, nil
 		}
 		return StringVarType, uint(len(x)), 0, nil
+	case *string:
+		return VarTypeByValue(*x)
 	case []string:
 		numElements = uint(len(x))
 		vt, size, _, err = VarTypeByValue("")
 		return
 	case bool:
 		return BooleanVarType, 0, 0, nil
+	case *bool:
+		return VarTypeByValue(*x)
 
 	case int8, uint8, int16, uint16, int, uint, int32, uint32:
 		return Int32VarType, 0, 0, nil
@@ -482,6 +486,8 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		numElements = uint(len(x))
 		vt, size, _, err = VarTypeByValue(time.Time{})
 		return
+	case *time.Time:
+		return VarTypeByValue(*x)
 
 	case time.Duration:
 		return IntervalVarType, 0, 0, nil

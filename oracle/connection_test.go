@@ -168,7 +168,7 @@ func TestCursor(t *testing.T) {
 var conn Connection
 
 func getConnection(t *testing.T) Connection {
-	if conn.handle != nil {
+	if conn.handle != nil && conn.IsConnected() {
 		return conn
 	}
 
