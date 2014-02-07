@@ -148,8 +148,27 @@ func dateTimeVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	*/
 	C.getDateTime((*C.OCIDate)(v.getHandle(pos)),
 		&year, &month, &day, &hour, &minute, &second)
+	/*
+		    fmt.Printf("%s[%d]: %d-%d-%d %d:%d:%d = %s", v, pos,
+				year, month, day, hour, minute, second,
+				time.Date(int(year), time.Month(month), int(day),
+					int(hour), int(minute), int(second), 0, time.Local).Format(time.RFC3339))
+	*/
+	if year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0 {
+		return time.Time{}, nil
+	}
 	return time.Date(int(year), time.Month(month), int(day),
 		int(hour), int(minute), int(second), 0, time.Local), nil
+}
+
+func dateTimeVarIsNull(v *Variable, pos uint) bool {
+	var (
+		year                             C.sb2
+		month, day, hour, minute, second C.ub1
+	)
+	C.getDateTime((*C.OCIDate)(v.getHandle(pos)),
+		&year, &month, &day, &hour, &minute, &second)
+	return year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0
 }
 
 // intervalVarInitialize initializes the variable.
@@ -258,10 +277,11 @@ func init() {
 		oracleType:       C.SQLT_ODT,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             C.sizeof_OCIDate, // element length
-		isCharData:       false,            // is character data
-		isVariableLength: false,            // is variable length
-		canBeCopied:      true,             // can be copied
-		canBeInArray:     true,             // can be in array
+		isNull:           dateTimeVarIsNull,
+		isCharData:       false, // is character data
+		isVariableLength: false, // is variable length
+		canBeCopied:      true,  // can be copied
+		canBeInArray:     true,  // can be in array
 	}
 	IntervalVarType = &VariableType{
 		Name:             "Interval",

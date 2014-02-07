@@ -1316,7 +1316,11 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	if rval.Kind() == reflect.Ptr {
 		v.destination = rval
 		rval = rval.Elem()
-		value = rval.Interface()
+		if rval.IsValid() {
+			value = rval.Interface()
+		} else {
+			value = reflect.Zero(rval.Type())
+		}
 	} else if v.destination.IsValid() {
 		v.destination = reflect.ValueOf(nil)
 	}
