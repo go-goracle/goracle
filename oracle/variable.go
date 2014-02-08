@@ -1313,13 +1313,11 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		return errors.New("arrays of arrays are not supported by the OCI")
 	}
 	rval := reflect.ValueOf(value)
-	if rval.Kind() == reflect.Ptr {
+	if rval.Kind() == reflect.Ptr && !rval.IsNil() {
 		v.destination = rval
 		rval = rval.Elem()
 		if rval.IsValid() {
 			value = rval.Interface()
-		} else {
-			value = reflect.Zero(rval.Type())
 		}
 	} else if v.destination.IsValid() {
 		v.destination = reflect.ValueOf(nil)
