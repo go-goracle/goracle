@@ -286,7 +286,7 @@ func TestArrayInBinds(t *testing.T) {
 			t.FailNow()
 		}
 		qry = `DECLARE
-	TYPE tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY PLS_INTEGER;
+	TYPE tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY BINARY_INTEGER;
 	tab tabTyp := :1;
 	v_idx PLS_INTEGER;
 	v_out VARCHAR2(1000) := '!';
@@ -325,6 +325,7 @@ var arrOutBindsTests = []struct {
 	in     interface{}
 	out    []string
 }{
+	{"PLS_INTEGER", []int32{-2, -4, -8}, []string{"", "", ""}},
 	{"INTEGER(3)", []int32{1, 3, 5}, []string{"Typ=2 Len=2: 193,2", "Typ=2 Len=2: 193,4", "Typ=2 Len=2: 193,6"}},
 	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, []string{"Typ=2 Len=2: 192,51", "Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102"}},
 	{"VARCHAR2(40)", []string{"SELECT    012345678901234567890123456789", "árvíztűrő tükörfúrógép"},
@@ -379,6 +380,7 @@ END;`
 		if err = cur.Execute(qry, nil,
 			map[string]interface{}{"inp": tt.in, "out": out}); err != nil {
 			t.Errorf("error executing `%s`: %s", qry, err)
+			t.FailNow()
 			continue
 		}
 		n := out.ArrayLength()

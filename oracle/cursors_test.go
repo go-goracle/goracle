@@ -32,7 +32,7 @@ func TestReuseBinds(t *testing.T) {
 	var (
 		err             error
 		timVar, textVar *Variable
-		tim             time.Time = time.Now()
+		tim             = time.Now()
 		text            string
 	)
 	if timVar, err = cur.NewVar(&tim); err != nil {
