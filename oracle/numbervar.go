@@ -310,7 +310,7 @@ func init() {
 		preDefine:        numberVarPreDefine,
 		setValue:         numberVarSetValue,
 		getValue:         numberVarGetValue,
-		oracleType:       C.SQLT_FLT,         // Oracle type
+		oracleType:       C.SQLT_VNU,         // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
 		size:             C.sizeof_OCINumber, // element length
 		isCharData:       false,              // is character data
@@ -351,7 +351,7 @@ func init() {
 		preDefine:        numberVarPreDefine,
 		setValue:         numberVarSetValue,
 		getValue:         numberVarGetValue,
-		oracleType:       C.SQLT_INT,       // Oracle type
+		oracleType:       C.SQLT_VNU,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             8,                // element length
 		isCharData:       false,            // is character data
@@ -365,7 +365,7 @@ func init() {
 		preDefine:        numberVarPreDefine,
 		setValue:         numberVarSetValue,
 		getValue:         numberVarGetValue,
-		oracleType:       C.SQLT_NUM,         // Oracle type
+		oracleType:       C.SQLT_VNU,         // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
 		size:             C.sizeof_OCINumber, // element length
 		isCharData:       false,              // is character data

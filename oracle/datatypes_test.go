@@ -253,7 +253,8 @@ var arrInBindsTests = []struct {
 	in     interface{}
 	out    string
 }{
-	{"INTEGER(3)", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=2: 193,4\n3. Typ=2 Len=2: 193,6\n"},
+	{"INTEGER(3)", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=1: 128\n3. Typ=2 Len=2: 193,4\n"},
+	{"PLS_INTEGER", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=1: 128\n3. Typ=2 Len=2: 193,4\n"},
 	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "!2!1. Typ=2 Len=2: 192,51\n2. Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102\n"},
 	{"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"},
 		"!2!1. Typ=1 Len=6: 83,69,76,69,67,84\n2. Typ=1 Len=31: 195,161,114,118,195,173,122,116,197,177,114,197,145,32,116,195,188,107,195,182,114,102,195,186,114,195,179,103,195,169,112\n"},
@@ -286,7 +287,7 @@ func TestArrayInBinds(t *testing.T) {
 			t.FailNow()
 		}
 		qry = `DECLARE
-	TYPE tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY BINARY_INTEGER;
+	TYPE tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY PLS_INTEGER;
 	tab tabTyp := :1;
 	v_idx PLS_INTEGER;
 	v_out VARCHAR2(1000) := '!';
