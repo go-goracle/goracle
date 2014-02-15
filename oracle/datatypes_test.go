@@ -325,7 +325,7 @@ var arrOutBindsTests = []struct {
 	in     interface{}
 	out    []string
 }{
-	{"PLS_INTEGER", []int32{-2, -4, -8}, []string{"", "", ""}},
+	{"INTEGER", []int32{-2, -4, -8}, []string{"Typ=2 Len=3: 62,99,102", "Typ=2 Len=3: 62,97,102", "Typ=2 Len=3: 62,93,102"}},
 	{"INTEGER(3)", []int32{1, 3, 5}, []string{"Typ=2 Len=2: 193,2", "Typ=2 Len=2: 193,4", "Typ=2 Len=2: 193,6"}},
 	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, []string{"Typ=2 Len=2: 192,51", "Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102"}},
 	{"VARCHAR2(40)", []string{"SELECT    012345678901234567890123456789", "árvíztűrő tükörfúrógép"},

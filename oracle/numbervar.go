@@ -306,11 +306,12 @@ func numberVarGetValue(v *Variable, pos uint) (interface{}, error) {
 
 func init() {
 	FloatVarType = &VariableType{
-		Name:             "Float",
-		preDefine:        numberVarPreDefine,
-		setValue:         numberVarSetValue,
-		getValue:         numberVarGetValue,
-		oracleType:       C.SQLT_FLT,         // Oracle type
+		Name:       "Float",
+		preDefine:  numberVarPreDefine,
+		setValue:   numberVarSetValue,
+		getValue:   numberVarGetValue,
+		oracleType: C.SQLT_VNU,
+		//oracleType:       C.SQLT_FLT,         // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
 		size:             C.sizeof_OCINumber, // element length
 		isCharData:       false,              // is character data
@@ -333,11 +334,12 @@ func init() {
 	}
 
 	Int32VarType = &VariableType{
-		Name:             "Int32",
-		preDefine:        numberVarPreDefine,
-		setValue:         numberVarSetValue,
-		getValue:         numberVarGetValue,
-		oracleType:       C.SQLT_INT,       // Oracle type
+		Name:       "Int32",
+		preDefine:  numberVarPreDefine,
+		setValue:   numberVarSetValue,
+		getValue:   numberVarGetValue,
+		oracleType: C.SQLT_VNU,
+		//oracleType:       C.SQLT_INT,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             4,                // element length
 		isCharData:       false,            // is character data
@@ -347,11 +349,12 @@ func init() {
 	}
 
 	Int64VarType = &VariableType{
-		Name:             "Int64",
-		preDefine:        numberVarPreDefine,
-		setValue:         numberVarSetValue,
-		getValue:         numberVarGetValue,
-		oracleType:       C.SQLT_INT,       // Oracle type
+		Name:       "Int64",
+		preDefine:  numberVarPreDefine,
+		setValue:   numberVarSetValue,
+		getValue:   numberVarGetValue,
+		oracleType: C.SQLT_VNU,
+		//oracleType:       C.SQLT_INT,       // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT, // charset form
 		size:             8,                // element length
 		isCharData:       false,            // is character data
@@ -361,11 +364,12 @@ func init() {
 	}
 
 	LongIntegerVarType = &VariableType{
-		Name:             "LongInteger",
-		preDefine:        numberVarPreDefine,
-		setValue:         numberVarSetValue,
-		getValue:         numberVarGetValue,
-		oracleType:       C.SQLT_NUM,         // Oracle type
+		Name:       "LongInteger",
+		preDefine:  numberVarPreDefine,
+		setValue:   numberVarSetValue,
+		getValue:   numberVarGetValue,
+		oracleType: C.SQLT_VNU,
+		//oracleType:       C.SQLT_NUM,         // Oracle type
 		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
 		size:             C.sizeof_OCINumber, // element length
 		isCharData:       false,              // is character data

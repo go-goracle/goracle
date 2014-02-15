@@ -69,3 +69,27 @@ END;""", params)
 out = params['out'].getvalue()
 print repr(out)
 EOF
+
+echo '----------------------------------------------------------'
+PYTHONPATH=build/lib.linux-x86_64-2.7-11g:$PYTHONPATH python <<EOF
+import cx_Oracle_dbg as cx_Oracle
+import sys
+cx = cx_Oracle.connect('$DSN')
+cu = cx.cursor()
+params = {'inp': [1, 2], 'out': cu.var(cx_Oracle.STRING)}
+cu.execute("""DECLARE
+    TYPE in_tabTyp IS TABLE OF INTEGER INDEX BY BINARY_INTEGER;
+	in_tab in_tabTyp := :inp;
+	v_idx PLS_INTEGER;
+    v_out PLS_INTEGER := 0;
+BEGIN
+	v_idx := in_tab.FIRST;
+	WHILE v_idx IS NOT NULL LOOP
+        v_out := v_out + in_tab(v_idx);
+		v_idx := in_tab.NEXT(v_idx);
+	END LOOP;
+    :out := v_out;
+END;""", params)
+out = params['out'].getvalue()
+print repr(out)
+EOF

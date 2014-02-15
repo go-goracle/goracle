@@ -13,7 +13,8 @@ CHAR, VARCHAR2, NUMBER, DATETIME, INTERVAL simple AND array bind/define.
 CURSOR, CLOB, BLOB
 
 ## Not working ##
-Nothing I know of.
+Cannot input PLS_INTEGER, only INTIGER (this os OK, as PLS_INTEGER is a
+PL/SQL type, not an SQL one).
 
 ## Not working ATM ##
 Nothing I know of.
