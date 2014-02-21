@@ -254,6 +254,7 @@ var arrInBindsTests = []struct {
 	out    string
 }{
 	{"INTEGER(3)", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=2: 193,4\n3. Typ=2 Len=2: 193,6\n"},
+	//{"PLS_INTEGER", []int32{1, 3, 5}, "!3!1. Typ=2 Len=2: 193,2\n2. Typ=2 Len=1: 128\n3. Typ=2 Len=2: 193,4\n"},
 	{"NUMBER(5,3)", []float32{1.0 / 2, -10.24}, "!2!1. Typ=2 Len=2: 192,51\n2. Typ=2 Len=10: 62,91,78,2,2,24,90,83,81,102\n"},
 	{"VARCHAR2(6)", []string{"KEDV01", "KEDV02"}, "!2!1. Typ=1 Len=6: 75,69,68,86,48,49\n2. Typ=1 Len=6: 75,69,68,86,48,50\n"},
 	{"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"},
@@ -287,7 +288,7 @@ func TestArrayInBinds(t *testing.T) {
 			t.FailNow()
 		}
 		qry = `DECLARE
-	TYPE tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY BINARY_INTEGER;
+	TYPE tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY PLS_INTEGER;
 	tab tabTyp := :1;
 	v_idx PLS_INTEGER;
 	v_out VARCHAR2(1000) := '!';
@@ -356,11 +357,11 @@ func TestArrayOutBinds(t *testing.T) {
 		outStr string
 		ok     bool
 	)
-	placeholder := string(make([]byte, 100))
+	placeholder := string(make([]byte, 1000))
 	for i, tt := range arrOutBindsTests {
 		//if out, err = cur.NewVar(""); err != nil {
 		//if out, err = cur.NewVar([]string{"01234567890123456789", "01234567890123456789"}); err != nil {
-		if out, err = cur.NewVariableArrayByValue(placeholder, 10); err != nil {
+		if out, err = cur.NewVariableArrayByValue(placeholder, 100); err != nil {
 			t.Errorf("cannot create out variable: %s", err)
 			t.FailNow()
 		}
@@ -380,8 +381,7 @@ BEGIN
 END;`
 		if err = cur.Execute(qry, nil,
 			map[string]interface{}{"inp": tt.in, "out": out}); err != nil {
-			t.Errorf("error executing `%s`: %s", qry, err)
-			t.FailNow()
+			t.Errorf("%d. error executing `%s`: %s", i, qry, err)
 			continue
 		}
 		n := out.ArrayLength()
