@@ -301,10 +301,10 @@ func (v *Variable) getDataArr() (p unsafe.Pointer) {
 		}
 	}()
 
-	if v.dataBytes != nil {
+	if len(v.dataBytes) > 0 {
 		// log.Printf("getDataArr(%d) len=%d", v.typ.oracleType, len(v.dataBytes))
 		return (unsafe.Pointer(&v.dataBytes[0]))
-	} else if v.dataInts != nil {
+	} else if len(v.dataInts) > 0 {
 		return (unsafe.Pointer(&v.dataInts[0]))
 	}
 	return (unsafe.Pointer(&v.dataFloats[0]))
@@ -340,7 +340,7 @@ func (v *Variable) allocateData() error {
 	v.dataFloats = nil
 	v.dataInts = nil
 	v.dataBytes = nil
-	if false && v.typ.IsNumber() && !v.typ.isCharData &&
+	if v.typ.IsNumber() && !v.typ.isCharData &&
 		(v.typ == NativeFloatVarType || v.typ.IsInteger()) {
 		if v.typ == NativeFloatVarType {
 			v.dataFloats = make([]float64, v.allocatedElements)
@@ -799,7 +799,7 @@ static udt_Variable *Variable_NewByOutputTypeHandler(
 
 func (v *Variable) aLrC() (indic unsafe.Pointer, aL, rC *C.ub2) {
 	indic = unsafe.Pointer(&v.indicator[0])
-	if v.actualLength != nil && v.returnCode != nil {
+	if len(v.actualLength) > 0 && len(v.returnCode) > 0 {
 		aL = &v.actualLength[0]
 		rC = &v.returnCode[0]
 	}
@@ -954,17 +954,38 @@ func (v *Variable) internalBind() (err error) {
 	}
 	//log.Printf("%v isArray? %b allElts=%d", v.typ.Name, v.isArray, allElts)
 	var bindName string
+	var bufSlice interface{}
+	var m int
+	if CTrace {
+		m = int(v.bufferSize)
+		if m > 40 {
+			m = 40
+		}
+		switch {
+		case v.dataInts != nil:
+			if m > len(v.dataInts) {
+				m = len(v.dataInts)
+			}
+			bufSlice = v.dataInts[:m]
+		case v.dataFloats != nil:
+			if m > len(v.dataFloats) {
+				m = len(v.dataFloats)
+			}
+			bufSlice = v.dataFloats[:m]
+		default:
+			if m > len(v.dataBytes) {
+				m = len(v.dataBytes)
+			}
+			bufSlice = v.dataBytes[:m]
+		}
+	}
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {
-			m := v.bufferSize
-			if m > 40 {
-				m = 40
-			}
 			ctrace("internalBind.OCIBindByName(cur=%p, bind=%p, env=%p, name=%q, bufferSize=%d, oracleType=%d, data[:%d]=%v, indicator=%v, aL=%v, rC=%v, allElts=%v, pActElts=%v, DEFAULT)",
 				v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, bname,
-				v.bufferSize, v.typ.oracleType, m, v.dataBytes[:m],
+				v.bufferSize, v.typ.oracleType, m, bufSlice,
 				v.indicator, aL, rC,
 				allElts, pActElts)
 		}
@@ -978,12 +999,29 @@ func (v *Variable) internalBind() (err error) {
 			allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
-			m := v.bufferSize
+			m := int(v.bufferSize)
 			if m > 40 {
 				m = 40
 			}
+			switch {
+			case v.dataInts != nil:
+				if m > len(v.dataInts) {
+					m = len(v.dataInts)
+				}
+				bufSlice = v.dataInts[:m]
+			case v.dataFloats != nil:
+				if m > len(v.dataFloats) {
+					m = len(v.dataFloats)
+				}
+				bufSlice = v.dataFloats[:m]
+			default:
+				if m > len(v.dataBytes) {
+					m = len(v.dataBytes)
+				}
+				bufSlice = v.dataBytes[:m]
+			}
 			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data[:%d]=%v, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
-				v.boundCursorHandle, v.boundPos, m, v.dataBytes[:m],
+				v.boundCursorHandle, v.boundPos, m, bufSlice,
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
 				allElts, pActElts)
 		}
@@ -1409,9 +1447,9 @@ func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePos, targetPo
 		sp := sourcePos * sourceVar.bufferSize
 		sq := (sourcePos + 1) * sourceVar.bufferSize
 		switch {
-		case sourceVar.dataFloats != nil:
+		case len(sourceVar.dataFloats) > 0:
 			copy(targetVar.dataFloats[dp:], sourceVar.dataFloats[sp:sq])
-		case sourceVar.dataInts != nil:
+		case len(sourceVar.dataInts) > 0:
 			copy(targetVar.dataInts[dp:], sourceVar.dataInts[sp:sq])
 		default:
 			copy(targetVar.dataBytes[dp:], sourceVar.dataBytes[sp:sq])
