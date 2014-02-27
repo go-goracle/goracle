@@ -289,7 +289,7 @@ func TestArrayInBinds(t *testing.T) {
 		}
 		qry = `DECLARE
 	TYPE tabTyp IS TABLE OF ` + tt.tabTyp + ` INDEX BY PLS_INTEGER;
-	tab tabTyp := :1;
+	tab tabTyp := :in;
 	v_idx PLS_INTEGER;
 	v_out VARCHAR2(1000) := '!';
 BEGIN
@@ -302,9 +302,14 @@ BEGIN
 	    SELECT v_out||v_idx||'. '||DUMP(tab(v_idx))||CHR(10) INTO v_out FROM DUAL;
 		v_idx := tab.NEXT(v_idx);
 	END LOOP;
-	:2 := v_out;
+	:out := v_out;
 END;`
-		if err = cur.Execute(qry, []interface{}{tt.in, out}, nil); err != nil {
+		in, err := cur.NewVar(tt.in)
+		if err != nil {
+			t.Errorf("%d. error with NewVar: %v", i, err)
+			continue
+		}
+		if err = cur.Execute(qry, nil, map[string]interface{}{"in": in, "out": out}); err != nil {
 			t.Errorf("error executing `%s`: %s", qry, err)
 			continue
 		}

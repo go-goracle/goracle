@@ -72,6 +72,7 @@ type Variable struct {
 func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uint) (v *Variable, err error) {
 	// log.Printf("cur=%+v varType=%+v", cur, varType)
 	// perform basic initialization
+	isArray := numElements > 0
 	if numElements < 1 {
 		numElements = 1
 	}
@@ -82,7 +83,7 @@ func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uin
 		// returnCode:   make([]C.ub2, numElements),
 		// actualLength: make([]C.ub2, numElements),
 	}
-	if numElements > 1 {
+	if isArray {
 		v.makeArray()
 	}
 
@@ -197,13 +198,13 @@ func (cur *Cursor) NewVar(value interface{}, /*inconverter, outconverter, typena
 		val = rval.Elem().Interface()
 	}
 	varType, size, numElements, err := VarTypeByValue(val)
-	//log.Printf("varType=%v size=%d numElements=%d", varType, size, numElements)
 	if err != nil {
 		return nil, err
 	}
 	if varType.isVariableLength && size == 0 {
 		size = varType.size
 	}
+	log.Printf("varType=%v size=%d numElements=%d", varType, size, numElements)
 	/*
 	   if (type == (PyObject*) &g_ObjectVarType && !typeNameObj) {
 	       PyErr_SetString(PyExc_TypeError,
@@ -449,6 +450,9 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 	case []string:
 		numElements = uint(len(x))
 		vt, size, _, err = VarTypeByValue("")
+		for _, y := range x {
+			size = maxUint(size, uint(len(y)+1))
+		}
 		return
 	case bool:
 		return BooleanVarType, 0, 0, nil
@@ -1484,6 +1488,13 @@ func (v Variable) setHandle(pos uint, val unsafe.Pointer) {
 }
 func (v Variable) getHandleBytes(pos uint) []byte {
 	return v.dataBytes[int(pos*v.typ.size):int((pos+1)*v.typ.size)]
+}
+
+func maxUint(a, b uint) uint {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 /*
