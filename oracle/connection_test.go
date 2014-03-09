@@ -165,6 +165,21 @@ func TestCursor(t *testing.T) {
 	}
 }
 
+func TestSplitDSN(t *testing.T) {
+	for i, ts := range []struct {
+		input  string
+		output [3]string
+	}{
+		{"user/passw@sid", [...]string{"user", "passw", "sid"}},
+		{"/@conn_string", [...]string{"", "", "conn_string"}},
+	} {
+		user, passw, sid := SplitDSN(ts.input)
+		if !(ts.output[0] == user && ts.output[1] == passw && ts.output[2] == sid) {
+			t.Errorf("%d. %q: wanted %q, got %q", i, ts.input, ts.output, [...]string{user, passw, sid})
+		}
+	}
+}
+
 var conn Connection
 
 func getConnection(t *testing.T) Connection {

@@ -238,7 +238,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 			setErrAt(err, "Connect[set user name]")
 			return err
 		}
-		// log.Printf("set user name %s", buffer)
+		fmt.Printf("set user name %s\n", buffer)
 	}
 
 	// set password in session handle
@@ -251,7 +251,7 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 			setErrAt(err, "Connect[set password]")
 			return err
 		}
-		// log.Printf("set password %s", buffer)
+		fmt.Printf("set password %s\n", buffer)
 	}
 
 	/*
@@ -569,7 +569,7 @@ func SplitDSN(dsn string) (username, password, sid string) {
 			}
 			username = username[:i]
 		} else {
-			username, password = "", username
+			username, password = "", username[1:]
 		}
 	}
 	return
