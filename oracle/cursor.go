@@ -1191,12 +1191,14 @@ func (cur *Cursor) callBuildStatement(
 
 	// begin building the statement
 	argNum := 1
+	argChunksOffset := 0
 	chunks := make([]string, 1, 32)
 	chunks[0] = "begin "
 	if returnValue != nil {
 		chunks = append(chunks, ":1 := ")
 		// insert the return variable
 		bindVarsArr[0] = returnValue
+		argChunksOffset = 1 // argNum=1 is used for the return
 		argNum++
 	}
 	chunks = append(chunks, name, "(")
@@ -1211,7 +1213,7 @@ func (cur *Cursor) callBuildStatement(
 			} else {
 				plus = ""
 			}
-			argchunks[argNum-1] = ":" + strconv.Itoa(argNum) + plus
+			argchunks[argNum-1-argChunksOffset] = ":" + strconv.Itoa(argNum) + plus
 			bindVarsArr[argNum-1] = arg
 			argNum++
 		}
@@ -1226,7 +1228,7 @@ func (cur *Cursor) callBuildStatement(
 			} else {
 				plus = ""
 			}
-			argchunks[argNum-1] = k + "=>:" + strconv.Itoa(argNum) + plus
+			argchunks[argNum-1-argChunksOffset] = k + "=>:" + strconv.Itoa(argNum) + plus
 			bindVarsArr[argNum-1] = arg
 			argNum++
 		}

@@ -93,3 +93,65 @@ func TestBindWithoutBind(t *testing.T) {
 		}
 	}
 }
+
+// clear && go test -v -test.run Test_callBuildStatement_Function -dsn=XXXXXXXXX
+func Test_callBuildStatement_Function(t *testing.T) {
+	listOfArguments := []interface{}{}
+	keywordArguments := map[string]interface{}{}
+	callBuildStatement_test(true, listOfArguments, keywordArguments, "begin :1 := Func(); end;", t)
+	listOfArguments = append(listOfArguments, "listarg1")
+	callBuildStatement_test(true, listOfArguments, keywordArguments, "begin :1 := Func(:2); end;", t)
+	keywordArguments["keyarg1"] = "keyval1"
+	callBuildStatement_test(true, listOfArguments, keywordArguments, "begin :1 := Func(:2, keyarg1=>:3); end;", t)
+	// empty listArgs
+	listOfArguments = []interface{}{}
+	callBuildStatement_test(true, listOfArguments, keywordArguments, "begin :1 := Func(keyarg1=>:2); end;", t)
+}
+
+// clear && go test -v -test.run Test_callBuildStatement_Procedure -dsn=XXXXXXXXX
+func Test_callBuildStatement_Procedure(t *testing.T) {
+	listOfArguments := []interface{}{}
+	keywordArguments := map[string]interface{}{}
+	callBuildStatement_test(false, listOfArguments, keywordArguments, "begin Proc(); end;", t)
+	listOfArguments = append(listOfArguments, "listarg1")
+	callBuildStatement_test(false, listOfArguments, keywordArguments, "begin Proc(:1); end;", t)
+	keywordArguments["keyarg1"] = "keyval1"
+	callBuildStatement_test(false, listOfArguments, keywordArguments, "begin Proc(:1, keyarg1=>:2); end;", t)
+	// empty listArgs
+	listOfArguments = []interface{}{}
+	callBuildStatement_test(false, listOfArguments, keywordArguments, "begin Proc(keyarg1=>:1); end;", t)
+}
+
+func callBuildStatement_test(
+	withReturn bool,
+	listOfArguments []interface{},
+	keywordArguments map[string]interface{},
+	expectedStatement string,
+	t *testing.T) {
+	mockedCursor := &Cursor{}
+	var statement string
+	var err error
+	if withReturn { // Function
+		var returnValue Variable
+		statement, _, err = mockedCursor.callBuildStatement(
+			"Func",
+			&returnValue,
+			listOfArguments,
+			keywordArguments)
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else { // Procedure
+		statement, _, err = mockedCursor.callBuildStatement(
+			"Proc",
+			nil,
+			listOfArguments,
+			keywordArguments)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if statement != expectedStatement {
+		t.Errorf("got:%s\nwant:%s", statement, expectedStatement)
+	}
+}
