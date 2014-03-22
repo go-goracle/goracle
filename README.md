@@ -53,7 +53,8 @@ See [c](./c) for example.
 
 
 # Install #
-It is `go get`'able iff you have
+It is `go get`'able  with `go get github.com/tgulacsi/goracle/godrv`
+iff you have
 [Oracle DB](http://www.oracle.com/technetwork/database/enterprise-edition/index.html) installed
 OR the Oracle's
 [InstantClient](http://www.oracle.com/technetwork/database/features/instant-client/index-097480.html)
@@ -67,7 +68,7 @@ AND you have set proper environment variables:
 
     export CGO_CFLAGS=-I$(dirname $(find $ORACLE_HOME -type f -name oci.h))
     export CGO_LDFLAGS=-L$(dirname $(find $ORACLE_HOME -type f -name libclntsh.so\*))
-    go get github.com/tgulacsi/goracle
+    go get github.com/tgulacsi/goracle/godrv
 
 For example, with my [XE](http://www.oracle.com/technetwork/products/express-edition/downloads/index.html):
 
