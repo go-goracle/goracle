@@ -95,34 +95,34 @@ func TestBindWithoutBind(t *testing.T) {
 }
 
 // clear && go test -v -test.run Test_callBuildStatement_Function -dsn=XXXXXXXXX
-func Test_callBuildStatement_Function(t *testing.T) {
+func TestCallBuildStatementFunction(t *testing.T) {
 	listOfArguments := []interface{}{}
 	keywordArguments := map[string]interface{}{}
-	callBuildStatement_test(true, listOfArguments, keywordArguments, "begin :1 := Func(); end;", t)
+	callBuildStatementTest(true, listOfArguments, keywordArguments, "begin :1 := Func(); end;", t)
 	listOfArguments = append(listOfArguments, "listarg1")
-	callBuildStatement_test(true, listOfArguments, keywordArguments, "begin :1 := Func(:2); end;", t)
+	callBuildStatementTest(true, listOfArguments, keywordArguments, "begin :1 := Func(:2); end;", t)
 	keywordArguments["keyarg1"] = "keyval1"
-	callBuildStatement_test(true, listOfArguments, keywordArguments, "begin :1 := Func(:2, keyarg1=>:3); end;", t)
+	callBuildStatementTest(true, listOfArguments, keywordArguments, "begin :1 := Func(:2, keyarg1=>:3); end;", t)
 	// empty listArgs
 	listOfArguments = []interface{}{}
-	callBuildStatement_test(true, listOfArguments, keywordArguments, "begin :1 := Func(keyarg1=>:2); end;", t)
+	callBuildStatementTest(true, listOfArguments, keywordArguments, "begin :1 := Func(keyarg1=>:2); end;", t)
 }
 
 // clear && go test -v -test.run Test_callBuildStatement_Procedure -dsn=XXXXXXXXX
-func Test_callBuildStatement_Procedure(t *testing.T) {
+func TestCallBuildStatementProcedure(t *testing.T) {
 	listOfArguments := []interface{}{}
 	keywordArguments := map[string]interface{}{}
-	callBuildStatement_test(false, listOfArguments, keywordArguments, "begin Proc(); end;", t)
+	callBuildStatementTest(false, listOfArguments, keywordArguments, "begin Proc(); end;", t)
 	listOfArguments = append(listOfArguments, "listarg1")
-	callBuildStatement_test(false, listOfArguments, keywordArguments, "begin Proc(:1); end;", t)
+	callBuildStatementTest(false, listOfArguments, keywordArguments, "begin Proc(:1); end;", t)
 	keywordArguments["keyarg1"] = "keyval1"
-	callBuildStatement_test(false, listOfArguments, keywordArguments, "begin Proc(:1, keyarg1=>:2); end;", t)
+	callBuildStatementTest(false, listOfArguments, keywordArguments, "begin Proc(:1, keyarg1=>:2); end;", t)
 	// empty listArgs
 	listOfArguments = []interface{}{}
-	callBuildStatement_test(false, listOfArguments, keywordArguments, "begin Proc(keyarg1=>:1); end;", t)
+	callBuildStatementTest(false, listOfArguments, keywordArguments, "begin Proc(keyarg1=>:1); end;", t)
 }
 
-func callBuildStatement_test(
+func callBuildStatementTest(
 	withReturn bool,
 	listOfArguments []interface{},
 	keywordArguments map[string]interface{},

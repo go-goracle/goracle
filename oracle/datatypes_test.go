@@ -147,6 +147,8 @@ var outBindsTests = []struct {
 }{
 	{"3", int32(0), "3"},
 	{"-10.24", float32(-10.24), "-10.24"},
+	{"TO_NUMBER(12345678901)", int64(12345678901), "12345678901"},
+	{"TO_NUMBER(12345678901234567890)", "12345678901234567890", "12345678901234567890"},
 	// {"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"}, "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},
 	// {"RAW(4)", [][]byte{[]byte{0, 1, 2, 3}, []byte{5, 7, 11, 13}}, "Typ=23 Len=8: 0,1,2,3,5,7,b,d"},
 	// {"DATE", []time.Time{time.Date(2013, 1, 2, 10, 6, 49, 0, time.Local),
