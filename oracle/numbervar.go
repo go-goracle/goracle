@@ -279,7 +279,9 @@ func numberVarGetValue(v *Variable, pos uint) (interface{}, error) {
 		}
 		return v.environment.FromEncodedString(buf[:int(size)]), nil
 	}
-	// log.Printf("v=%s IsInteger?%s", v.typ, v.typ.IsInteger())
+	if CTrace {
+		ctrace("v=%s IsInteger?%s", v.typ, v.typ.IsInteger())
+	}
 	if v.typ.IsInteger() {
 		intVal := int64(0)
 		if err := v.environment.CheckStatus(

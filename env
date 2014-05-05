@@ -5,20 +5,20 @@ fi
 cdir=
 ldir=
 if [ -z "$ORACLE_HOME" ]; then
-    nm=$(find /u01/app/oracle/product /usr/lib/oracle -name 'oracle_env.sh' \
+    nm=$(find /usr/lib/oracle /u01/app/oracle/product -name 'oracle_env.sh' \
         -type f 2>/dev/null | head -n1)
     if [ -n "$nm" ]; then
         . $nm
     fi
 fi
-for bdn in $ORACLE_HOME /usr/include; do
+for bdn in /usr/include $ORACLE_HOME; do
     cdir=$(find $bdn -type f -name oci.h 2>/dev/null | head -n1)
     if [ -n "$cdir" ]; then
         cdir=$(dirname $cdir)
         break
     fi
 done
-for bdn in $ORACLE_HOME /usr/lib; do
+for bdn in /usr/lib $ORACLE_HOME; do
     ldir=$(find $bdn -type f -name libclntsh.so\* 2>/dev/null | head -n1)
     if [ -n "$ldir" ]; then
         ldir=$(dirname $ldir)

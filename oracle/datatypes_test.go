@@ -39,6 +39,8 @@ var dataTypesTests = []struct {
 }{
 	{"SELECT 1 FROM DUAL", "%!s(float64=1)"},
 	{"SELECT -1 FROM DUAL", "%!s(float64=-1)"},
+	{"SELECT 9876 FROM DUAL", "%!s(float64=9876)"},
+	{"SELECT 9999999999 FROM DUAL", "%!s(float64=9.999999999e+09)"},
 	{"SELECT -1/4 FROM DUAL", "%!s(float64=-0.25)"},
 	{"SELECT TO_DATE('2011-12-13 14:15:16', 'YYYY-MM-DD HH24:MI:SS') FROM DUAL",
 		"2011-12-13 14:15:16 +0100 CET"},
@@ -89,7 +91,7 @@ func TestSimpleTypes(t *testing.T) {
 					repr = fmt.Sprintf("%s", row[0])
 				}
 				if repr != tt.out {
-					t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, repr, tt.out)
+					t.Errorf("%d. exec(%q) => %q (%#v), want %q", i, tt.in, row[0], repr, tt.out)
 				}
 			}
 		}
@@ -147,6 +149,7 @@ var outBindsTests = []struct {
 }{
 	{"3", int32(0), "3"},
 	{"-10.24", float32(-10.24), "-10.24"},
+	{"9999999999", int64(999999999), "9999999999"},
 	{"TO_NUMBER(12345678901)", int64(12345678901), "12345678901"},
 	{"TO_NUMBER(12345678901234567890)", "12345678901234567890", "12345678901234567890"},
 	// {"VARCHAR2(40)", []string{"SELECT", "árvíztűrő tükörfúrógép"}, "Typ=1 Len=6 CharacterSet=AL32UTF8: 53,45,4c,45,43,54"},

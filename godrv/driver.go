@@ -209,7 +209,7 @@ func (r rowsRes) Next(dest []driver.Value) error {
 	row := (*[]interface{})(unsafe.Pointer(&dest))
 	// log.Printf("FetcOneInto(%p %+v len=%d) %T", row, *row, len(*row), *row)
 	err := r.cu.FetchOneInto(*row...)
-	debug("fetched row=%p %+v (len=%d) err=%s", row, *row, len(*row), err)
+	debug("fetched row=%p %#v (len=%d) err=%v", row, *row, len(*row), err)
 	return err
 }
 

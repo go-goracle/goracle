@@ -39,6 +39,7 @@ func TestSimple(t *testing.T) {
 	)
 	for i, qry := range []string{
 		"SELECT ROWNUM FROM DUAL",
+		"SELECT 1234567890 FROM DUAL",
 		"SELECT LOG(10, 2) FROM DUAL",
 		"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL",
 		"SELECT HEXTORAW('00') FROM DUAL",
@@ -89,6 +90,50 @@ func TestSimple(t *testing.T) {
 			t.Errorf("error scanning row: %s", err)
 		}
 		//t.Logf("%d=%q", num, str)
+	}
+}
+
+func TestNumber(t *testing.T) {
+	conn := getConnection(t)
+	defer conn.Close()
+
+	oldDebug := IsDebug
+	IsDebug = true
+	if !oldDebug {
+		defer func() { IsDebug = false }()
+	}
+
+	var (
+		err, errF error
+		into      int64
+		intoF     float64
+	)
+	for i, tst := range []struct {
+		in   string
+		want int64
+	}{
+		{"1", 1},
+		{"1234567890", 1234567890},
+	} {
+		into, intoF, errF = 0, 0, nil
+		qry := "SELECT " + tst.in + " FROM DUAL"
+		row := conn.QueryRow(qry)
+		if err = row.Scan(&into); err != nil {
+			row = conn.QueryRow(qry)
+			if errF = row.Scan(&intoF); errF != nil {
+				t.Errorf("%d. error with %q testF: %s", i, qry, err)
+				continue
+			}
+			t.Logf("%d. %q result: %#v", i, qry, intoF)
+			if intoF != float64(tst.want) {
+				t.Errorf("%d. got %#v want %#v", i, intoF, float64(tst.want))
+			}
+			continue
+		}
+		t.Logf("%d. %q result: %#v", i, qry, into)
+		if into != tst.want {
+			t.Errorf("%d. got %#v want %#v", i, into, tst.want)
+		}
 	}
 }
 
