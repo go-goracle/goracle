@@ -31,7 +31,7 @@ func TestTable(t *testing.T) {
 	cur := conn.NewCursor()
 	defer cur.Close()
 	if err := cur.Execute(`CREATE TABLE tst_goracle (
-			F_int NUMBER(3), F_bigint NUMBER(20),
+			F_int NUMBER(10,0), F_bigint NUMBER(20),
 			F_real NUMBER(6,3), F_bigreal NUMBER(20,10),
 			F_text VARCHAR2(1000), F_date DATE
 		)`, nil, nil); err != nil {
@@ -39,15 +39,12 @@ func TestTable(t *testing.T) {
 		return
 	}
 	defer cur.Execute("DROP TABLE tst_goracle", nil, nil)
-	if !insert(t, cur, 1, "1234567890123456", 123.456,
-		"123456789.123456789", "int64", time.Now()) {
-		return
-	}
 
-	if !insert(t, cur, 2, "22345678901234567890", 223.456,
-		"223456789.123456789", "big.Int", time.Now()) {
-		return
-	}
+	insert(t, cur, 1234567890, "1234567890123456", 123.456,
+		"123456789.123456789", "int64", time.Now())
+
+	insert(t, cur, 2, "22345678901234567890", 223.456,
+		"223456789.123456789", "big.Int", time.Now())
 }
 
 func insert(t *testing.T, cur *Cursor,
