@@ -28,7 +28,8 @@ import "C"
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
+
+	"github.com/juju/errgo"
 )
 
 var (
@@ -74,7 +75,7 @@ func longVarSetValue(v *Variable, pos uint, value interface{}) error {
 	if y, ok := value.(string); !ok {
 		z, ok := value.([]byte)
 		if !ok {
-			return fmt.Errorf("awaited string or []byte, got %T", value)
+			return errgo.Newf("awaited string or []byte, got %T", value)
 		}
 		x = z
 	} else {
@@ -84,17 +85,19 @@ func longVarSetValue(v *Variable, pos uint, value interface{}) error {
 	length := uint(len(x) + 4)
 	if uint(len(v.dataBytes)) < length {
 		if err := v.resize(length); err != nil {
-			return err
+			return errgo.Mask(err)
 		}
 	}
 
 	p := v.bufferSize * pos
 	if err := binary.Write(bytes.NewBuffer(v.dataBytes[p:p+4]),
 		binary.LittleEndian, uint32(len(x))); err != nil {
-		return err
+		return errgo.Mask(
+
+			// copy the string to the Oracle buffer
+			err)
 	}
 
-	// copy the string to the Oracle buffer
 	copy(v.dataBytes[p+4:p+4+uint(len(x))], x)
 	return nil
 }
@@ -105,7 +108,7 @@ func longVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	size := uint32(v.bufferSize)
 	if err := binary.Read(bytes.NewReader(v.dataBytes[p:p+4]),
 		binary.LittleEndian, &size); err != nil {
-		return nil, err
+		return nil, errgo.Mask(err)
 	}
 	data := v.dataBytes[p+4 : p+4+uint(size)]
 	if v.typ == LongStringVarType {

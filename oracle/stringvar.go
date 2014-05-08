@@ -26,9 +26,9 @@ limitations under the License.
 import "C"
 
 import (
-	"errors"
-	"fmt"
 	"log"
+
+	"github.com/juju/errgo"
 )
 
 var (
@@ -85,14 +85,14 @@ func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 	case []string:
 		for i := range x {
 			if err = stringVarSetValue(v, pos+uint(i), x[i]); err != nil {
-				return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
+				return errgo.Newf("error setting pos=%d + %d. element: %s", pos, i, err)
 			}
 		}
 		return nil
 	case [][]byte:
 		for i := range x {
 			if err = stringVarSetValue(v, pos+uint(i), x[i]); err != nil {
-				return fmt.Errorf("error setting pos=%d + %d. element: %s", pos, i, err)
+				return errgo.Newf("error setting pos=%d + %d. element: %s", pos, i, err)
 			}
 		}
 		return nil
@@ -110,15 +110,15 @@ func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 		log.Panicf("string or []byte required, got %T", value)
 	}
 	if v.typ.isCharData && length > MaxStringChars {
-		return errors.New("string data too large")
+		return errgo.New("string data too large")
 	} else if !v.typ.isCharData && length > MaxBinaryBytes {
-		return errors.New("binary data too large")
+		return errgo.New("binary data too large")
 	}
 
 	// ensure that the buffer is large enough
 	if length > int(v.bufferSize) {
 		if err := v.resize(uint(length)); err != nil {
-			return err
+			return errgo.Mask(err)
 		}
 	}
 

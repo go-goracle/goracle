@@ -38,11 +38,12 @@ void setXID(XID *xid, int formatId, char *transactionId, int tIdLen, char *branc
 import "C"
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"unsafe"
+
+	"github.com/juju/errgo"
 )
 
 // MakeDSN makea a data source name given the host port and SID.
@@ -156,15 +157,15 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		C.OCI_HTYPE_SERVER,
 		(*unsafe.Pointer)(unsafe.Pointer(&conn.serverHandle)),
 		"Connect[allocate server handle]"); err != nil {
-		return err
-	}
+		return errgo.Mask(
 
-	// attach to the server
-	/*
-	   if (cxBuffer_FromObject(&buffer, self->dsn,
-	           self->environment->encoding) < 0)
-	       return -1;
-	*/
+			// attach to the server
+			/*
+			   if (cxBuffer_FromObject(&buffer, self->dsn,
+			           self->environment->encoding) < 0)
+			       return -1;
+			*/err)
+	}
 
 	buffer := make([]byte, max(16, len(conn.dsn), len(conn.username), len(conn.password))+1)
 	copy(buffer, []byte(conn.dsn))
@@ -181,17 +182,21 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 	conn.srvMtx.Unlock()
 	// cxBuffer_Clear(&buffer);
 	if err = conn.environment.CheckStatus(status, "Connect[server attach]"); err != nil {
-		return err
+		return errgo.Mask(
+
+			// log.Printf("attached to server %s", conn.serverHandle)
+			err)
 	}
-	// log.Printf("attached to server %s", conn.serverHandle)
 
 	// allocate the service context handle
 	if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
 		C.OCI_HTYPE_SVCCTX, (*unsafe.Pointer)(unsafe.Pointer(&conn.handle)),
 		"Connect[allocate service context handle]"); err != nil {
-		return err
+		return errgo.Mask(
+
+			// log.Printf("allocated service context handle")
+			err)
 	}
-	// log.Printf("allocated service context handle")
 
 	// set attribute for server handle
 	if err = conn.AttrSet(C.OCI_ATTR_SERVER, unsafe.Pointer(conn.serverHandle), 0); err != nil {
@@ -223,9 +228,11 @@ func (conn *Connection) Connect(mode int64, twophase bool /*, newPassword string
 		C.OCI_HTYPE_SESSION,
 		(*unsafe.Pointer)(unsafe.Pointer(&conn.sessionHandle)),
 		"Connect[allocate session handle]"); err != nil {
-		return err
+		return errgo.Mask(
+
+			// log.Printf("allocated session handle")
+			err)
 	}
-	// log.Printf("allocated session handle")
 
 	// set user name in session handle
 	if conn.username != "" {
@@ -310,7 +317,7 @@ func (conn *Connection) Commit() error {
 			C.ub4(conn.commitMode)), "Commit")
 	conn.srvMtx.Unlock()
 	if err != nil {
-		return err
+		return errgo.Mask(err)
 	}
 	conn.commitMode = C.OCI_DEFAULT
 	//Py_END_ALLOW_THREADS
@@ -325,10 +332,10 @@ func (conn *Connection) Begin(formatID int, transactionID, branchID string) erro
 	// parse the arguments
 	formatID = -1
 	if len(transactionID) > C.MAXGTRIDSIZE {
-		return errors.New("transaction id too large")
+		return errgo.New("transaction id too large")
 	}
 	if len(branchID) > C.MAXBQUALSIZE {
-		return errors.New("branch id too large")
+		return errgo.New("branch id too large")
 	}
 
 	// make sure we are actually connected
@@ -342,16 +349,18 @@ func (conn *Connection) Begin(formatID int, transactionID, branchID string) erro
 		C.OCI_ATTR_TRANS, unsafe.Pointer(&transactionHandle),
 		"Connection.Begin(): find existing transaction handle")
 	if err != nil {
-		return err
+		return errgo.Mask(
+
+			// create a new transaction handle, if necessary
+			err)
 	}
 
-	// create a new transaction handle, if necessary
 	if transactionHandle == nil {
 		if err = ociHandleAlloc(unsafe.Pointer(conn.environment.handle),
 			C.OCI_HTYPE_TRANS,
 			(*unsafe.Pointer)(unsafe.Pointer(&transactionHandle)),
 			"Connection.Begin"); err != nil {
-			return errors.New("Connection.Begin(): allocate transaction handle: " +
+			return errgo.New("Connection.Begin(): allocate transaction handle: " +
 				err.Error())
 		}
 	}
@@ -366,7 +375,7 @@ func (conn *Connection) Begin(formatID int, transactionID, branchID string) erro
 		if err = conn.environment.AttrSet(
 			unsafe.Pointer(transactionHandle), C.OCI_ATTR_XID,
 			C.OCI_HTYPE_TRANS, unsafe.Pointer(&xid), C.sizeof_XID); err != nil {
-			return errors.New("Connection.Begin(): set XID: " + err.Error())
+			return errgo.New("Connection.Begin(): set XID: " + err.Error())
 		}
 	}
 
@@ -374,7 +383,7 @@ func (conn *Connection) Begin(formatID int, transactionID, branchID string) erro
 	if err = conn.environment.AttrSet(
 		unsafe.Pointer(conn.handle), C.OCI_HTYPE_SVCCTX,
 		C.OCI_ATTR_TRANS, unsafe.Pointer(transactionHandle), 0); err != nil {
-		return errors.New("Connection.Begin(): associate transaction: " + err.Error())
+		return errgo.New("Connection.Begin(): associate transaction: " + err.Error())
 	}
 
 	// start the transaction
@@ -385,7 +394,7 @@ func (conn *Connection) Begin(formatID int, transactionID, branchID string) erro
 		"start transaction")
 	conn.srvMtx.Unlock()
 	if err != nil {
-		return errors.New("Connection.Begin(): start transaction: " + err.Error())
+		return errgo.New("Connection.Begin(): start transaction: " + err.Error())
 	}
 
 	//Py_END_ALLOW_THREADS
@@ -411,7 +420,7 @@ func (conn *Connection) Prepare() (bool, error) {
 		return false, nil
 	}
 	if err := conn.environment.CheckStatus(status, "Prepare"); err != nil {
-		return false, err
+		return false, errgo.Mask(err)
 	}
 	conn.commitMode = C.OCI_TRANS_TWOPHASE
 	//Py_END_ALLOW_THREADS
@@ -584,12 +593,12 @@ func (conn *Connection) NlsSettings(cur *Cursor) (oci, client, database string, 
 		defer cur.Close()
 	}
 	if err = cur.Execute("SELECT USERENV('language') FROM DUAL", nil, nil); err != nil {
-		err = fmt.Errorf("cannot get session language!?!: %s", err)
+		err = errgo.Newf("cannot get session language!?!: %s", err)
 		return
 	}
 	var row []interface{}
 	if row, err = cur.FetchOne(); err != nil {
-		err = fmt.Errorf("no userenv('language')? %s", err)
+		err = errgo.Newf("no userenv('language')? %s", err)
 		return
 	}
 	client = row[0].(string)
@@ -597,7 +606,7 @@ func (conn *Connection) NlsSettings(cur *Cursor) (oci, client, database string, 
 	if err = cur.Execute(`SELECT parameter, value FROM nls_database_parameters
 			WHERE parameter IN ('NLS_TERRITORY', 'NLS_LANGUAGE', 'NLS_CHARACTERSET')`,
 		nil, nil); err != nil {
-		err = fmt.Errorf("error selecting from nls_database_parameters: %s", err)
+		err = errgo.Newf("error selecting from nls_database_parameters: %s", err)
 		return
 	}
 	params := make(map[string]string, 3)

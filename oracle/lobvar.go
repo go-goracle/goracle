@@ -49,10 +49,11 @@ sword lobAlloc(OCIEnv *envhp, void *data, int allocatedElements) {
 import "C"
 
 import (
-	"errors"
-	"fmt"
+
 	//"runtime"
 	"unsafe"
+
+	"github.com/juju/errgo"
 )
 
 var (
@@ -81,31 +82,32 @@ func lobVarInitialize(v *Variable, cur *Cursor) error {
 		C.lobAlloc(v.environment.handle, unsafe.Pointer(&v.dataBytes[0]), //unsafe.Pointer(&dst),
 			C.int(v.allocatedElements)),
 		"DescrAlloc"); err != nil {
-		return err
+		return errgo.Mask(
+
+			/*
+				var (
+					x   **C.OCILobLocator
+					err error
+				)
+				for i := uint(0); i < v.allocatedElements; i++ {
+					x = (**C.OCILobLocator)(v.getHandle(i))
+					if err = v.environment.CheckStatus(
+						C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
+							(*unsafe.Pointer)(unsafe.Pointer(x)), C.OCI_DTYPE_LOB, 0, nil),
+						"DescrAlloc"); err != nil {
+						return err
+					}
+					if CTrace {
+						ctrace("lobVarInitialize(x=%p (%x))", x, x)
+					}
+					v.setHandle(i, unsafe.Pointer(*x))
+					if CTrace {
+						ctrace("lobVarInitialize(env=%p, i=%d, lob=%x)",
+							v.environment.handle, i, v.getHandleBytes(i))
+					}
+				}
+			*/err)
 	}
-	/*
-		var (
-			x   **C.OCILobLocator
-			err error
-		)
-		for i := uint(0); i < v.allocatedElements; i++ {
-			x = (**C.OCILobLocator)(v.getHandle(i))
-			if err = v.environment.CheckStatus(
-				C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
-					(*unsafe.Pointer)(unsafe.Pointer(x)), C.OCI_DTYPE_LOB, 0, nil),
-				"DescrAlloc"); err != nil {
-				return err
-			}
-			if CTrace {
-				ctrace("lobVarInitialize(x=%p (%x))", x, x)
-			}
-			v.setHandle(i, unsafe.Pointer(*x))
-			if CTrace {
-				ctrace("lobVarInitialize(env=%p, i=%d, lob=%x)",
-					v.environment.handle, i, v.getHandleBytes(i))
-			}
-		}
-	*/
 
 	return nil
 }
@@ -114,7 +116,7 @@ func (v *Variable) getLobLoc(pos uint) (*C.OCILobLocator, error) {
 	switch v.typ {
 	case ClobVarType, NClobVarType, BlobVarType, BFileVarType:
 	default:
-		return nil, fmt.Errorf("getLobLoc is usable only for LOB vars, not for %s", v.typ.Name)
+		return nil, errgo.Newf("getLobLoc is usable only for LOB vars, not for %s", v.typ.Name)
 	}
 	return C.getLobLoc(unsafe.Pointer(&v.dataBytes[0]), C.int(pos)), nil
 }
@@ -123,7 +125,7 @@ func (v *Variable) getLobInternalSize(pos uint) (length C.ub4, err error) {
 	switch v.typ {
 	case ClobVarType, NClobVarType, BlobVarType, BFileVarType:
 	default:
-		return 0, fmt.Errorf("getLobInternalSize is usable only for LOB vars! not for %T", v.typ)
+		return 0, errgo.Newf("getLobInternalSize is usable only for LOB vars! not for %T", v.typ)
 	}
 	lob, _ := v.getLobLoc(pos)
 	// Py_BEGIN_ALLOW_THREADS
@@ -206,13 +208,13 @@ func lobVarFinalize(v *Variable) error {
 func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, err error) {
 	if !(v.typ == BlobVarType || v.typ == ClobVarType ||
 		v.typ == NClobVarType || v.typ == BFileVarType) {
-		return 0, fmt.Errorf("only LOBs an be written into, not %T", v.typ)
+		return 0, errgo.Newf("only LOBs an be written into, not %T", v.typ)
 	}
 
 	amount = len(data)
 	// verify the data type
 	if v.typ == BFileVarType {
-		return 0, errors.New("BFILEs are read only")
+		return 0, errgo.New("BFILEs are read only")
 	}
 	if v.typ == BlobVarType {
 		// amount = len(data)
@@ -254,7 +256,7 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 			C.OCI_ONE_PIECE, nil, nil, 0,
 			v.typ.charsetForm),
 		"LobWrite"); err != nil {
-		return 0, err
+		return 0, errgo.Mask(err)
 	}
 	amount = int(oamount)
 	// Py_END_ALLOW_THREADS
@@ -278,7 +280,7 @@ func lobVarGetValueInto(v *Variable, pos uint, lv *ExternalLobVar) error {
 func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 	x, ok := value.([]byte)
 	if !ok {
-		return fmt.Errorf("requires []byte, got %T", value)
+		return errgo.Newf("requires []byte, got %T", value)
 	}
 	var (
 		isTemporary C.boolean
@@ -292,7 +294,7 @@ func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 			v.environment.errorHandle,
 			(*C.OCILobLocator)(v.getHandle(pos)), &isTemporary),
 		"LobIsTemporary"); err != nil {
-		return err
+		return errgo.Mask(err)
 	}
 	if isTemporary != C.TRUE {
 		if v.typ.oracleType == C.SQLT_BLOB {
@@ -309,7 +311,7 @@ func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 				C.OCI_DURATION_SESSION),
 			"LobCreateTemporary"); err != nil {
 			// Py_END_ALLOW_THREADS
-			return err
+			return errgo.Mask(err)
 		}
 	}
 
@@ -320,9 +322,11 @@ func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 			v.environment.errorHandle,
 			(*C.OCILobLocator)(unsafe.Pointer(v.getHandle(pos))), 0),
 		"LobTrim"); err != nil {
-		return err
+		return errgo.Mask(
+
+			// Py_END_ALLOW_THREADS
+			err)
 	}
-	// Py_END_ALLOW_THREADS
 
 	// set the current value
 	// func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, err error) {

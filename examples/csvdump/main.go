@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juju/errgo/errors"
 	"github.com/tgulacsi/goracle/examples/connect"
 	// "github.com/tgulacsi/goracle/godrv"
 	"github.com/tgulacsi/goracle/oracle"
@@ -48,7 +49,7 @@ func dump(w io.Writer, qry string) error {
 	//db, err := connect.GetConnection("")
 	cx, err := connect.GetRawConnection("")
 	if err != nil {
-		return fmt.Errorf("error connecting to database: %s", err)
+		return errors.Newf("error connecting to database: %s", err)
 	}
 	//defer db.Close()
 	defer cx.Close()
@@ -57,13 +58,13 @@ func dump(w io.Writer, qry string) error {
 	defer cu.Close()
 	err = cu.Execute(qry, nil, nil)
 	if err != nil {
-		return fmt.Errorf("error executing %q: %s", qry, err)
+		return errors.Newf("error executing %q: %s", qry, err)
 	}
 	//defer rows.Close()
 	//columns, err := rows.Columns()
 	columns, err := GetColumns(cu)
 	if err != nil {
-		return fmt.Errorf("error getting column converters: %s", err)
+		return errors.Newf("error getting column converters: %s", err)
 	}
 	log.Printf("columns: %#v", columns)
 
@@ -96,7 +97,7 @@ func dump(w io.Writer, qry string) error {
 	}
 	log.Printf("written %d rows.", n)
 	if err != nil && err != io.EOF {
-		return fmt.Errorf("error fetching rows from %s: %s", cu, err)
+		return errors.Newf("error fetching rows from %s: %s", cu, err)
 	}
 	return nil
 }
@@ -111,7 +112,7 @@ type Column struct {
 func GetColumns(cu *oracle.Cursor) (cols []Column, err error) {
 	desc, err := cu.GetDescription()
 	if err != nil {
-		return nil, fmt.Errorf("error getting description for %s: %s", cu, err)
+		return nil, errors.Newf("error getting description for %s: %s", cu, err)
 	}
 	//log.Printf("columns: %s", columns)
 	log.Printf("desc: %#v", desc)

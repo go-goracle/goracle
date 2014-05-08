@@ -21,6 +21,8 @@ import (
 	"log"
 	"testing"
 	"time"
+
+	"github.com/juju/errgo"
 )
 
 /*
@@ -37,11 +39,11 @@ var dataTypesTests = []struct {
 	in  string
 	out string
 }{
-	{"SELECT 1 FROM DUAL", "%!s(float64=1)"},
-	{"SELECT -1 FROM DUAL", "%!s(float64=-1)"},
-	{"SELECT 9876 FROM DUAL", "%!s(float64=9876)"},
-	{"SELECT 9999999999 FROM DUAL", "%!s(float64=9.999999999e+09)"},
-	{"SELECT -1/4 FROM DUAL", "%!s(float64=-0.25)"},
+	{"SELECT 1 FROM DUAL", "%!s(int32=1)"},
+	{"SELECT -1 FROM DUAL", "%!s(int32=-1)"},
+	{"SELECT 9876 FROM DUAL", "%!s(int32=9876)"},
+	{"SELECT 9999999999 FROM DUAL", "9999999999"},
+	{"SELECT -1/4 FROM DUAL", "-.25"},
 	{"SELECT TO_DATE('2011-12-13 14:15:16', 'YYYY-MM-DD HH24:MI:SS') FROM DUAL",
 		"2011-12-13 14:15:16 +0100 CET"},
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
@@ -49,7 +51,7 @@ var dataTypesTests = []struct {
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
 	{"SELECT HEXTORAW('00') FROM DUAL", "\x00"},
 	{"SELECT INTERVAL '05:30' HOUR TO MINUTE FROM DUAL", "5h30m0s"},
-	{"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "árvíztűrő tükörfúrógép"},
+	{"SELECT TO_CLOB('árvíztűrő tükörfúrógép') FROM DUAL", "string(árvíztűrő tükörfúrógép)"},
 }
 
 func TestSimpleTypes(t *testing.T) {
@@ -86,7 +88,7 @@ func TestSimpleTypes(t *testing.T) {
 					if reprB, err = ex.ReadAll(); err != nil {
 						t.Errorf("error reading LOB %s: %s", ex, err)
 					}
-					repr = string(reprB)
+					repr = "string(" + string(reprB) + ")"
 				} else {
 					repr = fmt.Sprintf("%s", row[0])
 				}
@@ -182,7 +184,7 @@ func TestOutBinds(t *testing.T) {
 			continue
 		}
 		if err = out.GetValueInto(&tt.outVal, 0); err != nil {
-			t.Errorf("%d. error getting value: %s", i, err)
+			t.Errorf("%d. error getting value: %s", i, errgo.Details(err))
 			continue
 		}
 		t.Logf("%d. out:%s %v", i, out, tt.outVal)

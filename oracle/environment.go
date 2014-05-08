@@ -43,10 +43,11 @@ import "C"
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"log"
 	"unsafe"
+
+	"github.com/juju/errgo"
 )
 
 // Environment holds handles for the database environment
@@ -120,7 +121,7 @@ func NewEnvironment() (*Environment, error) {
 	if err = env.CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
 		env.errorHandle, &sb4, C.OCI_NLS_CHARSET_MAXBYTESZ),
 		"Environment_New(): get max bytes per character"); err != nil {
-		return nil, err
+		return nil, errgo.Mask(err)
 	}
 	env.MaxBytesPerCharacter = uint(sb4)
 	env.maxStringBytes = MaxStringChars * env.MaxBytesPerCharacter
@@ -130,7 +131,7 @@ func NewEnvironment() (*Environment, error) {
 	if err = env.CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
 		env.errorHandle, &sb4, C.OCI_NLS_CHARSET_FIXEDWIDTH),
 		"Environment_New(): determine if charset fixed width"); err != nil {
-		return nil, err
+		return nil, errgo.Mask(err)
 	}
 	env.FixedWidth = sb4 > 0
 
@@ -167,7 +168,7 @@ func (env *Environment) Free() error {
 func ociHandleAlloc(parent unsafe.Pointer, typ C.ub4, dst *unsafe.Pointer, at string) error {
 	// var vsize C.ub4
 	if err := checkStatus(C.OCIHandleAlloc(parent, dst, typ, C.size_t(0), nil), false); err != nil {
-		return errors.New(at + ": " + err.Error())
+		return errgo.New(at + ": " + err.Error())
 	}
 	return nil
 }
@@ -176,7 +177,7 @@ func (env *Environment) ociDescrAlloc(dst *unsafe.Pointer, typ C.ub4, at string)
 	if err := checkStatus(
 		C.OCIDescriptorAlloc(unsafe.Pointer(env.handle), dst, typ, C.size_t(0), nil),
 		false); err != nil {
-		return errors.New(at + ": " + err.Error())
+		return errgo.New(at + ": " + err.Error())
 	}
 	return nil
 }
@@ -218,7 +219,7 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 		C.ub4(attribute), //ub4 attrtype
 		env.errorHandle)  //OCIError *errhp
 	if err = env.CheckStatus(status, "GetCharacterSetName[get charset id]"); err != nil {
-		return "", err
+		return "", errgo.Mask(err)
 	}
 
 	charsetName := make([]byte, C.OCI_NLS_MAXBUFSZ)
@@ -229,20 +230,24 @@ func (env *Environment) GetCharacterSetName(attribute uint32) (string, error) {
 		(*C.oratext)(&charsetName[0]),
 		C.OCI_NLS_MAXBUFSZ, C.ub2(charsetID)),
 		"GetCharacterSetName[get Oracle charset name]"); err != nil {
-		return "", err
+		return "", errgo.Mask(
+
+			// get IANA character set name
+			err)
 	}
 
-	// get IANA character set name
 	status = C.OCINlsNameMap(unsafe.Pointer(env.handle),
 		(*C.oratext)(&ianaCharsetName[0]),
 		C.OCI_NLS_MAXBUFSZ, (*C.oratext)(&charsetName[0]),
 		C.OCI_NLS_CS_ORA_TO_IANA)
 	if err = env.CheckStatus(status, "GetCharacterSetName[translate NLS charset]"); err != nil {
-		return "", err
+		return "", errgo.Mask(
+
+			// store results
+			// oratext = unsigned char
+			err)
 	}
 
-	// store results
-	// oratext = unsigned char
 	return string(ianaCharsetName), nil
 }
 
@@ -316,10 +321,8 @@ func (env *Environment) CheckStatus(status C.sword, at string) error {
 			break
 		}
 	}
-	err := &Error{Code: errorcode,
-		Message: fmt.Sprintf("[%d] %s", status, message),
-		At:      at}
-	log.Printf("CheckStatus(%d) ERR=%v", status, err)
+	err := NewErrorAt(errorcode, fmt.Sprintf("[%d] %s", status, message), at)
+	log.Printf("CheckStatus(%d) ERR=%#v", status, err)
 	return err
 }
 

@@ -26,10 +26,11 @@ package oracle
 import "C"
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"unsafe"
+
+	"github.com/juju/errgo"
 )
 
 const useLobRead2 = true
@@ -83,7 +84,7 @@ func (lv *ExternalLobVar) Verify() error {
 			lv.internalFetchNum, lv.lobVar.internalFetchNum)
 	}
 	if lv.internalFetchNum != lv.lobVar.internalFetchNum {
-		return errors.New("LOB variable no longer valid after subsequent fetch")
+		return errgo.New("LOB variable no longer valid after subsequent fetch")
 	}
 	return nil
 }
@@ -249,7 +250,7 @@ func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
 // Size returns the size of the data in the LOB variable.
 func (lv *ExternalLobVar) Size(inChars bool) (int64, error) {
 	if err := lv.Verify(); err != nil {
-		return 0, err
+		return 0, errgo.Mask(err)
 	}
 	length, err := lv.internalSize()
 	if inChars {
@@ -281,7 +282,7 @@ func (lv *ExternalLobVar) ReadAt(p []byte, off int64) (int, error) {
 		ctrace("length=%d", length)
 	}
 	if err != nil {
-		return 0, err
+		return 0, errgo.Mask(err)
 	} else if int64(length) < off {
 		return 0, io.EOF
 	}
@@ -328,9 +329,12 @@ func (lv *ExternalLobVar) ReadAt(p []byte, off int64) (int, error) {
 // Open the LOB to speed further accesses.
 func (lv *ExternalLobVar) Open() error {
 	if err := lv.Verify(); err != nil {
-		return err
+		return errgo.Mask(
+
+			// Py_BEGIN_ALLOW_THREADS
+			err)
 	}
-	// Py_BEGIN_ALLOW_THREADS
+
 	if CTrace {
 		ctrace("OCILobOpen(conn=%p, lob=%x, OCI_LOB_READWRITE)",
 			lv.lobVar.connection.handle, lv.getHandleBytes())
@@ -346,9 +350,12 @@ func (lv *ExternalLobVar) Open() error {
 // Close the LOB.
 func (lv *ExternalLobVar) Close() error {
 	if err := lv.Verify(); err != nil {
-		return err
+		return errgo.Mask(
+
+			// Py_BEGIN_ALLOW_THREADS
+			err)
 	}
-	// Py_BEGIN_ALLOW_THREADS
+
 	if CTrace {
 		ctrace("OCILobFileClose(conn=%p, lob=%x)",
 			lv.lobVar.connection.handle, lv.getHandleBytes())
@@ -364,7 +371,7 @@ func (lv *ExternalLobVar) Close() error {
 // Read returns a portion (or all) of the data in the external LOB variable.
 func (lv *ExternalLobVar) Read(p []byte) (int, error) {
 	if err := lv.Verify(); err != nil {
-		return 0, err
+		return 0, errgo.Mask(err)
 	}
 	n, e := lv.ReadAt(p, lv.readPos)
 	if CTrace {
@@ -377,11 +384,11 @@ func (lv *ExternalLobVar) Read(p []byte) (int, error) {
 // ReadAll returns all of the data in the external LOB variable.
 func (lv *ExternalLobVar) ReadAll() ([]byte, error) {
 	if err := lv.Verify(); err != nil {
-		return nil, err
+		return nil, errgo.Mask(err)
 	}
 	amount, err := lv.internalSize()
 	if err != nil {
-		return nil, fmt.Errorf("cannot get internal size of %s: %s", lv, err)
+		return nil, errgo.Newf("cannot get internal size of %s: %s", lv, err)
 	}
 	p := make([]byte, uint(amount))
 	var n int
@@ -396,7 +403,7 @@ func (lv *ExternalLobVar) ReadAll() ([]byte, error) {
 func (lv *ExternalLobVar) WriteAt(value []byte, off int64) (n int, err error) {
 	// perform the write, if possible
 	if err = lv.Verify(); err != nil {
-		return 0, err
+		return 0, errgo.Mask(err)
 	}
 	return lv.lobVar.lobVarWrite(value, 0, off)
 }
@@ -408,9 +415,12 @@ func (lv *ExternalLobVar) Trim(newSize int) error {
 	)
 
 	if err = lv.Verify(); err != nil {
-		return err
+		return errgo.Mask(
+
+			// Py_BEGIN_ALLOW_THREADS
+			err)
 	}
-	// Py_BEGIN_ALLOW_THREADS
+
 	if CTrace {
 		ctrace("OCILobTrim(conn=%p, lob=%x, newSize=%d)",
 			lv.lobVar.connection.handle, lv.getHandleBytes(), newSize)
@@ -420,9 +430,12 @@ func (lv *ExternalLobVar) Trim(newSize int) error {
 			lv.lobVar.environment.errorHandle,
 			lv.getHandle(), C.ub4(newSize)),
 		"LobTrim"); err != nil {
-		return err
+		return errgo.Mask(
+
+			// Py_END_ALLOW_THREADS
+			err)
 	}
-	// Py_END_ALLOW_THREADS
+
 	return nil
 }
 
@@ -433,7 +446,7 @@ func (lv *ExternalLobVar) GetChunkSize() (int, error) {
 	var err error
 
 	if err = lv.Verify(); err != nil {
-		return 0, err
+		return 0, errgo.Mask(err)
 	}
 	if CTrace {
 		ctrace("OCILobGetChunk(conn=%p, lob=%x, &size=%p)",
@@ -444,7 +457,7 @@ func (lv *ExternalLobVar) GetChunkSize() (int, error) {
 			lv.lobVar.environment.errorHandle,
 			lv.getHandle(), &chunkSize),
 		"LobGetChunkSize"); err != nil {
-		return 0, err
+		return 0, errgo.Mask(err)
 	}
 	return int(chunkSize), nil
 }
@@ -456,9 +469,12 @@ func (lv *ExternalLobVar) IsOpen() (bool, error) {
 		isOpen C.boolean
 	)
 	if err = lv.Verify(); err != nil {
-		return false, err
+		return false, errgo.Mask(
+
+			// Py_BEGIN_ALLOW_THREADS
+			err)
 	}
-	// Py_BEGIN_ALLOW_THREADS
+
 	if CTrace {
 		ctrace("OCILobIsOpen(conn=%p, lob=%x, &isOpen=%p)",
 			lv.lobVar.connection.handle, lv.getHandleBytes(), &isOpen)
@@ -468,9 +484,12 @@ func (lv *ExternalLobVar) IsOpen() (bool, error) {
 			lv.lobVar.environment.errorHandle,
 			lv.getHandle(), &isOpen),
 		"LobIsOpen"); err != nil {
-		return false, err
+		return false, errgo.Mask(
+
+			// Py_END_ALLOW_THREADS
+			err)
 	}
-	// Py_END_ALLOW_THREADS
+
 	return isOpen == C.TRUE, nil
 }
 
@@ -479,7 +498,7 @@ func (lv *ExternalLobVar) GetFileName() (string, string, error) {
 	var err error
 	// determine the directory alias and name
 	if err = lv.Verify(); err != nil {
-		return "", "", err
+		return "", "", errgo.Mask(err)
 	}
 	dirAliasB := make([]byte, 120)
 	nameB := make([]byte, 1020)
@@ -498,7 +517,7 @@ func (lv *ExternalLobVar) GetFileName() (string, string, error) {
 			(*C.OraText)(&dirAliasB[0]), &dirAliasLength,
 			(*C.OraText)(&nameB[0]), &nameLength),
 		"LobFileGetName"); err != nil {
-		return "", "", err
+		return "", "", errgo.Mask(err)
 	}
 
 	return string(dirAliasB[:dirAliasLength]), string(nameB[:nameLength]), nil
@@ -509,7 +528,7 @@ func (lv *ExternalLobVar) SetFileName(dirAlias, name string) error {
 	var err error
 	// create a string for retrieving the value
 	if err = lv.Verify(); err != nil {
-		return err
+		return errgo.Mask(err)
 	}
 	nameB := []byte(name)
 	dirAliasB := []byte(dirAlias)
@@ -527,7 +546,7 @@ func (lv *ExternalLobVar) SetFileName(dirAlias, name string) error {
 			(*C.OraText)(&dirAliasB[0]), C.ub2(len(dirAliasB)),
 			(*C.OraText)(&nameB[0]), C.ub2(len(nameB))),
 		"LobFileSetName"); err != nil {
-		return err
+		return errgo.Mask(err)
 	}
 
 	return nil
@@ -540,9 +559,11 @@ func (lv *ExternalLobVar) FileExists() (bool, error) {
 		flag C.boolean
 	)
 	if err = lv.Verify(); err != nil {
-		return false, err
+		return false, errgo.Mask(
+
+			// Py_BEGIN_ALLOW_THREADS
+			err)
 	}
-	// Py_BEGIN_ALLOW_THREADS
 
 	if CTrace {
 		ctrace("OCILobFileExists(conn=%p, lob=%x, &flag=%p",
@@ -552,10 +573,13 @@ func (lv *ExternalLobVar) FileExists() (bool, error) {
 		C.OCILobFileExists(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
 			lv.getHandle(), &flag),
-		"LobFileExists"); err != nil {
-		return false, err
+		"LobFileExists",
+	); err != nil {
+		return false, errgo.Mask(
+
+			// Py_END_ALLOW_THREADS
+			err)
 	}
-	// Py_END_ALLOW_THREADS
 
 	return flag == C.TRUE, nil
 }

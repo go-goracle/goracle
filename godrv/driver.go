@@ -20,18 +20,18 @@ package godrv
 import (
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"log"
 	"strconv"
 	"strings"
 	"unsafe"
 
+	"github.com/juju/errgo"
 	"github.com/tgulacsi/goracle/oracle"
 )
 
 var (
 	// NotImplemented prints Not implemented
-	NotImplemented = errors.New("Not implemented")
+	NotImplemented = errgo.New("Not implemented")
 	// IsDebug should we print debug logs?
 	IsDebug bool
 )
@@ -47,7 +47,7 @@ type stmt struct {
 
 // filterErr filters the error, returns driver.ErrBadConn if appropriate
 func filterErr(err error) error {
-	if oraErr, ok := err.(*oracle.Error); ok {
+	if oraErr, ok := errgo.Cause(err).(*oracle.Error); ok {
 		switch oraErr.Code {
 		case 115, 451, 452, 609, 1090, 1092, 1073, 3113, 3114, 3135, 3136, 12153, 12161, 12170, 12224, 12230, 12233, 12510, 12511, 12514, 12518, 12526, 12527, 12528, 12539: //connection errors - try again!
 			return driver.ErrBadConn
@@ -163,7 +163,7 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 		cols, err = s.cu.GetDescription()
 		debug("cols: %+v err: %s", cols, err)
 		if err != nil {
-			return nil, err
+			return nil, errgo.Mask(err)
 		}
 	}
 	return &rowsRes{cu: s.cu, cols: cols}, nil
@@ -210,7 +210,7 @@ func (r rowsRes) Next(dest []driver.Value) error {
 	// log.Printf("FetcOneInto(%p %+v len=%d) %T", row, *row, len(*row), *row)
 	err := r.cu.FetchOneInto(*row...)
 	debug("fetched row=%p %#v (len=%d) err=%v", row, *row, len(*row), err)
-	return err
+	return errgo.Mask(err)
 }
 
 // Driver implements a Driver
@@ -236,7 +236,7 @@ func (d *Driver) Open(uri string) (driver.Conn, error) {
 		err = cx.Connect(0, false)
 	}
 	if err != nil {
-		return nil, err
+		return nil, errgo.Mask(err)
 	}
 	return &conn{cx: &cx}, nil
 }

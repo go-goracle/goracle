@@ -34,9 +34,9 @@ static void cursorVarsetHandle(void *data, OCIStmt *handle) {
 import "C"
 
 import (
-	"errors"
-	"fmt"
 	"unsafe"
+
+	"github.com/juju/errgo"
 )
 
 //CursorVarType is the VariableType for a cursor
@@ -54,7 +54,7 @@ func cursorVarInitialize(v *Variable, cur *Cursor) error {
 	for i := uint(0); i < v.allocatedElements; i++ {
 		tempCursor = v.connection.NewCursor()
 		if err = tempCursor.allocateHandle(); err != nil {
-			return err
+			return errgo.Mask(err)
 		}
 		v.cursors[int(i)] = tempCursor
 		j = int(i * v.typ.size)
@@ -78,10 +78,10 @@ func cursorVarFinalize(v *Variable) error {
 func cursorVarSetValue(v *Variable, pos uint, value interface{}) error {
 	x, ok := value.(*Cursor)
 	if !ok {
-		return fmt.Errorf("requires *Cursor, got %T", value)
+		return errgo.Newf("requires *Cursor, got %T", value)
 	}
 	if uint(len(v.cursors)) <= pos {
-		return fmt.Errorf("can't set cursor at pos %d in array of %d length",
+		return errgo.Newf("can't set cursor at pos %d in array of %d length",
 			pos, len(v.cursors))
 	}
 
@@ -89,11 +89,11 @@ func cursorVarSetValue(v *Variable, pos uint, value interface{}) error {
 	v.cursors[pos] = x
 	if !x.isOwned {
 		if err = x.freeHandle(); err != nil {
-			return err
+			return errgo.Mask(err)
 		}
 		x.isOwned = true
 		if err = x.allocateHandle(); err != nil {
-			return err
+			return errgo.Mask(err)
 		}
 	}
 	C.cursorVarsetHandle(v.getHandle(pos),
@@ -106,13 +106,13 @@ func cursorVarSetValue(v *Variable, pos uint, value interface{}) error {
 // Set the value of the variable.
 func cursorVarGetValue(v *Variable, pos uint) (interface{}, error) {
 	if v == nil {
-		return nil, errors.New("variable is nil")
+		return nil, errgo.New("variable is nil")
 	}
 	if v.cursors == nil {
-		return nil, errors.New("v.cursors is nil")
+		return nil, errgo.New("v.cursors is nil")
 	}
 	if uint(len(v.cursors)) <= pos {
-		return nil, fmt.Errorf("can't get cursor at pos %d from array of %d length",
+		return nil, errgo.Newf("can't get cursor at pos %d from array of %d length",
 			pos, len(v.cursors))
 	}
 	debug("cursorVarGetValue(%v, %d): v.cursors=%v", v, pos, v.cursors)

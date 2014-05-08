@@ -17,9 +17,10 @@ limitations under the License.
 */
 
 import (
-	"fmt"
 	"log"
 	"strconv"
+
+	"github.com/juju/errgo"
 )
 
 // Error is an error struct holding additional info
@@ -32,7 +33,12 @@ type Error struct {
 
 // NewError creates a new error, pointing to the code with the given message
 func NewError(code int, message string) *Error {
-	return &Error{Code: code, Message: message}
+	return NewErrorAt(code, message, "")
+}
+
+// NewErrorAt creates a new error, pointing to the code with the given message
+func NewErrorAt(code int, message, at string) *Error {
+	return &Error{Code: code, Message: message, At: at}
 }
 
 // Error returns a string representation of the error (implenets error)
@@ -61,11 +67,11 @@ func (men mismatchElementNum) Error() string {
 
 // ProgrammingError returns a programming error
 func ProgrammingError(text string) error {
-	return fmt.Errorf("Programming error: %s", text)
+	return errgo.Newf("Programming error: %s", text)
 }
 
 func setErrAt(err error, at string) {
-	if x, ok := err.(*Error); ok {
+	if x, ok := errgo.Cause(err).(*Error); ok {
 		x.At = at
 	}
 }

@@ -160,10 +160,10 @@ char *_testLobOut(
 import "C"
 
 import (
-	"fmt"
 	"log"
 
 	//"time"
+	"github.com/juju/errgo"
 )
 
 func testLobOutC(cur *Cursor, qry string) (err error) {
@@ -177,7 +177,7 @@ func testLobOutC(cur *Cursor, qry string) (err error) {
 	log.Printf("status=%d msg=%s", status, msg)
 
 	if err = cur.environment.CheckStatus(status, "C._testLobOut"); err != nil {
-		return fmt.Errorf("%s: %s", msg, err)
+		return errgo.Newf("%s: %s", msg, err)
 	}
 	return nil
 }

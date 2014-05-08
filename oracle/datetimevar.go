@@ -71,9 +71,10 @@ OCIInterval *getIntervalHandle(void *data, int pos) {
 import "C"
 
 import (
-	"fmt"
 	"time"
 	"unsafe"
+
+	"github.com/juju/errgo"
 )
 
 var (
@@ -100,12 +101,12 @@ func dateTimeVarSetValue(v *Variable, pos uint, value interface{}) error {
 	if !ok {
 		a, ok := value.([]time.Time)
 		if !ok {
-			return fmt.Errorf("awaited time.Time or []time.Time, got %T", value)
+			return errgo.Newf("awaited time.Time or []time.Time, got %T", value)
 		}
 		var err error
 		for i, x := range a {
 			if err = dateTimeVarSetValue(v, pos+uint(i), x); err != nil {
-				return err
+				return errgo.Mask(err)
 			}
 		}
 		return nil
@@ -208,7 +209,7 @@ func intervalVarFinalize(v *Variable) error {
 	for i := uint(0); i < v.allocatedElements; i++ {
 		if handle = unsafe.Pointer(getIntervalHandle(v, i)); handle != nil {
 			if status = C.OCIDescriptorFree(handle, C.OCI_DTYPE_INTERVAL_DS); status != C.OCI_SUCCESS {
-				return fmt.Errorf("error freeing Interval %d. handle %p: %d",
+				return errgo.Newf("error freeing Interval %d. handle %p: %d",
 					i, handle, status)
 			}
 		}
@@ -222,7 +223,7 @@ func intervalVarSetValue(v *Variable, pos uint, value interface{}) error {
 
 	x, ok := value.(time.Duration)
 	if !ok {
-		return fmt.Errorf("requires time.Duration, got %T", value)
+		return errgo.Newf("requires time.Duration, got %T", value)
 	}
 
 	days = C.sb4(x.Hours()) / 24
@@ -260,7 +261,7 @@ func intervalVarGetValue(v *Variable, pos uint) (interface{}, error) {
 			//(*C.OCIInterval)(v.getHandle(pos))),
 			getIntervalHandle(v, pos)),
 		"internalVar_GetValue"); err != nil {
-		return nil, err
+		return nil, errgo.Mask(err)
 	}
 	return (time.Duration(days)*24*time.Hour +
 		time.Duration(hours)*time.Hour +

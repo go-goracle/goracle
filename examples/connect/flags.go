@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/juju/errgo/errors"
 	_ "github.com/tgulacsi/goracle/godrv"
 	"github.com/tgulacsi/goracle/oracle"
 )
@@ -81,7 +82,7 @@ func GetRawConnection(dsn string) (oracle.Connection, error) {
 	user, passw, sid := oracle.SplitDSN(dsn)
 	conn, err := oracle.NewConnection(user, passw, sid, false)
 	if err != nil {
-		return conn, err
+		return conn, errors.Mask(err)
 	}
 	return conn, conn.Connect(0, false)
 }
