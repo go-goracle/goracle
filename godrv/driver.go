@@ -20,6 +20,7 @@ package godrv
 import (
 	"database/sql"
 	"database/sql/driver"
+	"io"
 	"log"
 	"strconv"
 	"strings"
@@ -210,7 +211,13 @@ func (r rowsRes) Next(dest []driver.Value) error {
 	// log.Printf("FetcOneInto(%p %+v len=%d) %T", row, *row, len(*row), *row)
 	err := r.cu.FetchOneInto(*row...)
 	debug("fetched row=%p %#v (len=%d) err=%v", row, *row, len(*row), err)
-	return errgo.Mask(err)
+	if err != nil {
+		if err == io.EOF {
+			return io.EOF
+		}
+		return errgo.Mask(err)
+	}
+	return nil
 }
 
 // Driver implements a Driver
