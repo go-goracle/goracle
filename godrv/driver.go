@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
-
 	"github.com/juju/errgo"
 	"github.com/tgulacsi/goracle/oracle"
 )
@@ -210,6 +209,7 @@ func (r rowsRes) Next(dest []driver.Value) error {
 	row := (*[]interface{})(unsafe.Pointer(&dest))
 	// log.Printf("FetcOneInto(%p %+v len=%d) %T", row, *row, len(*row), *row)
 	err := r.cu.FetchOneInto(*row...)
+	log.Printf("fetched row=%p %#v (len=%d) err=%v", row, *row, len(*row), err)
 	debug("fetched row=%p %#v (len=%d) err=%v", row, *row, len(*row), err)
 	if err != nil {
 		if err == io.EOF {

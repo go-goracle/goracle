@@ -1194,10 +1194,16 @@ func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 	}
 	if isNull {
 		switch v.typ {
-		case StringVarType:
-			*dest = ""
+		case DateTimeVarType:
+			*dest = time.Time{}
+		case IntervalVarType:
+			*dest = time.Duration(0)
+		case NumberAsStringVarType, LongIntegerVarType, Int64VarType, Int32VarType, FloatVarType, NativeFloatVarType:
+			*dest = 0
+		case BooleanVarType:
+			*dest = false
 		default:
-			*dest = nil
+			*dest = ""
 		}
 		return nil
 	}

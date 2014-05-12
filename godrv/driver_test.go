@@ -23,11 +23,35 @@ import (
 	"io/ioutil"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tgulacsi/goracle/oracle"
 )
 
 var fDsn = flag.String("dsn", "", "Oracle DSN")
+
+func TestNull(t *testing.T) {
+	conn := getConnection(t)
+	defer conn.Close()
+	var (
+		err error
+		str string
+		dt  time.Time
+	)
+	qry := "SELECT '' FROM DUAL"
+	row := conn.QueryRow(qry)
+	if err = row.Scan(&str); err != nil {
+		t.Errorf("0. error with %q test: %s", qry, err)
+	}
+	t.Logf("0. %q result: %#v (%T)", qry, str, str)
+
+	qry = "SELECT TO_DATE(NULL) FROM DUAL"
+	row = conn.QueryRow(qry)
+	if err = row.Scan(&dt); err != nil {
+		t.Errorf("0. error with %q test: %s", qry, err)
+	}
+	t.Logf("1. %q result: %#v (%T)", qry, dt, dt)
+}
 
 func TestSimple(t *testing.T) {
 	conn := getConnection(t)
