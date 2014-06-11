@@ -13,7 +13,7 @@ CHAR, VARCHAR2, NUMBER, DATETIME, INTERVAL simple AND array bind/define.
 CURSOR, CLOB, BLOB
 
 ## Not working ##
-Cannot input PLS_INTEGER, only INTIGER (this os OK, as PLS_INTEGER is a
+Cannot input PLS_INTEGER, only INTEGER (this is OK, as PLS_INTEGER is a
 PL/SQL type, not an SQL one).
 
 ## Not working ATM ##
@@ -98,3 +98,40 @@ Perhaps this export would work too, but I did not try it.  I understand this is 
 
 The DYLD vars are needed to run the binary, not to compile it.
 
+## Windows 7 64-bit ##
+Thanks to Johann Kropf!
+### Requirements ###
+  * mingw-w64
+  * msys
+  * go
+  * Oracle InstantClient Basic 64bit
+  * Oracle InstantClient SDK 64bit
+  * `github.com\tgulacsi\goracle` under `%GOPATH%`
+
+Set `CGO_CFLAGS=-IC:\Oracle64Instant\sdk\include`
+Set `CGO_LDFLAGS=-LC:\Oracle64Instant\sdk\lib`
+
+On Windows the library `libclntsh.so` does not exist.
+So change the line in _all_ the source files of `github.com\tgulacsi\goracle\oracle`
+
+From 
+```#cgo LDFLAGS: -lclntsh```
+
+to 
+```#cgo LDFLAGS: -loci```
+
+Create the liboci.a file from the oci.dll by doing
+
+  1. Install Msys from Mingw if not already done
+  1. Download `gendef` utility from `http://sourceforge.net/p/mingw-w64/code/HEAD/tree/stable/v3.x/`
+by "Download snapshot"
+  1. Extract the zip-file and copy the folder `gendef` to your home-directory in Msys
+  1. go to the folder `gendef` and execute `./configure` and `./make` - gendef.exe will be created
+  1. Run: `gendef oci.dll` - `oci.def` will be generated
+  1. Run: `dlltool -D oci.dll -d oci.def -l liboci.a` - `liboci.a` will be generated
+  1. `copy liboci.a C:\Oracle64Instant\sdk\lib`
+
+Build oracle with
+`%GOPATH%\github.com\tgulacsi\goracle\oracle>go install`
+
+You can build now your program which imports "github.com/tgulacsi/goracle/oracle"!
