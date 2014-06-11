@@ -511,7 +511,7 @@ func (lv *ExternalLobVar) GetFileName() (string, string, error) {
 			&nameB[0], &nameLength)
 	}
 	if err = lv.lobVar.environment.CheckStatus(
-		C.OCILobFileGetName(lv.lobVar.connection.handle,
+		C.OCILobFileGetName(lv.lobVar.environment.handle,
 			lv.lobVar.environment.errorHandle,
 			lv.getHandle(),
 			(*C.OraText)(&dirAliasB[0]), &dirAliasLength,
@@ -540,7 +540,7 @@ func (lv *ExternalLobVar) SetFileName(dirAlias, name string) error {
 	}
 	lob := lv.getHandle()
 	if err = lv.lobVar.environment.CheckStatus(
-		C.OCILobFileSetName(lv.lobVar.connection.handle,
+		C.OCILobFileSetName(lv.lobVar.environment.handle,
 			lv.lobVar.environment.errorHandle,
 			&lob,
 			(*C.OraText)(&dirAliasB[0]), C.ub2(len(dirAliasB)),
