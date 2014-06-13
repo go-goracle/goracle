@@ -56,7 +56,7 @@ func TestClientVersion(t *testing.T) {
 }
 
 func TestIsConnected(t *testing.T) {
-	if (Connection{}).IsConnected() {
+	if (&Connection{}).IsConnected() {
 		t.Fail()
 	}
 	conn := getConnection(t)
@@ -180,10 +180,10 @@ func TestSplitDSN(t *testing.T) {
 	}
 }
 
-var conn Connection
+var conn *Connection
 
-func getConnection(t *testing.T) Connection {
-	if conn.handle != nil && conn.IsConnected() {
+func getConnection(t *testing.T) *Connection {
+	if conn.IsConnected() {
 		return conn
 	}
 

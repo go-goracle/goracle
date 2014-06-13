@@ -20,13 +20,13 @@ package godrv
 import (
 	"database/sql"
 	"database/sql/driver"
+	"github.com/juju/errgo"
+	"github.com/tgulacsi/goracle/oracle"
 	"io"
 	"log"
 	"strconv"
 	"strings"
 	"unsafe"
-	"github.com/juju/errgo"
-	"github.com/tgulacsi/goracle/oracle"
 )
 
 var (
@@ -245,7 +245,7 @@ func (d *Driver) Open(uri string) (driver.Conn, error) {
 	if err != nil {
 		return nil, errgo.Mask(err)
 	}
-	return &conn{cx: &cx}, nil
+	return &conn{cx: cx}, nil
 }
 
 // use log.Printf for log messages if IsDebug

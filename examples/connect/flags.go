@@ -75,7 +75,7 @@ func GetConnection(dsn string) (*sql.DB, error) {
 
 // GetRawConnection returns a raw (*oracle.Connection) connection
 // - using GetDSN if dsn is empty
-func GetRawConnection(dsn string) (oracle.Connection, error) {
+func GetRawConnection(dsn string) (*oracle.Connection, error) {
 	if dsn == "" {
 		dsn = GetDSN()
 	}

@@ -91,15 +91,15 @@ func insert(t *testing.T, conn *sql.Tx,
 	}
 	(&bigintO).SetString(bigintS, 10)
 	if bigintO.String() != bigint {
-		t.Errorf("bigint mismatch: got %d, awaited %d.", bigintO, bigint)
+		t.Errorf("bigint mismatch: got %s, awaited %s.", bigintO, bigint)
 	}
 	if notintO != notint {
-		t.Errorf("noting mismatch: got %d, awaited %d.", notintO, notint)
+		t.Errorf("noting mismatch: got %f, awaited %f.", notintO, notint)
 	}
 	(&bigrealF).SetString(bigreal)
 	(&bigrealO).SetString(bigrealS)
 	if (&bigrealO).Cmp(&bigrealF) != 0 {
-		t.Errorf("bigreal mismatch: got %s, awaited %s.", (&bigrealO), (&bigrealF))
+		t.Errorf("bigreal mismatch: got %s, awaited %f.", (&bigrealO), (&bigrealF))
 	}
 	if textO != text {
 		t.Errorf("text mismatch: got %q, awaited %q.", textO, text)
