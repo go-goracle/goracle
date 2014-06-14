@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+
 	"github.com/juju/errgo"
 	"github.com/tgulacsi/goracle/oracle"
 )

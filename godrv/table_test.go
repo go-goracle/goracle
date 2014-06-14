@@ -35,7 +35,10 @@ func TestTable(t *testing.T) {
 	if _, err := conn.Exec(`CREATE TABLE ` + tbl + ` (
 			F_int NUMBER(10,0), F_bigint NUMBER(20),
 			F_real NUMBER(6,3), F_bigreal NUMBER(20,10),
-			F_text VARCHAR2(1000), F_date DATE
+			F_text VARCHAR2(1000), F_date DATE,
+			F_text_spanish VARCHAR2(100),
+			F_text_chinese VARCHAR2(100),
+			F_text_russian VARCHAR2(100),
 		)`); err != nil {
 		t.Skipf("Skipping table test, as cannot create "+tbl+": %v", err)
 		return
@@ -48,14 +51,43 @@ func TestTable(t *testing.T) {
 	}
 	defer tx.Rollback()
 
-	insert(t, tx, 1, "1234567890123456", 123.456,
+	insert_num(t, tx, 1, "1234567890123456", 123.456,
 		"123456789.123456789", "int64", time.Now())
 
-	insert(t, tx, 2, "22345678901234567890", 223.456,
+	insert_num(t, tx, 2, "22345678901234567890", 223.456,
 		"223456789.123456789", "big.Int", time.Now())
+
+	insert_text(t, tx, "Habitación doble", "雙人房", "двухместный номер")
 }
 
-func insert(t *testing.T, conn *sql.Tx,
+func insert_text(t, tx, spanish, chinese, russian string) bool {
+	qry := "INSERT INTO " + tbl + " (F_int, F_text_spanish, F_text_chinese, F_text_russian) VALUES (:1, :2, :3)"
+	if _, err := conn.Exec(qry, -1, spanish, chinese, russian); err != nil {
+		t.Errorf("cannot insert into "+tbl+" (%q): %v", qry, err)
+	}
+	row := conn.QueryRow("SELECT F_text_spanish, F_text_chinese, F_text_russian FROM " + tbl + " WHERE F_int = -1")
+	var tSpanish, tChinese, tRussion string
+	if err := row.Scan(&tSpanish, &tChinese, &tRussian); err != nil {
+		t.Errorf("error scanning row: %v", errgo.Details(err))
+		return false
+	}
+	ok := true
+	if tSpanish != spanish {
+		t.Errorf("spanish mismatch: got %q, awaited %q", tSpanish, spanish)
+		ok = false
+	}
+	if tChinese != chinese {
+		t.Errorf("chinese mismatch: got %q, awaited %q", tChinese, chinese)
+		ok = false
+	}
+	if tRussian != russian {
+		t.Errorf("russian mismatch: got %q, awaited %q", tRussian, russian)
+		ok = false
+	}
+	return ok
+}
+
+func insert_num(t *testing.T, conn *sql.Tx,
 	small int, bigint string,
 	notint float64, bigreal string,
 	text string, date time.Time,
@@ -69,7 +101,7 @@ func insert(t *testing.T, conn *sql.Tx,
 		t.Errorf("cannot insert into "+tbl+" (%q): %v", qry, err)
 		return false
 	}
-	row := conn.QueryRow("SELECT * FROM "+tbl+" WHERE F_int = :1", small)
+	row := conn.QueryRow("SELECT F_int, F_bigint, F_real, F_bigreal, F_text, F_date FROM "+tbl+" WHERE F_int = :1", small)
 	var (
 		smallO             int
 		bigintO            big.Int
