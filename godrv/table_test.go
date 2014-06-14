@@ -38,7 +38,7 @@ func TestTable(t *testing.T) {
 			F_text VARCHAR2(1000), F_date DATE,
 			F_text_spanish VARCHAR2(100),
 			F_text_chinese VARCHAR2(100),
-			F_text_russian VARCHAR2(100),
+			F_text_russian VARCHAR2(100)
 		)`); err != nil {
 		t.Skipf("Skipping table test, as cannot create "+tbl+": %v", err)
 		return
@@ -60,17 +60,19 @@ func TestTable(t *testing.T) {
 	insert_text(t, tx, "Habitación doble", "雙人房", "двухместный номер")
 }
 
-func insert_text(t, tx, spanish, chinese, russian string) bool {
-	qry := "INSERT INTO " + tbl + " (F_int, F_text_spanish, F_text_chinese, F_text_russian) VALUES (:1, :2, :3)"
-	if _, err := conn.Exec(qry, -1, spanish, chinese, russian); err != nil {
+func insert_text(t *testing.T, conn *sql.Tx, spanish, chinese, russian string) bool {
+	qry := "INSERT INTO " + tbl + " (F_int, F_text_spanish, F_text_chinese, F_text_russian)" +
+		" VALUES (-1, :1, :2, :3)"
+	if _, err := conn.Exec(qry, spanish, chinese, russian); err != nil {
 		t.Errorf("cannot insert into "+tbl+" (%q): %v", qry, err)
 	}
 	row := conn.QueryRow("SELECT F_text_spanish, F_text_chinese, F_text_russian FROM " + tbl + " WHERE F_int = -1")
-	var tSpanish, tChinese, tRussion string
+	var tSpanish, tChinese, tRussian string
 	if err := row.Scan(&tSpanish, &tChinese, &tRussian); err != nil {
 		t.Errorf("error scanning row: %v", errgo.Details(err))
 		return false
 	}
+	t.Logf("spanish=%q chinese=%q russian=%q", spanish, chinese, russian)
 	ok := true
 	if tSpanish != spanish {
 		t.Errorf("spanish mismatch: got %q, awaited %q", tSpanish, spanish)
@@ -123,15 +125,15 @@ func insert_num(t *testing.T, conn *sql.Tx,
 	}
 	(&bigintO).SetString(bigintS, 10)
 	if bigintO.String() != bigint {
-		t.Errorf("bigint mismatch: got %d, awaited %d.", bigintO, bigint)
+		t.Errorf("bigint mismatch: got %s, awaited %s.", bigintO, bigint)
 	}
 	if notintO != notint {
-		t.Errorf("noting mismatch: got %d, awaited %d.", notintO, notint)
+		t.Errorf("noting mismatch: got %f, awaited %f.", notintO, notint)
 	}
 	(&bigrealF).SetString(bigreal)
 	(&bigrealO).SetString(bigrealS)
 	if (&bigrealO).Cmp(&bigrealF) != 0 {
-		t.Errorf("bigreal mismatch: got %s, awaited %s.", (&bigrealO), (&bigrealF))
+		t.Errorf("bigreal mismatch: got %s, awaited %f.", (&bigrealO), (&bigrealF))
 	}
 	if textO != text {
 		t.Errorf("text mismatch: got %q, awaited %q.", textO, text)
