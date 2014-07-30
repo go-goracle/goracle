@@ -463,6 +463,53 @@ END;`
 	t.Logf("row: %#v", row)
 }
 
+func TestLobIn(t *testing.T) {
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+	cur := conn.NewCursor()
+	defer cur.Close()
+
+	str := "before line break\nafter line break\n" + accented
+	for i, rec := range []struct {
+		qry  string
+	}{
+		{`DECLARE
+  clobvar CLOB := :1;
+BEGIN
+  --dbms_lob.open(clobvar, dbms_lob.lob_readwrite);
+  :2 := length(clobvar);
+  --dbms_lob.close(clobvar);
+END;`},
+	} {
+		out, err := cur.NewVariable(0, Int32VarType, 0)
+		if err != nil {
+			t.Errorf("%d. error getting cursor variable: %s", i, err)
+			t.FailNow()
+		}
+		in, err := cur.NewVariable(0, ClobVarType, uint(len(str)))
+		if err != nil {
+			t.Errorf("%d. error getting cursor variable: %v", i, err)
+			t.FailNow()
+		}
+		if err = in.SetValue(0, []byte(str)); err != nil {
+			t.Errorf("%d. error setting input var value: %v", i, err)
+			continue
+		}
+		if err = cur.Execute(rec.qry, []interface{}{in, out}, nil); err != nil {
+			t.Errorf("%d. error executing `%s`: %s", i, rec.qry, err)
+			t.FailNow()
+		}
+		outVal, err := out.GetValue(0)
+		if err != nil {
+			t.Errorf("%d. cannot get out value: %s", i, err)
+			t.FailNow()
+		}
+		t.Logf("%d. chars written: %d", i, outVal)
+	}
+}
+
 func TestLobOut(t *testing.T) {
 	conn := getConnection(t)
 	if !conn.IsConnected() {

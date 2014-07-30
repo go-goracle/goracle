@@ -296,7 +296,7 @@ func (env *Environment) CheckStatus(status C.sword, at string) error {
 	}
 	if err := checkStatus(status, true); err != nil {
 		if err != NoDataFound {
-			log.Printf("CheckStatus(%d): ERR=%s", status, err)
+			log.Printf("CheckStatus(%d) @%s ERR=%s\n%s", status, at, err, getStackTrace())
 		}
 		return err
 	}
@@ -321,9 +321,7 @@ func (env *Environment) CheckStatus(status C.sword, at string) error {
 			break
 		}
 	}
-	err := NewErrorAt(errorcode, fmt.Sprintf("[%d] %s", status, message), at)
-	log.Printf("CheckStatus(%d) ERR=%#v", status, err)
-	return err
+	return NewErrorAt(errorcode, fmt.Sprintf("[%d] %s", status, message), at)
 }
 
 //AttrGet gets the parent's attribute identified by key, and stores it in dst

@@ -18,7 +18,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import "log"
+import (
+	"log"
+	"runtime"
+)
 
 //CTrace is true iff we are printing TRACE messages
 const CTrace = true
@@ -26,4 +29,18 @@ const CTrace = true
 //ctrace prints with log.Printf the C-call trace
 func ctrace(name string, args ...interface{}) {
 	log.Printf("CTRACE "+name, args...)
+}
+
+
+var pc = make([]byte, 4096)
+
+// getStackTrace returns the calling stack trace
+func getStackTrace() string {
+	for {
+		n := runtime.Stack(pc, false)
+		if n < len(pc) {
+			return string(pc[:n])
+		}
+		pc = make([]byte, n * 2)
+	}
 }

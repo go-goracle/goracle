@@ -26,3 +26,6 @@ const CTrace = false
 func ctrace(name string, args ...interface{}) {
 	//log.Printf("TRACE %s(%v)", name, args)
 }
+
+// getStackTrace returns an empty string
+func getStackTrace() string { return "" }

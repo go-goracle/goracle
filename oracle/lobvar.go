@@ -37,7 +37,7 @@ sword lobAlloc(OCIEnv *envhp, void *data, int allocatedElements) {
 	for (i = 0; i < allocatedElements; i++) {
         //fprintf(stderr, "=== data[%d]=%p\n", i, ((OCILobLocator**)data)[i]);
 		if ((status = OCIDescriptorAlloc(envhp,
-                (void**)((OCILobLocator**)data + i),
+                (void**)(&((OCILobLocator**)data)[i]),
                 OCI_DTYPE_LOB, 0, NULL)) != OCI_SUCCESS) {
             return status;
         }
@@ -68,6 +68,9 @@ var (
 )
 
 // Initialize the variable.
+//
+// see http://www-rohan.sdsu.edu/doc/oracle/appdev.102/b14249/adlob_lob_ops.htm#g1113588
+// http://www-rohan.sdsu.edu/doc/oracle/appdev.102/b14250/oci16msc002.htm#CIHEEEHI
 func lobVarInitialize(v *Variable, cur *Cursor) error {
 	if CTrace {
 		ctrace("%s.lobVarInitialize", v)
@@ -78,35 +81,16 @@ func lobVarInitialize(v *Variable, cur *Cursor) error {
 
 	// initialize the LOB locators
 	//dst := unsafe.Pointer(&v.dataBytes[0])
-	if err := v.environment.CheckStatus(
-		C.lobAlloc(v.environment.handle, unsafe.Pointer(&v.dataBytes[0]), //unsafe.Pointer(&dst),
-			C.int(v.allocatedElements)),
-		"DescrAlloc"); err != nil {
-		return errgo.Mask(
-
-			/*
-				var (
-					x   **C.OCILobLocator
-					err error
-				)
-				for i := uint(0); i < v.allocatedElements; i++ {
-					x = (**C.OCILobLocator)(v.getHandle(i))
-					if err = v.environment.CheckStatus(
-						C.OCIDescriptorAlloc(unsafe.Pointer(v.environment.handle),
-							(*unsafe.Pointer)(unsafe.Pointer(x)), C.OCI_DTYPE_LOB, 0, nil),
-						"DescrAlloc"); err != nil {
-						return err
-					}
-					if CTrace {
-						ctrace("lobVarInitialize(x=%p (%x))", x, x)
-					}
-					v.setHandle(i, unsafe.Pointer(*x))
-					if CTrace {
-						ctrace("lobVarInitialize(env=%p, i=%d, lob=%x)",
-							v.environment.handle, i, v.getHandleBytes(i))
-					}
-				}
-			*/err)
+	//status := C.lobAlloc(v.environment.handle, unsafe.Pointer(&dst),
+	status := C.lobAlloc(v.environment.handle, unsafe.Pointer(&v.dataBytes[0]),
+		C.int(v.allocatedElements))
+	if CTrace {
+		ctrace("%s.lobAlloc(env=%p, &dataBytes=%p (len=%d), allocElts=%d): %d, handle=%p",
+			v, v.environment.handle, &v.dataBytes[0], len(v.dataBytes), v.allocatedElements, status,
+			v.getHandle(0))
+	}
+	if err := v.environment.CheckStatus(status, "DescrAlloc"); err != nil {
+		return errgo.Mask(err)
 	}
 
 	return nil
@@ -131,8 +115,7 @@ func (v *Variable) getLobInternalSize(pos uint) (length C.ub4, err error) {
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
 		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
-			v.connection.handle, pos*v.typ.size,
-			v.getHandleBytes(pos), &length)
+			v.connection.handle, pos*v.typ.size, lob, &length)
 		//buf := make([]byte, 8192)
 		//ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
 		//ctrace("data[%d]=%p", pos, lob)
@@ -160,7 +143,6 @@ func lobVarPreFetch(v *Variable) (err error) {
 		hndl        *C.OCILobLocator
 	)
 	for i := uint(0); i < v.allocatedElements; i++ {
-		//hndl = (*C.OCILobLocator)(v.getHandle(i))
 		if hndl, err = v.getLobLoc(i); err != nil {
 			return
 		}
@@ -195,13 +177,19 @@ func lobVarFinalize(v *Variable) error {
 	if v == nil || v.dataBytes == nil {
 		return nil
 	}
+	var err error
 	for i := uint(0); i < v.allocatedElements; i++ {
+		hndl, e := v.getLobLoc(i)
 		if CTrace {
-			ctrace("lobVarFinalize(lob=%x)", v.getHandle(i))
+			ctrace("lobVarFinalize(lob=%x) err=%v", hndl, e)
 		}
-		C.OCIDescriptorFree(v.getHandle(i), C.OCI_DTYPE_LOB)
+		if e == nil {
+			C.OCIDescriptorFree(unsafe.Pointer(hndl), C.OCI_DTYPE_LOB)
+		} else if err == nil {
+			err = e
+		}
 	}
-	return nil
+	return err
 }
 
 // Write data to the LOB variable.
@@ -242,19 +230,24 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 
 	oamount := C.ub4(amount)
 	// Py_BEGIN_ALLOW_THREADS
+	hndl, err := v.getLobLoc(pos)
+	off++  // "first position is 1"
 	if CTrace {
-		ctrace("OCILobWrite(conn=%p, lob=%x, &oamount=%p, off=%d, cF=%d)",
-			v.connection.handle, v.getHandleBytes(pos), &oamount, off,
-			v.typ.charsetForm)
+		ctrace("OCILobWrite(conn=%p, lob=%p, oamount=%d, off=%d, cF=%d): %v",
+			v.connection.handle, hndl, oamount, off, v.typ.charsetForm, err)
+	}
+	if err != nil {
+		return 0, err
 	}
 	if err := v.environment.CheckStatus(
+		// http://www-rohan.sdsu.edu/doc/oracle/appdev.102/b14250/oci16msc002.htm#i578761
 		C.OCILobWrite(v.connection.handle,
 			v.environment.errorHandle,
-			(*C.OCILobLocator)(v.getHandle(pos)),
+			hndl,
 			&oamount, C.ub4(off),
 			unsafe.Pointer(&data[0]), C.ub4(len(data)),
-			C.OCI_ONE_PIECE, nil, nil, 0,
-			v.typ.charsetForm),
+			C.OCI_ONE_PIECE, nil, nil, 
+			0, v.typ.charsetForm),
 		"LobWrite"); err != nil {
 		return 0, errgo.Mask(err)
 	}
@@ -285,15 +278,21 @@ func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 	var (
 		isTemporary C.boolean
 		lobType     C.ub1
-		err         error
 	)
 
+	hndl, err := v.getLobLoc(pos)
+	if err != nil {
+		return err
+	}
 	// make sure have temporary LOBs set up
 	if err = v.environment.CheckStatus(
-		C.OCILobIsTemporary(v.environment.handle,
-			v.environment.errorHandle,
-			(*C.OCILobLocator)(v.getHandle(pos)), &isTemporary),
+		C.OCILobIsTemporary(v.environment.handle, v.environment.errorHandle,
+			hndl, &isTemporary),
 		"LobIsTemporary"); err != nil {
+		if CTrace {
+			ctrace("OCILobIsTemporary(env=%p, err=%p, handle=%p, dst=%p): %v",
+				v.environment.handle, v.environment.errorHandle, hndl, &isTemporary, err)
+		}
 		return errgo.Mask(err)
 	}
 	if isTemporary != C.TRUE {
@@ -306,7 +305,7 @@ func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 		if err = v.environment.CheckStatus(
 			C.OCILobCreateTemporary(v.connection.handle,
 				v.environment.errorHandle,
-				(*C.OCILobLocator)(v.getHandle(pos)),
+				hndl,
 				C.OCI_DEFAULT, v.typ.charsetForm, lobType, C.FALSE,
 				C.OCI_DURATION_SESSION),
 			"LobCreateTemporary"); err != nil {
@@ -318,9 +317,7 @@ func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 	// trim the current value
 	// Py_BEGIN_ALLOW_THREADS
 	if err = v.environment.CheckStatus(
-		C.OCILobTrim(v.connection.handle,
-			v.environment.errorHandle,
-			(*C.OCILobLocator)(unsafe.Pointer(v.getHandle(pos))), 0),
+		C.OCILobTrim(v.connection.handle, v.environment.errorHandle, hndl, 0),
 		"LobTrim"); err != nil {
 		return errgo.Mask(
 
