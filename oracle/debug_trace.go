@@ -31,7 +31,6 @@ func ctrace(name string, args ...interface{}) {
 	log.Printf("CTRACE "+name, args...)
 }
 
-
 var pc = make([]byte, 4096)
 
 // getStackTrace returns the calling stack trace
@@ -41,6 +40,6 @@ func getStackTrace() string {
 		if n < len(pc) {
 			return string(pc[:n])
 		}
-		pc = make([]byte, n * 2)
+		pc = make([]byte, n*2)
 	}
 }

@@ -473,7 +473,7 @@ func TestLobIn(t *testing.T) {
 
 	str := "before line break\nafter line break\n" + accented
 	for i, rec := range []struct {
-		qry  string
+		qry string
 	}{
 		{`DECLARE
   clobvar CLOB := :1;

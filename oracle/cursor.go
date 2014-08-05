@@ -1239,8 +1239,17 @@ func (cur *Cursor) callBuildStatement(
 
 	// next append any keyword arguments
 	if keywordArguments != nil && len(keywordArguments) > 0 {
+		// sort the keywords, to have a reproducible statement
+		keys := make([]string, len(keywordArguments))
+		i := 0
+		for k := range keywordArguments {
+			keys[i] = k
+			i++
+		}
+		sort.Strings(keys)
 		plus := ""
-		for k, arg := range keywordArguments {
+		for _, k := range keys {
+			arg := keywordArguments[k]
 			if _, ok := arg.(bool); ok {
 				plus = " = 1"
 			} else {

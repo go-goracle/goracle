@@ -231,7 +231,7 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 	oamount := C.ub4(amount)
 	// Py_BEGIN_ALLOW_THREADS
 	hndl, err := v.getLobLoc(pos)
-	off++  // "first position is 1"
+	off++ // "first position is 1"
 	if CTrace {
 		ctrace("OCILobWrite(conn=%p, lob=%p, oamount=%d, off=%d, cF=%d): %v",
 			v.connection.handle, hndl, oamount, off, v.typ.charsetForm, err)
@@ -246,7 +246,7 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 			hndl,
 			&oamount, C.ub4(off),
 			unsafe.Pointer(&data[0]), C.ub4(len(data)),
-			C.OCI_ONE_PIECE, nil, nil, 
+			C.OCI_ONE_PIECE, nil, nil,
 			0, v.typ.charsetForm),
 		"LobWrite"); err != nil {
 		return 0, errgo.Mask(err)
