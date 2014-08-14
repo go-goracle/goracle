@@ -183,6 +183,36 @@ func TestPrepared(t *testing.T) {
 	defer rows.Close()
 }
 
+func TestNULL(t *testing.T) {
+	conn := getConnection(t)
+	defer conn.Close()
+
+	rows, err := conn.Query(`
+		SELECT dt
+		  FROM (SELECT TO_DATE('', 'YYYY-MM-DD') dt FROM DUAL
+				UNION ALL SELECT SYSDATE FROM DUAL
+				UNION ALL SELECT NULL FROM DUAL)`)
+	if err != nil {
+		t.Errorf("error executing the query: %v", err)
+		t.FailNow()
+	}
+	var dt time.Time
+	i := 0
+	for rows.Next() {
+		if err = rows.Scan(&dt); err != nil {
+			t.Errorf("error fetching row %d: %v", i+1, err)
+			break
+		}
+		if i == 1 && dt.IsZero() {
+			t.Errorf("second row is zero: %#v", dt)
+		}
+		if i != 1 && !dt.IsZero() {
+			t.Errorf("other row is not zero: %#v", dt)
+		}
+		i++
+	}
+}
+
 var testDB *sql.DB
 
 func getConnection(t *testing.T) *sql.DB {

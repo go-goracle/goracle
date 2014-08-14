@@ -586,3 +586,35 @@ END;`, BlobVarType},
 		}
 	}
 }
+
+func TestNULL(t *testing.T) {
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+	cur := conn.NewCursor()
+	defer cur.Close()
+
+	if err := cur.Execute(`
+		SELECT dt
+		  FROM (SELECT TO_DATE('', 'YYYY-MM-DD') dt FROM DUAL
+				UNION ALL SELECT SYSDATE FROM DUAL
+				UNION ALL SELECT NULL FROM DUAL)`, nil, nil); err != nil {
+		t.Errorf("error executing the query: %v", err)
+		t.FailNow()
+	}
+	for i := 0; i < 3; i++ {
+		row, err := cur.FetchOne()
+		t.Logf("%d. row=%#v err=%v", i, row, err)
+		if err != nil {
+			t.Errorf("error fetching row %d: %v", i+1, err)
+			break
+		}
+		if i == 1 && row[0] == nil {
+			t.Errorf("second row is nil: %#v", row)
+		}
+		if i != 1 && row[0] != nil {
+			t.Errorf("other row is not nil: %#v", row)
+		}
+	}
+}
