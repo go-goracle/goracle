@@ -51,16 +51,16 @@ func TestTable(t *testing.T) {
 	}
 	defer tx.Rollback()
 
-	insert_num(t, tx, 1, "1234567890123456", 123.456,
+	insertNum(t, tx, 1, "1234567890123456", 123.456,
 		"123456789.123456789", "int64", time.Now())
 
-	insert_num(t, tx, 2, "22345678901234567890", 223.456,
+	insertNum(t, tx, 2, "22345678901234567890", 223.456,
 		"223456789.123456789", "big.Int", time.Now())
 
-	insert_text(t, tx, "Habitación doble", "雙人房", "двухместный номер")
+	insertText(t, tx, "Habitación doble", "雙人房", "двухместный номер")
 }
 
-func insert_text(t *testing.T, conn *sql.Tx, spanish, chinese, russian string) bool {
+func insertText(t *testing.T, conn *sql.Tx, spanish, chinese, russian string) bool {
 	qry := "INSERT INTO " + tbl + " (F_int, F_text_spanish, F_text_chinese, F_text_russian)" +
 		" VALUES (-1, :1, :2, :3)"
 	if _, err := conn.Exec(qry, spanish, chinese, russian); err != nil {
@@ -89,7 +89,7 @@ func insert_text(t *testing.T, conn *sql.Tx, spanish, chinese, russian string) b
 	return ok
 }
 
-func insert_num(t *testing.T, conn *sql.Tx,
+func insertNum(t *testing.T, conn *sql.Tx,
 	small int, bigint string,
 	notint float64, bigreal string,
 	text string, date time.Time,
