@@ -21,6 +21,44 @@ import (
 	"time"
 )
 
+func TestSelectBind(t *testing.T) {
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+	cur := conn.NewCursor()
+	defer cur.Close()
+
+	tbl := `(SELECT 1 id FROM DUAL
+             UNION ALL SELECT 2 FROM DUAL
+             UNION ALL SELECT 1234567890123 FROM DUAL)`
+
+	qry := "SELECT * FROM " + tbl
+	if err := cur.Execute(qry, nil, nil); err != nil {
+		t.Errorf("get all rows: %v", err)
+		return
+	}
+	row, err := cur.FetchOne()
+	if err != nil {
+		t.Errorf("fetch 1: %v", err)
+	}
+	if row, err = cur.FetchOne(); err != nil {
+		t.Errorf("fetch 2: %v", err)
+	}
+	if row, err = cur.FetchOne(); err != nil {
+		t.Errorf("fetch 3: %v", err)
+	}
+
+	qry = "SELECT id FROM " + tbl + " WHERE id = :1"
+	if err = cur.Execute(qry, []interface{}{int64(1234567890123)}, nil); err != nil {
+		t.Errorf("bind: %v", err)
+	}
+	if row, err = cur.FetchOne(); err != nil {
+		t.Errorf("bind fetch: %v", err)
+	}
+	t.Logf("bind: %v", row[0])
+}
+
 func TestReuseBinds(t *testing.T) {
 	conn := getConnection(t)
 	if !conn.IsConnected() {

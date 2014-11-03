@@ -166,8 +166,8 @@ func TestSelectBind(t *testing.T) {
 	defer conn.Close()
 
 	tbl := `(SELECT 1 id FROM DUAL
-                           UNION ALL SELECT 2 FROM DUAL
-                           UNION ALL SELECT 1234567890123 FROM DUAL)`
+             UNION ALL SELECT 2 FROM DUAL
+             UNION ALL SELECT 1234567890123 FROM DUAL)`
 
 	qry := "SELECT * FROM " + tbl
 rows, err := conn.Query(qry)
@@ -180,7 +180,7 @@ rows, err := conn.Query(qry)
 	i := 1
 	for rows.Next() {
 		if err = rows.Scan(&id); err != nil {
-			t.Errorf("%d. error: %v", err)
+			t.Errorf("%d. error: %v", i, err)
 		}
 		t.Logf("%d. %d", i, id)
 		i++
