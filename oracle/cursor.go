@@ -335,8 +335,8 @@ func (cur Cursor) GetRowCount() int {
 func (cur *Cursor) getErrorOffset() int {
 	var offset, x C.ub4
 	if CTrace {
-		ctrace("getErrorOffset.OCIAttrGet", cur.handle, "HTYPE_STMT", &offset, &x,
-			"ATTR_PARSE_ERROR_OFFSET", cur.environment.errorHandle)
+		ctrace("getErrorOffset.OCIAttrGet(cur=%p, HTYPE_STMT, &offset=%p, &x=%p,ATTR_PARSE_ERROR_OFFSET, errhndl=%p)",
+			cur.handle, &offset, &x, cur.environment.errorHandle)
 	}
 	C.OCIAttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 		unsafe.Pointer(&offset), &x,

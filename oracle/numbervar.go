@@ -100,6 +100,10 @@ func numberVarPreDefine(v *Variable, param *C.OCIParam) error {
 			err)
 	}
 
+	if CTrace {
+		ctrace("%v.numberVarPreDefine: scale=%d precision=%d", v, scale, precision)
+	}
+
 	if v.typ == nil {
 		v.typ = FloatVarType
 	}
@@ -120,10 +124,12 @@ func numberVarPreDefine(v *Variable, param *C.OCIParam) error {
 }
 
 func (env *Environment) numberFromInt(value int64, dst unsafe.Pointer) error {
+	if CTrace {
+		ctrace("numberFromInt(%d)", value)
+	}
 	return env.CheckStatus(
 		C.OCINumberFromInt(env.errorHandle, unsafe.Pointer(&value),
-			C.uword(unsafe.Sizeof(value)), C.OCI_NUMBER_SIGNED,
-			(*C.OCINumber)(dst)),
+			8, C.OCI_NUMBER_SIGNED, (*C.OCINumber)(dst)),
 		"numberFromInt")
 }
 
@@ -137,15 +143,20 @@ func (env *Environment) numberFromFloat(value float64, dst unsafe.Pointer) error
 func numberVarformatForString(text string) string {
 	format := make([]byte, len(text))
 	rational := false
-	if text[0] == '-' {
+	i := 0
+	if text[i] == '-' {
 		format[0] = '-'
+		i++
 	}
-	for i := 1; i < len(text); i++ {
+	for ; i < len(text); i++ {
 		if !rational && text[i] == '.' {
 			format[i] = '.'
 			rational = true
 		}
 		format[i] = '9'
+	}
+	if CTrace {
+		ctrace("numberVarformatFoString(%q)=%q", text, string(format))
 	}
 	return string(format)
 }
@@ -166,6 +177,10 @@ func (env *Environment) numberFromText(value string, dst unsafe.Pointer) error {
 
 // Set the value of the variable.
 func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
+	if CTrace {
+		ctrace("numberVarSetValue(typ=%s, pos=%d len=(%d), value=%T(%+v))", v.typ,
+			pos, len(v.dataBytes), value, value)
+	}
 	debug("numberVarSetValue(typ=%s, pos=%d len=(%d), value=%T(%+v))", v.typ,
 		pos, len(v.dataBytes), value, value)
 	nfInt := func(intVal int64) error {
@@ -173,16 +188,14 @@ func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
 			v.dataInts[pos] = intVal
 			return nil
 		}
-		return v.environment.numberFromInt(intVal,
-			v.getHandle(pos))
+		return v.environment.numberFromInt(intVal, v.getHandle(pos))
 	}
 	nfFloat := func(floatVal float64) error {
 		if v.dataFloats != nil {
 			v.dataFloats[pos] = floatVal
 			return nil
 		}
-		return v.environment.numberFromFloat(floatVal,
-			v.getHandle(pos))
+		return v.environment.numberFromFloat(floatVal, v.getHandle(pos))
 	}
 	var err error
 	switch x := value.(type) {
@@ -215,6 +228,7 @@ func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
 		return nfInt(int64(x))
 	case int64:
 		return nfInt(int64(x))
+		//return v.environment.numberFromText(strconv.FormatInt(x, 10), v.getHandle(pos))
 	case []int64:
 		for i := range x {
 			if err = numberVarSetValue(v, pos+uint(i), x[i]); err != nil {
@@ -368,12 +382,12 @@ func init() {
 		getValue:   numberVarGetValue,
 		oracleType: C.SQLT_VNU,
 		//oracleType:       C.SQLT_INT,       // Oracle type
-		charsetForm:      C.SQLCS_IMPLICIT, // charset form
-		size:             4,                // element length
-		isCharData:       false,            // is character data
-		isVariableLength: false,            // is variable length
-		canBeCopied:      true,             // can be copied
-		canBeInArray:     true,             // can be in array
+		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
+		size:             C.sizeof_OCINumber, // element length
+		isCharData:       false,              // is character data
+		isVariableLength: false,              // is variable length
+		canBeCopied:      true,               // can be copied
+		canBeInArray:     true,               // can be in array
 	}
 
 	Int64VarType = &VariableType{
@@ -383,12 +397,12 @@ func init() {
 		getValue:   numberVarGetValue,
 		oracleType: C.SQLT_VNU,
 		//oracleType:       C.SQLT_INT,       // Oracle type
-		charsetForm:      C.SQLCS_IMPLICIT, // charset form
-		size:             8,                // element length
-		isCharData:       false,            // is character data
-		isVariableLength: false,            // is variable length
-		canBeCopied:      true,             // can be copied
-		canBeInArray:     true,             // can be in array
+		charsetForm:      C.SQLCS_IMPLICIT,   // charset form
+		size:             C.sizeof_OCINumber, // element length
+		isCharData:       false,              // is character data
+		isVariableLength: false,              // is variable length
+		canBeCopied:      true,               // can be copied
+		canBeInArray:     true,               // can be in array
 	}
 
 	LongIntegerVarType = &VariableType{

@@ -49,14 +49,24 @@ func TestSelectBind(t *testing.T) {
 		t.Errorf("fetch 3: %v", err)
 	}
 
+	//
+	// DUMP(1234567890123)
+	// -----------------------------------
+	// Typ=2 Len=8: 199,2,24,46,68,90,2,24
+
 	qry = "SELECT id FROM " + tbl + " WHERE id = :1"
-	if err = cur.Execute(qry, []interface{}{int64(1234567890123)}, nil); err != nil {
-		t.Errorf("bind: %v", err)
+	for i, id := range []int64{1, 2, 1234567890123} {
+		i++
+		if err = cur.Execute(qry, []interface{}{id}, nil); err != nil {
+			t.Errorf("%d. bind: %v", i, err)
+			return
+		}
+		if row, err = cur.FetchOne(); err != nil {
+			t.Errorf("%d.bind fetch: %v", i, err)
+			return
+		}
+		t.Logf("%d. bind: %v", i, row)
 	}
-	if row, err = cur.FetchOne(); err != nil {
-		t.Errorf("bind fetch: %v", err)
-	}
-	t.Logf("bind: %v", row[0])
 }
 
 func TestReuseBinds(t *testing.T) {
