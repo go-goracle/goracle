@@ -20,10 +20,10 @@ package main
 import (
 	"bufio"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -67,7 +67,7 @@ func dump(w io.Writer, qry string) error {
 	}
 	log.Printf("columns: %#v", columns)
 
-	bw := bufio.NewWriter(w)
+	bw := bufio.NewWriterSize(w, 65536)
 	defer bw.Flush()
 	for i, col := range columns {
 		if i > 0 {
@@ -79,7 +79,8 @@ func dump(w io.Writer, qry string) error {
 	}
 	bw.Write([]byte{'\n'})
 	n := 0
-	for rows, err := cu.FetchMany(100); err == nil && len(rows) > 0; rows, err = cu.FetchMany(100) {
+	rows, err := cu.FetchMany(1000)
+	for err == nil && len(rows) > 0 {
 		for _, row := range rows {
 			for i, data := range row {
 				if i > 0 {
@@ -93,6 +94,7 @@ func dump(w io.Writer, qry string) error {
 			bw.Write([]byte{'\n'})
 			n++
 		}
+		rows, err = cu.FetchMany(1000)
 	}
 	log.Printf("written %d rows.", n)
 	if err != nil && err != io.EOF {
@@ -131,10 +133,13 @@ func GetColumns(cu *oracle.Cursor) (cols []Column, err error) {
 
 var converters = map[int]ColConverter{
 	1: func(data interface{}) string { //VARCHAR2
-		return `"` + data.(string) + `"`
+		return fmt.Sprintf("%q", data.(string))
 	},
 	6: func(data interface{}) string { //NUMBER
-		return strconv.FormatFloat(data.(float64), 'G', 22, 64)
+		return fmt.Sprintf("%v", data)
+	},
+	96: func(data interface{}) string { //CHAR
+		return fmt.Sprintf("%q", data.(string))
 	},
 	156: func(data interface{}) string { //DATE
 		return `"` + data.(time.Time).Format(time.RFC3339) + `"`
