@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/juju/errgo"
+	"github.com/tgulacsi/goracle/oracle"
 )
 
 const tbl = "tst_goracle_godrv"
@@ -38,12 +39,13 @@ func TestTable(t *testing.T) {
 			F_text VARCHAR2(1000), F_date DATE,
 			F_text_spanish VARCHAR2(100),
 			F_text_chinese VARCHAR2(100),
-			F_text_russian VARCHAR2(100)
+			F_text_russian VARCHAR2(100),
+                        F_clob CLOB
 		)`); err != nil {
 		t.Skipf("Skipping table test, as cannot create "+tbl+": %v", err)
 		return
 	}
-	defer conn.Exec("DROP TABLE " + tbl)
+	//defer conn.Exec("DROP TABLE " + tbl)
 	tx, err := conn.Begin()
 	if err != nil {
 		t.Errorf("cannot start transaction: %v", err)
@@ -58,6 +60,8 @@ func TestTable(t *testing.T) {
 		"223456789.123456789", "big.Int", time.Now())
 
 	insertText(t, tx, "Habitación doble", "雙人房", "двухместный номер")
+
+	insertClob(t, tx, "árvíztűrő tükörfúrógép")
 }
 
 func insertText(t *testing.T, conn *sql.Tx, spanish, chinese, russian string) bool {
@@ -142,5 +146,49 @@ func insertNum(t *testing.T, conn *sql.Tx,
 		t.Errorf("date mismatch: got %s, awaited %s.", dateO, date.Round(time.Second))
 	}
 
+	return true
+}
+
+func insertClob(t *testing.T, conn *sql.Tx, text string) bool {
+	qry := "INSERT INTO " + tbl + ` (F_int, F_clob) 
+                  VALUES (-2, EMPTY_CLOB())`
+
+	if _, err := conn.Exec(qry); err != nil {
+		t.Errorf("cannot insert into "+tbl+" (%q): %v", qry, err)
+		return false
+	}
+	var clob *oracle.ExternalLobVar
+	qry = "SELECT F_clob FROM " + tbl + " WHERE F_int = -2 AND ROWNUM < 2"
+	if err := conn.QueryRow(qry).Scan(&clob); err != nil {
+		t.Errorf("cannot select empty clob: %v", err)
+		return false
+	}
+	t.Logf("clob=%v", clob)
+
+	if n, err := clob.WriteAt([]byte(text), 0); err != nil {
+		t.Errorf("WriteAt clob: %v", err)
+	} else if n != len([]rune(text)) {
+		t.Errorf("written %d chars, awaited %d", n, len([]rune(text)))
+	} else {
+		t.Logf("written %d chars", n)
+	}
+	clob.Close()
+
+	if err := conn.QueryRow(qry).Scan(&clob); err != nil {
+		t.Errorf("cannot select clob: %v", err)
+		return false
+	}
+	t.Logf("clob=%v", clob)
+	defer clob.Close()
+
+	got, err := clob.ReadAll()
+	if err != nil {
+		t.Errorf("reading clob: %v", err)
+		return false
+	}
+	if string(got) != text {
+		t.Errorf("got %q, awaited %q", got, text)
+		return false
+	}
 	return true
 }

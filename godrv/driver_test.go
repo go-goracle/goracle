@@ -201,6 +201,29 @@ func TestSelectBind(t *testing.T) {
 func TestClob(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
+	text := "abcdefghijkl"
+	stmt ,err := conn.Prepare("SELECT TO_CLOB('"+text+"') FROM DUAL")
+	if err != nil {
+		t.Errorf("error preparing query1: %v", err)
+		t.FailNow()
+	}
+	defer stmt.Close()
+
+	var clob *oracle.ExternalLobVar
+	if err = stmt.QueryRow().Scan(&clob); err != nil {
+		t.Errorf("Error scanning clob: %v", err)
+	}
+	defer clob.Close()
+	t.Logf("clob: %v", clob)
+
+	got, err := clob.ReadAll()
+	if err != nil {
+		t.Errorf("error reading clob: %v", err)
+		t.FailNow()
+	}
+	if string(got) != text {
+		t.Errorf("clob: got %q, awaited %q", got, text)
+	}
 }
 
 func TestPrepared(t *testing.T) {
@@ -211,6 +234,7 @@ func TestPrepared(t *testing.T) {
 		t.Errorf("error preparing query: %v", err)
 		t.FailNow()
 	}
+	defer stmt.Close()
 	rows, err := stmt.Query("a")
 	if err != nil {
 		t.Errorf("error executing query: %s", err)
