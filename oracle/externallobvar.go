@@ -35,41 +35,47 @@ import (
 
 const useLobRead2 = true
 
+// Compile-time guarantees for interface implementations.
+var _ = io.Writer(&ExternalLobVar{})
+var _ = io.Reader(&ExternalLobVar{})
+var _ = io.ReaderAt(&ExternalLobVar{})
+var _ = io.WriterAt(&ExternalLobVar{})
+
 // Defines the routines for handling LOB variables external to this module.
 
 // ExternalLobVar is an external LOB var type
 type ExternalLobVar struct {
 	lobVar           *Variable
-	pos              uint
+	idx              uint
 	internalFetchNum uint
 	isFile           bool
-	readPos          int64
+	rwPos            int64
 }
 
 func (lv ExternalLobVar) getHandle() *C.OCILobLocator {
-	lob, _ := lv.lobVar.getLobLoc(lv.pos)
+	lob, _ := lv.lobVar.getLobLoc(lv.idx)
 	return lob
 }
 func (lv ExternalLobVar) getHandleBytes() []byte {
-	return lv.lobVar.getHandleBytes(lv.pos)
+	return lv.lobVar.getHandleBytes(lv.idx)
 }
 
 // NewExternalLobVar creates a new external LOB variable.
 func NewExternalLobVar(v *Variable, // variable to encapsulate
-	pos uint, // position in array to encapsulate
+	idx uint, // position in array to encapsulate
 ) *ExternalLobVar {
 	if CTrace {
-		ctrace("NewExternalLobVar(%s, %d)", v, pos)
+		ctrace("NewExternalLobVar(%s, %d)", v, idx)
 	}
 	ret := &ExternalLobVar{
 		lobVar:           v,
-		pos:              pos,
+		idx:              idx,
 		internalFetchNum: v.internalFetchNum,
 		isFile:           v.typ == BFileVarType}
 	if CTrace {
 		if n, err := ret.internalSize(); err != nil {
 			ctrace("error getting internal size in NewExternalLobVar(%v, %d): %s",
-				v, pos, err)
+				v, idx, err)
 		} else {
 			ctrace("internal size: %d", n)
 		}
@@ -224,11 +230,11 @@ func (lv *ExternalLobVar) internalSize() (length C.ub4, err error) {
 	// Py_BEGIN_ALLOW_THREADS
 	if CTrace {
 		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
-			lv.lobVar.connection.handle, lv.pos*lv.lobVar.typ.size,
+			lv.lobVar.connection.handle, lv.idx*lv.lobVar.typ.size,
 			lv.getHandleBytes(), &length)
 		//buf := make([]byte, 8192)
 		//ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
-		//ctrace("data[%d]=%p", lv.pos, lob)
+		//ctrace("data[%d]=%p", lv.idx, lob)
 	}
 	if err = lv.lobVar.environment.CheckStatus(
 		C.OCILobGetLength(lv.lobVar.connection.handle,
@@ -373,11 +379,11 @@ func (lv *ExternalLobVar) Read(p []byte) (int, error) {
 	if err := lv.Verify(); err != nil {
 		return 0, errgo.Mask(err)
 	}
-	n, e := lv.ReadAt(p, lv.readPos)
+	n, e := lv.ReadAt(p, lv.rwPos)
 	if CTrace {
-		ctrace("ReadAt %d => %d, %s => %d", lv.readPos, n, e, lv.readPos+int64(n))
+		ctrace("ReadAt %d => %d, %s => %d", lv.rwPos, n, e, lv.rwPos+int64(n))
 	}
-	lv.readPos += int64(n)
+	lv.rwPos += int64(n)
 	return n, e
 }
 
@@ -399,13 +405,26 @@ func (lv *ExternalLobVar) ReadAll() ([]byte, error) {
 	return p, err
 }
 
-// WriteAt writes a value to the LOB variable; return the number of bytes written.
+// WriteAt writes a value to the LOB variable at the specified offset; return the number of bytes written.
 func (lv *ExternalLobVar) WriteAt(value []byte, off int64) (n int, err error) {
 	// perform the write, if possible
 	if err = lv.Verify(); err != nil {
 		return 0, errgo.Mask(err)
 	}
 	return lv.lobVar.lobVarWrite(value, 0, off)
+}
+
+// Write writes the value to the LOB variable; return the number of bytes written.
+func (lv *ExternalLobVar) Write(p []byte) (int, error) {
+	if err := lv.Verify(); err != nil {
+		return 0, errgo.Mask(err)
+	}
+	n, e := lv.WriteAt(p, lv.rwPos)
+	if CTrace {
+		ctrace("WriteAt %d => %d, %s => %d", lv.rwPos, n, e, lv.rwPos+int64(n))
+	}
+	lv.rwPos += int64(n)
+	return n, e
 }
 
 // Trim the LOB variable to the specified length.

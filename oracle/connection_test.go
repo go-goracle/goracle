@@ -236,8 +236,8 @@ func gcMem() {
 
 func TestReConnect(t *testing.T) {
 	var err error
-	tick := time.Tick(100 * time.Millisecond)
-	N := 30
+	tick := time.Tick(500 * time.Millisecond)
+	N := 10
 	if testing.Short() {
 		N = 3
 	} else {

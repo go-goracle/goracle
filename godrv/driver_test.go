@@ -202,7 +202,7 @@ func TestClob(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
 	text := "abcdefghijkl"
-	stmt ,err := conn.Prepare("SELECT TO_CLOB('"+text+"') FROM DUAL")
+	stmt, err := conn.Prepare("SELECT TO_CLOB('" + text + "') FROM DUAL")
 	if err != nil {
 		t.Errorf("error preparing query1: %v", err)
 		t.FailNow()
