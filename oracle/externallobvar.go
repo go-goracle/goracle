@@ -458,6 +458,28 @@ func (lv *ExternalLobVar) Trim(newSize int) error {
 	return nil
 }
 
+// Seek as os.File.Seek: sets the offset for the next Read or Write on file to offset,
+// interpreted according to whence: 0 means relative to the origin of the file
+// 1 means relative to the current offset, and 2 means relative to the end.
+// It returns the new offset and an error, if any.
+func (lv *ExternalLobVar) Seek(offset int64, whence int) (ret int64, err error) {
+	switch whence {
+	case 0:
+		lv.rwPos = offset
+	case 1:
+		lv.rwPos += offset
+	case 2:
+		var size C.ub4
+		if size, err = lv.internalSize(); err != nil {
+			return lv.rwPos, err
+		}
+		lv.rwPos = int64(size) + offset
+	default:
+		return lv.rwPos, fmt.Errorf("bad whence %d", whence)
+	}
+	return lv.rwPos, nil
+}
+
 // GetChunkSize returns the chunk size that should be used when
 // reading/writing the LOB in chunks.
 func (lv *ExternalLobVar) GetChunkSize() (int, error) {
