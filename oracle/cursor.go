@@ -39,7 +39,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 // BypassMultipleArgs induces a bypass agains ORA-1008 when a keyword

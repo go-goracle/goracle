@@ -46,7 +46,7 @@ import (
 	"log"
 	"unsafe"
 
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 // Environment holds handles for the database environment

@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 /*

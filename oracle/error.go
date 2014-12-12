@@ -20,7 +20,7 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 // Error is an error struct holding additional info

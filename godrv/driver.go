@@ -26,8 +26,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/juju/errgo"
 	"github.com/tgulacsi/goracle/oracle"
+	"gopkg.in/errgo.v1"
 )
 
 var (
