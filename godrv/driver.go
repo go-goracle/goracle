@@ -136,6 +136,11 @@ func (s stmt) NumInput() int {
 	return len(names)
 }
 
+// NewVar creates a new Variable, for out binds.
+func (s stmt) NewVar(value interface{}) (*oracle.Variable, error) {
+	return s.cu.NewVar(value)
+}
+
 type rowsRes struct {
 	cu   *oracle.Cursor
 	cols []oracle.VariableDescription
