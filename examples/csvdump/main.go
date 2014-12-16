@@ -27,13 +27,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/errgo/errors"
+	"gopkg.in/errgo.v1"
 	"github.com/tgulacsi/goracle/examples/connect"
-	// "github.com/tgulacsi/goracle/godrv"
 	"github.com/tgulacsi/goracle/oracle"
 )
 
 func getQuery(table, where string, columns []string) string {
+	if strings.HasPrefix(table, "SELECT ") {
+		return table
+	}
 	cols := "*"
 	if len(columns) > 0 {
 		cols = strings.Join(columns, ", ")
