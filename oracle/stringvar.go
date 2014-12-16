@@ -28,7 +28,7 @@ import "C"
 import (
 	"log"
 
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 var (

@@ -43,7 +43,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 // MakeDSN makea a data source name given the host port and SID.

@@ -36,7 +36,7 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 //CursorVarType is the VariableType for a cursor

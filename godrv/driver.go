@@ -26,8 +26,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/juju/errgo"
 	"github.com/tgulacsi/goracle/oracle"
+	"gopkg.in/errgo.v1"
 )
 
 var (
@@ -134,6 +134,11 @@ func (s stmt) NumInput() int {
 		return -1
 	}
 	return len(names)
+}
+
+// NewVar creates a new Variable, for out binds.
+func (s stmt) NewVar(value interface{}) (*oracle.Variable, error) {
+	return s.cu.NewVar(value)
 }
 
 type rowsRes struct {

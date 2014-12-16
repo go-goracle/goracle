@@ -163,7 +163,7 @@ import (
 	"log"
 
 	//"time"
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 func testLobOutC(cur *Cursor, qry string) (err error) {

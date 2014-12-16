@@ -74,7 +74,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/juju/errgo"
+	"gopkg.in/errgo.v1"
 )
 
 var (
