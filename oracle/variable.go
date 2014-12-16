@@ -471,6 +471,8 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 
 	case int64, uint64:
 		return Int64VarType, 0, 0, nil
+	case *int64:
+		return VarTypeByValue(*x)
 	case []int64:
 		numElements = uint(len(x))
 		vt, size, _, err = VarTypeByValue(int64(0))
@@ -1400,14 +1402,35 @@ func (cur *Cursor) getPtrValues() error {
 	for _, v := range cur.bindVarsArr {
 		if v.destination.IsValid() && !v.isArray {
 			val, err := v.GetValue(0)
-			debug("%s setting %v to %v %v", v, v.destination, val, err)
+			debug("%s setting %v to %v err=%v", v, v.destination, val, err)
 			if err != nil {
 				return errgo.Notef(err, "error getting value of %s", v)
 			}
 			if val == nil {
 				v.destination.Elem().Set(reflect.Zero(v.destination.Elem().Type()))
 			} else {
-				v.destination.Elem().Set(reflect.ValueOf(val))
+				ok := false
+				switch x := v.destination.Interface().(type) {
+				case *int32:
+					switch y := val.(type) {
+					case int32:
+						*x, ok = y, true
+					case int64:
+						*x, ok = int32(y), true
+					}
+				case *int64:
+					switch y := val.(type) {
+					case int32:
+						*x, ok = int64(y), true
+					case int64:
+						*x, ok = y, true
+					}
+				}
+				if !ok {
+					elem := v.destination.Elem()
+					elem.Set(reflect.ValueOf(val).Convert(elem.Type()))
+				}
+
 			}
 		}
 	}
