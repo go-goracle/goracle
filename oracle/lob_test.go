@@ -17,14 +17,11 @@ limitations under the License.
 package oracle
 
 import (
-	//"fmt"
-	//"log"
+	"sync"
 	"testing"
-	//"time"
 )
 
-//comment out - used only for discovering the "invalid handle" error with LOBs
-func _TestLobOutC(t *testing.T) {
+func TestLobOutC(t *testing.T) {
 	conn := getConnection(t)
 	if !conn.IsConnected() {
 		t.FailNow()
@@ -51,4 +48,53 @@ END;`
 		t.FailNow()
 	}
 
+}
+
+func TestGetLobConcurrent(t *testing.T) {
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+
+	text := "abcdefghijkl"
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(text string) {
+			defer wg.Done()
+			cur := conn.NewCursor()
+			defer cur.Close()
+			if err := cur.Prepare("SELECT TO_CLOB('"+text+"') FROM DUAL", ""); err != nil {
+				t.Errorf("Prepare: %v", err)
+				return
+			}
+			if err := cur.Execute("", nil, nil); err != nil {
+				t.Errorf("Execute: %v", err)
+				return
+			}
+
+			row, err := cur.FetchOne()
+			if err != nil {
+				t.Errorf("Fetch: %v", err)
+				return
+			}
+			clob := row[0].(*ExternalLobVar)
+			defer clob.Close()
+
+			t.Logf("clob=%v", clob)
+			got, err := clob.ReadAll()
+			if err != nil {
+				t.Errorf("error reading clob: %v", err)
+				return
+			}
+			t.Logf("got=%q", got)
+			if string(got) != text {
+				t.Errorf("clob: got %q, awaited %q", got, text)
+				return
+			}
+		}(text)
+		//}(text + "-" + strconv.Itoa(i))
+	}
+	wg.Wait()
 }

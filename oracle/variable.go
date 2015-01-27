@@ -124,7 +124,11 @@ func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uin
 
 // String returns a (short) representation of the variable
 func (v *Variable) String() string {
-	return fmt.Sprintf("<Variable %s of %p>", v.typ.Name, v.boundCursorHandle)
+	p := v.dataBytes
+	if len(p) > 20 {
+		p = p[:20]
+	}
+	return fmt.Sprintf("%s@%p=%q", v.typ.Name, v.boundCursorHandle, p)
 }
 
 // VariableDescription holds the description of a variable
