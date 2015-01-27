@@ -23,6 +23,10 @@ import (
 	"github.com/tgulacsi/goracle/oracle"
 )
 
+func init() {
+	IsDebug = true
+}
+
 func TestGetLobConcurrentStmt(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
@@ -36,7 +40,7 @@ func TestGetLobConcurrentStmt(t *testing.T) {
 	defer stmt.Close()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		wg.Add(1)
 		go func(text string) {
 			defer wg.Done()
@@ -69,7 +73,7 @@ func TestGetLobConcurrent(t *testing.T) {
 	text := "abcdefghijkl"
 
 	var wg sync.WaitGroup
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		wg.Add(1)
 		go func(text string) {
 			defer wg.Done()
@@ -78,7 +82,7 @@ func TestGetLobConcurrent(t *testing.T) {
 				t.Errorf("error preparing query1: %v", err)
 				return
 			}
-			defer stmt.Close()
+			//defer stmt.Close()
 
 			var clob *oracle.ExternalLobVar
 			if err = stmt.QueryRow().Scan(&clob); err != nil {

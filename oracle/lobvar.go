@@ -49,8 +49,6 @@ sword lobAlloc(OCIEnv *envhp, void *data, int allocatedElements) {
 import "C"
 
 import (
-
-	//"runtime"
 	"unsafe"
 
 	"gopkg.in/errgo.v1"

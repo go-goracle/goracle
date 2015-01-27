@@ -77,8 +77,8 @@ func (c conn) Prepare(query string) (driver.Stmt, error) {
 		}
 		query = strings.Join(q2, "")
 	}
-	debug("%p.Prepare(%s)", cu, query)
 	err := cu.Prepare(query, "")
+	debug("Prepare", "cursor", cu, "query", query, "error", err)
 	if err != nil {
 		return nil, filterErr(err)
 	}
@@ -87,6 +87,7 @@ func (c conn) Prepare(query string) (driver.Stmt, error) {
 
 // closes the connection
 func (c conn) Close() error {
+	debug("Close connection", "conn", c)
 	err := c.cx.Close()
 	c.cx = nil
 	return err
@@ -125,7 +126,7 @@ func (t tx) Rollback() error {
 // closes statement
 func (s stmt) Close() error {
 	if s.cu != nil {
-		debug("CLOSEing statement %p (%s)", s.cu, s.statement)
+		debug("Close statement", "cursor", s.cu, "statement", s.statement)
 		s.cu.Close()
 		s.cu = nil
 	}
@@ -166,7 +167,7 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 	var err error
 	// driver.Value = interface{}, convert []driver.Value to []interface{}
 	a := (*[]interface{})(unsafe.Pointer(&args))
-	debug("%p.run(%s, %v)", s.cu, s.statement, *a)
+	debug("run", "cursor", s.cu, "statement", s.statement, "args", a)
 	if err = s.cu.Execute(s.statement, *a, nil); err != nil {
 		return nil, filterErr(err)
 	}
@@ -174,7 +175,7 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 	var cols []oracle.VariableDescription
 	if !s.cu.IsDDL() {
 		cols, err = s.cu.GetDescription()
-		debug("cols: %+v err: %s", cols, err)
+		debug("GetDescription", "cols", cols, "error", err)
 		if err != nil {
 			return nil, errgo.Mask(err)
 		}
@@ -210,7 +211,7 @@ func (r rowsRes) Columns() []string {
 // closes the resultset
 func (r rowsRes) Close() error {
 	if r.cu != nil {
-		debug("CLOSEing result %p", r.cu)
+		debug("Close result", "cursor", r.cu)
 		r.cu.Close()
 		r.cu = nil
 	}
@@ -222,7 +223,7 @@ func (r rowsRes) Next(dest []driver.Value) error {
 	row := (*[]interface{})(unsafe.Pointer(&dest))
 	// Log.Debug("FetcOneInto", "row", rowm "*row", *row, "length", len(*row))
 	err := r.cu.FetchOneInto(*row...)
-	debug("fetched row=%p %#v (len=%d) err=%v", row, *row, len(*row), err)
+	debug("Next", "row", row, "*row", *row, "length", len(*row), "error", err)
 	if err != nil {
 		if err == io.EOF {
 			return io.EOF
