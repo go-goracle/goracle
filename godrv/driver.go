@@ -158,6 +158,7 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 	//time.Time
 
 	var err error
+	// driver.Value = interface{}, convert []driver.Value to []interface{}
 	a := (*[]interface{})(unsafe.Pointer(&args))
 	debug("%p.run(%s, %v)", s.cu, s.statement, *a)
 	if err = s.cu.Execute(s.statement, *a, nil); err != nil {
@@ -204,7 +205,7 @@ func (r rowsRes) Columns() []string {
 func (r rowsRes) Close() error {
 	if r.cu != nil {
 		debug("CLOSEing result %p", r.cu)
-		// r.cu.Close() // FIXME
+		r.cu.Close() // FIXME
 		r.cu = nil
 	}
 	return nil
