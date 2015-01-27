@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tgulacsi/go/loghlp/tsthlp"
 	"github.com/tgulacsi/goracle/oracle"
 )
 
@@ -281,6 +282,7 @@ func getConnection(t *testing.T) *sql.DB {
 		return testDB
 	}
 	flag.Parse()
+	Log.SetHandler(tsthlp.TestHandler(t))
 	if testDB, err = sql.Open("goracle", *fDsn); err != nil {
 		t.Fatalf("error connecting to %q: %s", *fDsn, err)
 	}

@@ -18,13 +18,14 @@ package oracle
 import (
 	"bytes"
 	"flag"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/tgulacsi/go/loghlp/tsthlp"
 )
 
 var dsn = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
@@ -186,6 +187,7 @@ func getConnection(t *testing.T) *Connection {
 	if conn.IsConnected() {
 		return conn
 	}
+	Log.SetHandler(tsthlp.TestHandler(t))
 
 	if !(dsn != nil && *dsn != "") {
 		t.Logf("cannot test connection without dsn!")
@@ -195,10 +197,12 @@ func getConnection(t *testing.T) *Connection {
 	var err error
 	conn, err = NewConnection(user, passw, sid, false)
 	if err != nil {
-		log.Panicf("error creating connection to %s: %s", *dsn, err)
+		Log.Crit("Create connection", "dsn", *dsn, "error", err)
+		panic("cannot create connection: " + err.Error())
 	}
 	if err = conn.Connect(0, false); err != nil {
-		log.Panicf("error connecting: %s", err)
+		Log.Crit("Connecting", "error", err)
+		panic("error connecting: " + err.Error())
 	}
 	return conn
 }
@@ -221,16 +225,15 @@ func gcMem() {
 	omemkb := memkb
 	out, err := exec.Command("ps", memcmd...).Output()
 	if err != nil {
-		log.Printf("error running ps %s: %s", memcmd, err)
+		Log.Error("ps", "cmd", memcmd, "error", err)
 	} else {
 		if x, err := strconv.Atoi(string(bytes.TrimSpace(out))); err != nil {
-			log.Printf("not number: %q (%s)", out, err)
+			Log.Error("ps parse", "notNumber", out, "error", err)
 		} else {
 			memkb = x
 		}
 	}
-	log.Printf("mem += %.3db = %db - RSS += %dkb = %dkb", ms.Alloc-alloc, ms.Alloc,
-		memkb-omemkb, memkb)
+	Log.Info("gcMem", "+", ms.Alloc-alloc, "Alloc", ms.Alloc, "+kb", memkb-omemkb, "AllocKb", memkb)
 	alloc = ms.Alloc
 }
 
@@ -247,7 +250,7 @@ func TestReConnect(t *testing.T) {
 	}
 	for i := 0; i < N; i++ {
 		<-tick
-		log.Printf("%d. reconnection", i)
+		Log.Debug("reconnection", "attempt", i)
 		conn = getConnection(t)
 		if err = conn.Connect(0, false); err != nil {
 			t.Errorf("error connection with 0 to db: %s", err)

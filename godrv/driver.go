@@ -21,21 +21,27 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 	"unsafe"
 
 	"github.com/tgulacsi/goracle/oracle"
 	"gopkg.in/errgo.v1"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var (
+	// Log is discarded by default. Use Log.SetHandler.
+	Log = log15.New("lib", "goracle.godrv")
 	// NotImplemented prints Not implemented
 	NotImplemented = errgo.New("Not implemented")
 	// IsDebug should we print debug logs?
 	IsDebug bool
 )
+
+func init() {
+	Log.SetHandler(log15.DiscardHandler())
+}
 
 type conn struct {
 	cx *oracle.Connection
@@ -130,7 +136,7 @@ func (s stmt) Close() error {
 func (s stmt) NumInput() int {
 	names, err := s.cu.GetBindNames()
 	if err != nil {
-		log.Printf("error getting bind names of %p: %s", s.cu, err)
+		Log.Error("Getting bind names", "cursor", s.cu, "error", err)
 		return -1
 	}
 	return len(names)
@@ -205,7 +211,7 @@ func (r rowsRes) Columns() []string {
 func (r rowsRes) Close() error {
 	if r.cu != nil {
 		debug("CLOSEing result %p", r.cu)
-		r.cu.Close() // FIXME
+		r.cu.Close()
 		r.cu = nil
 	}
 	return nil
@@ -214,7 +220,7 @@ func (r rowsRes) Close() error {
 // DATE, DATETIME, TIMESTAMP are treated as they are in Local time zone
 func (r rowsRes) Next(dest []driver.Value) error {
 	row := (*[]interface{})(unsafe.Pointer(&dest))
-	// log.Printf("FetcOneInto(%p %+v len=%d) %T", row, *row, len(*row), *row)
+	// Log.Debug("FetcOneInto", "row", rowm "*row", *row, "length", len(*row))
 	err := r.cu.FetchOneInto(*row...)
 	debug("fetched row=%p %#v (len=%d) err=%v", row, *row, len(*row), err)
 	if err != nil {
@@ -254,10 +260,10 @@ func (d *Driver) Open(uri string) (driver.Conn, error) {
 	return &conn{cx: cx}, nil
 }
 
-// use log.Printf for log messages if IsDebug
-func debug(fmt string, args ...interface{}) {
+// use Log.Debug for log messages if IsDebug
+func debug(msg string, pairs ...interface{}) {
 	if IsDebug {
-		log.Printf(fmt, args...)
+		Log.Debug(msg, pairs...)
 	}
 }
 

@@ -17,7 +17,6 @@ limitations under the License.
 package godrv
 
 import (
-	"log"
 	"sync"
 	"testing"
 
@@ -31,7 +30,8 @@ func TestGetLobConcurrentStmt(t *testing.T) {
 	text := "abcdefghijkl"
 	stmt, err := conn.Prepare("SELECT TO_CLOB('" + text + "') FROM DUAL")
 	if err != nil {
-		log.Printf("error preparing query1: %v", err)
+		t.Errorf("error preparing query1: %v", err)
+		return
 	}
 	defer stmt.Close()
 
@@ -75,7 +75,8 @@ func TestGetLobConcurrent(t *testing.T) {
 			defer wg.Done()
 			stmt, err := conn.Prepare("SELECT TO_CLOB('" + text + "') FROM DUAL")
 			if err != nil {
-				log.Printf("error preparing query1: %v", err)
+				t.Errorf("error preparing query1: %v", err)
+				return
 			}
 			defer stmt.Close()
 

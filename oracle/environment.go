@@ -43,11 +43,18 @@ import "C"
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"unsafe"
 
 	"gopkg.in/errgo.v1"
+	"gopkg.in/inconshreveable/log15.v2"
 )
+
+// Log is discarded by default. Use Log.SetHandler to set.
+var Log = log15.New("lib", "goracle")
+
+func init() {
+	Log.SetHandler(log15.DiscardHandler())
+}
 
 // Environment holds handles for the database environment
 type Environment struct {
@@ -98,7 +105,7 @@ func NewEnvironment() (*Environment, error) {
 		CsIDAl32UTF8 = C.OCINlsCharSetNameToId(unsafe.Pointer(env.handle),
 			(*C.oratext)(&buffer[0]))
 		C.OCIHandleFree(unsafe.Pointer(&env.handle), C.OCI_HTYPE_ENV)
-		// log.Printf("csid=%d", CsIDAl32UTF8)
+		// Log.Debug("Env", "csid", CsIDAl32UTF8)
 	}
 	if err = checkStatus(C.OCIEnvNlsCreate(
 		&env.handle, C.OCI_DEFAULT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
@@ -106,7 +113,7 @@ func NewEnvironment() (*Environment, error) {
 		setErrAt(err, "Unable to acquire Oracle environment handle with AL32UTF8 charset")
 		return nil, err
 	}
-	// log.Printf("env=%+v err=%+v", env.handle, err)
+	// Log.Debug("Env", "env", env.handle, "error", err)
 
 	// create the error handle
 	if err = ociHandleAlloc(unsafe.Pointer(env.handle),
@@ -124,7 +131,7 @@ func NewEnvironment() (*Environment, error) {
 	}
 	env.MaxBytesPerCharacter = uint(sb4)
 	env.maxStringBytes = MaxStringChars * env.MaxBytesPerCharacter
-	// log.Printf("maxBytesPerCharacter=%d", env.maxBytesPerCharacter)
+	// Log.Debug("Env", "maxBytesPerCharacter", env.maxBytesPerCharacter)
 
 	// acquire whether character set is fixed width
 	if err = env.CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
@@ -287,15 +294,15 @@ func checkStatus(status C.sword, justSpecific bool) error {
 // retrieve the error message from the database environment
 func (env *Environment) CheckStatus(status C.sword, at string) error {
 	// if status != C.OCI_SUCCESS {
-	// log.Printf("CheckStatus(%d (%s), %s)", status, status == C.OCI_SUCCESS, at)
+	// Log.Debug("CheckStatus", "status", status, "success?", status == C.OCI_SUCCESS, "at", at)
 	// }
 	if status == C.OCI_SUCCESS || status == C.OCI_SUCCESS_WITH_INFO {
-		// log.Printf("CheckStatus(%d): OK", status)
+		// Log.Debug("CheckStatus: OK", "status", status)
 		return nil
 	}
 	if err := checkStatus(status, true); err != nil {
 		if err != NoDataFound {
-			log.Printf("CheckStatus(%d) @%s ERR=%s\n%s", status, at, err, getStackTrace())
+			Log.Error("CheckStatus", "status", status, "at", at, "error", err, "stackTrace", getStackTrace())
 		}
 		return err
 	}
@@ -334,7 +341,7 @@ func (env *Environment) AttrGet(parent unsafe.Pointer, parentType, key int,
 	if err := env.CheckStatus(
 		C.OCIAttrGet(parent, C.ub4(parentType), dst, &osize, C.ub4(key),
 			env.errorHandle), errText); err != nil {
-		log.Printf("error gettint attr: %s", err)
+		Log.Error("AttrGet", "attr", key, "error", err)
 		return -1, err
 	}
 	return int(osize), nil
@@ -356,17 +363,14 @@ func (env *Environment) AttrGetName(parent unsafe.Pointer, parentType, key int,
 		C.ub4(key), env.errorHandle,
 		&status, &nameLen)
 	if err := env.CheckStatus(status, errText); err != nil {
-		log.Printf("error getting char attr: %s", err)
+		Log.Error("AttrGetName", "attr", key, "error", err)
 		return nil, err
 	}
-	// log.Printf("nameLen=%d name=%v", nameLen, name)
 	result := C.GoBytes(unsafe.Pointer(name), C.int(nameLen))
-	// log.Printf("dst=%s = %v", result, result)
 	return result, nil
 }
 
 //FromEncodedString returns string decoded from Oracle's representation
 func (env *Environment) FromEncodedString(text []byte) string {
-	// log.Printf("FromEncodedString(%v=%s)", text, text)
 	return string(text)
 }
