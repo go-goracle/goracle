@@ -164,7 +164,7 @@ func NewCursor(conn *Connection) *Cursor {
 
 //String implements Stringer on Cursor
 func (cur *Cursor) String() string {
-	return fmt.Sprintf("<goracle.Cursor %x on %p>", cur.handle, cur.connection.handle)
+	return fmt.Sprintf("<goracle.Cursor %p on %p>", cur.handle, cur.connection.handle)
 }
 
 //getBindNames returns a list of bind variable names. At this point the cursor must have
@@ -1061,7 +1061,7 @@ func (cur *Cursor) internalPrepare(statement string, statementTag string) error 
 		}
 	}
 	if CTrace {
-		ctrace("internalPrepare done, cur.handle=%x", cur.handle)
+		ctrace("internalPrepare done, cur.handle=%p", cur.handle)
 	}
 	// debug("prepared")
 

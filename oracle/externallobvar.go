@@ -43,7 +43,8 @@ var _ = io.WriterAt(&ExternalLobVar{})
 
 // Defines the routines for handling LOB variables external to this module.
 
-// ExternalLobVar is an external LOB var type
+// ExternalLobVar is an external LOB var type.
+// It is NOT concurrent-safe ATM.
 type ExternalLobVar struct {
 	lobVar           *Variable
 	idx              uint

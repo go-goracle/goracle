@@ -24,7 +24,7 @@ import (
 	"github.com/tgulacsi/goracle/oracle"
 )
 
-func TestGetLob(t *testing.T) {
+func TestGetLobConcurrentStmt(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
 
@@ -38,23 +38,66 @@ func TestGetLob(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 3; i++ {
 		wg.Add(1)
-		go func() {
+		go func(text string) {
 			defer wg.Done()
 			var clob *oracle.ExternalLobVar
 			if err = stmt.QueryRow().Scan(&clob); err != nil {
 				t.Errorf("Error scanning clob: %v", err)
+				return
 			}
 			defer clob.Close()
 			t.Logf("clob=%v", clob)
 			got, err := clob.ReadAll()
 			if err != nil {
 				t.Errorf("error reading clob: %v", err)
+				return
 			}
 			t.Logf("got=%q", got)
 			if string(got) != text {
 				t.Errorf("clob: got %q, awaited %q", got, text)
+				return
 			}
-		}()
+		}(text)
+		//}(text + "-" + strconv.Itoa(i))
+	}
+	wg.Wait()
+}
+func TestGetLobConcurrent(t *testing.T) {
+	conn := getConnection(t)
+	defer conn.Close()
+
+	text := "abcdefghijkl"
+
+	var wg sync.WaitGroup
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func(text string) {
+			defer wg.Done()
+			stmt, err := conn.Prepare("SELECT TO_CLOB('" + text + "') FROM DUAL")
+			if err != nil {
+				log.Printf("error preparing query1: %v", err)
+			}
+			defer stmt.Close()
+
+			var clob *oracle.ExternalLobVar
+			if err = stmt.QueryRow().Scan(&clob); err != nil {
+				t.Errorf("Error scanning clob: %v", err)
+			}
+			defer clob.Close()
+
+			t.Logf("clob=%v", clob)
+			got, err := clob.ReadAll()
+			if err != nil {
+				t.Errorf("error reading clob: %v", err)
+				return
+			}
+			t.Logf("got=%q", got)
+			if string(got) != text {
+				t.Errorf("clob: got %q, awaited %q", got, text)
+				return
+			}
+		}(text)
+		//}(text + "-" + strconv.Itoa(i))
 	}
 	wg.Wait()
 }
