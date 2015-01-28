@@ -69,6 +69,8 @@ var (
 //
 // see http://www-rohan.sdsu.edu/doc/oracle/appdev.102/b14249/adlob_lob_ops.htm#g1113588
 // http://www-rohan.sdsu.edu/doc/oracle/appdev.102/b14250/oci16msc002.htm#CIHEEEHI
+//
+// The given Cursor is not used, only its Connection.
 func lobVarInitialize(v *Variable, cur *Cursor) error {
 	if CTrace {
 		ctrace("%s.lobVarInitialize", v)

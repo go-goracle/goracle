@@ -79,6 +79,10 @@ func TestGetLobConcurrent(t *testing.T) {
 				t.Errorf("Fetch: %v", err)
 				return
 			}
+
+			// close the underlying cursor, see whether it invalidates the LOB handle
+			cur.Close()
+
 			clob := row[0].(*ExternalLobVar)
 			defer clob.Close()
 
