@@ -31,10 +31,6 @@ func TestGetLobConcurrentStmt(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
 
-	// FIXME(tgulacsi): for some reason connection is Closed without these:
-	conn.SetMaxOpenConns(4)
-	conn.SetMaxIdleConns(4)
-
 	text := "abcdefghijkl"
 	stmt, err := conn.Prepare("SELECT TO_CLOB('" + text + "') FROM DUAL")
 	if err != nil {
@@ -49,7 +45,14 @@ func TestGetLobConcurrentStmt(t *testing.T) {
 		go func(text string) {
 			defer wg.Done()
 			var clob *oracle.ExternalLobVar
-			if err = stmt.QueryRow().Scan(&clob); err != nil {
+			rows, err := stmt.Query()
+			if err != nil {
+				t.Errorf("query: %v", err)
+				return
+			}
+			defer rows.Close()
+			_ = rows.Next()
+			if err = rows.Scan(&clob); err != nil {
 				t.Errorf("Error scanning clob: %v", err)
 				return
 			}
@@ -74,10 +77,6 @@ func TestGetLobConcurrent(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
 
-	// FIXME(tgulacsi): for some reason connection is Closed without these:
-	conn.SetMaxOpenConns(4)
-	conn.SetMaxIdleConns(4)
-
 	text := "abcdefghijkl"
 
 	var wg sync.WaitGroup
@@ -93,8 +92,16 @@ func TestGetLobConcurrent(t *testing.T) {
 			defer stmt.Close()
 
 			var clob *oracle.ExternalLobVar
-			if err = stmt.QueryRow().Scan(&clob); err != nil {
+			rows, err := stmt.Query()
+			if err != nil {
+				t.Errorf("query: %v", err)
+				return
+			}
+			defer rows.Close()
+			_ = rows.Next()
+			if err = rows.Scan(&clob); err != nil {
 				t.Errorf("Error scanning clob: %v", err)
+				return
 			}
 			defer clob.Close()
 

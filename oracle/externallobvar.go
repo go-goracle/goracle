@@ -380,8 +380,8 @@ func (lv *ExternalLobVar) Close() error {
 // WARNING: if you use concurrency with database/sql, and sometimes gets
 //          "cannot get internal size of <ExternalLobVar>: -1073741817: invalid handle"
 //          errors, then the culprit may be database/sql closing the underlying driver.Conn.
-// As a workaround, raise MaxOpenConns AND MaxIdleConns!
-// For details, see Issue #26 (https://github.com/tgulacsi/goracle/issues/26).
+// The usual reason for this is that you use QueryRow, which closes the connection
+// right after the Scan. To fix this, don't be lazy and use Query, and the returned Rows.
 func (lv *ExternalLobVar) Read(p []byte) (int, error) {
 	if err := lv.Verify(); err != nil {
 		return 0, errgo.Mask(err)
