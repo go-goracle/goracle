@@ -28,6 +28,7 @@ import (
 	"github.com/tgulacsi/goracle/oracle"
 	"gopkg.in/errgo.v1"
 	"gopkg.in/inconshreveable/log15.v2"
+	"gopkg.in/inconshreveable/log15.v2/stack"
 )
 
 var (
@@ -87,7 +88,7 @@ func (c conn) Prepare(query string) (driver.Stmt, error) {
 
 // closes the connection
 func (c conn) Close() error {
-	debug("Close connection", "conn", c)
+	debug("Close connection", "conn", c, "strace", stack.Callers())
 	err := c.cx.Close()
 	c.cx = nil
 	return err

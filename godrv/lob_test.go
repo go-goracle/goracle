@@ -31,6 +31,10 @@ func TestGetLobConcurrentStmt(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
 
+	// FIXME(tgulacsi): for some reason connection is Closed without these:
+	conn.SetMaxOpenConns(4)
+	conn.SetMaxIdleConns(4)
+
 	text := "abcdefghijkl"
 	stmt, err := conn.Prepare("SELECT TO_CLOB('" + text + "') FROM DUAL")
 	if err != nil {
@@ -70,6 +74,10 @@ func TestGetLobConcurrent(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
 
+	// FIXME(tgulacsi): for some reason connection is Closed without these:
+	conn.SetMaxOpenConns(4)
+	conn.SetMaxIdleConns(4)
+
 	text := "abcdefghijkl"
 
 	var wg sync.WaitGroup
@@ -82,7 +90,7 @@ func TestGetLobConcurrent(t *testing.T) {
 				t.Errorf("error preparing query1: %v", err)
 				return
 			}
-			//defer stmt.Close()
+			defer stmt.Close()
 
 			var clob *oracle.ExternalLobVar
 			if err = stmt.QueryRow().Scan(&clob); err != nil {
