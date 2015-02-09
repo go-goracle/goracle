@@ -81,6 +81,17 @@ With InstantClient:
     CGO_CFLAGS=-I/usr/include/oracle/11.2/client64
     CGO_LDFLAGS=-L/usr/include/oracle/11.2/client64
 
+### RHEL 5 ###
+If your git is too old, gopkg.in may present too much hops. You can do
+
+	mkdir -p $GOPATH/src/gopkg.in/ && cd $GOPATH/src/gopkg.in && \
+		git checkout https://github.com/go-errgo/errgo.git errgo.v1 && \
+		cd errgo.v1 && git checkout -f v1
+	mkdir -p $GOPATH/src/gopkg.in/ && cd $GOPATH/src/gopkg.in && \
+		git checkout https://github.com/inconshreveable/log15.git log15.v2 && \
+		cd log15.v2 && git checkout -f v2
+
+
 ## Mac OS X ##
 For Mac OS X I did the following:
 
