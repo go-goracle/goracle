@@ -167,6 +167,11 @@ func NewCursor(conn *Connection) *Cursor {
 		isOpen: true}
 }
 
+// Cursor returns a new cursor.
+func (conn *Connection) Cursor() *Cursor {
+	return NewCursor(conn)
+}
+
 //String implements Stringer on Cursor
 func (cur *Cursor) String() string {
 	return fmt.Sprintf("<goracle.Cursor %p on %p>", cur.handle, cur.connection.handle)
