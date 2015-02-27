@@ -71,6 +71,11 @@ type Cursor struct {
 	numbersAsStrings, isDML, isOpen, isOwned    bool
 }
 
+// Connection returns the underlying Connection.
+func (cu Cursor) Connection() *Connection {
+	return cu.connection
+}
+
 //DefaultArraySize is the default array (PL/SQL) size
 var DefaultArraySize uint = 50
 var (
@@ -569,7 +574,7 @@ func (cur *Cursor) itemDescription(pos uint) (desc VariableDescription, err erro
 	// use helper routine to get tuple
 	desc, err = cur.itemDescriptionHelper(pos, param)
 	if CTrace {
-		ctrace("OCIDescriptorFree", param, "DTYPE_PARAM")
+		ctrace("OCIDescriptorFree(param=%v, type=DTYPE_PARAM)", param)
 	}
 	C.OCIDescriptorFree(unsafe.Pointer(param), C.OCI_DTYPE_PARAM)
 	return
