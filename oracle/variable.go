@@ -1448,7 +1448,13 @@ func (cur *Cursor) getPtrValues() error {
 			if val == nil {
 				v.destination.Elem().Set(reflect.Zero(v.destination.Elem().Type()))
 			} else {
-				v.destination.Elem().Set(reflect.ValueOf(val))
+				src := reflect.ValueOf(val)
+				switch src.Kind() {
+				case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					v.destination.Elem().SetInt(src.Int())
+				default:
+					v.destination.Elem().Set(src)
+				}
 			}
 		}
 	}
