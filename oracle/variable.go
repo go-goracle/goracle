@@ -1450,8 +1450,10 @@ func (cur *Cursor) getPtrValues() error {
 			} else {
 				src := reflect.ValueOf(val)
 				switch src.Kind() {
-				case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 					v.destination.Elem().SetInt(src.Int())
+				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+					v.destination.Elem().SetUint(src.Uint())
 				default:
 					v.destination.Elem().Set(src)
 				}
