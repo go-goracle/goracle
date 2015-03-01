@@ -16,9 +16,15 @@ limitations under the License.
 
 package oracle
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/tgulacsi/go/loghlp/tsthlp"
+)
 
 func TestPool(t *testing.T) {
+	Log.SetHandler(tsthlp.TestHandler(t))
+
 	p := NewPool(*dsn)
 	cx1, err := p.Get()
 	if err != nil {

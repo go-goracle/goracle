@@ -17,6 +17,8 @@ limitations under the License.
 package oracle
 
 import (
+	"fmt"
+	"runtime"
 	"sync"
 )
 
@@ -39,7 +41,17 @@ func (p Pool) Get() (*Connection, error) {
 	if cx != nil {
 		return cx.(*Connection), nil
 	}
-	return NewConnection(p.user, p.passw, p.sid, false)
+	conn, err := NewConnection(p.user, p.passw, p.sid, false)
+	if err != nil {
+		return conn, err
+	}
+	runtime.SetFinalizer(conn, func(cx *Connection) {
+		if cx != nil {
+			Log.Warn("Finalizer closes connection " + fmt.Sprintf("%v", cx))
+			cx.Close()
+		}
+	})
+	return conn, nil
 }
 
 // Put the connection back to the pool.
