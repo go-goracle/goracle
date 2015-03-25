@@ -25,8 +25,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/tgulacsi/goracle/oracle"
 	"gopkg.in/errgo.v1"
+	"gopkg.in/goracle.v1/oracle"
 	"gopkg.in/inconshreveable/log15.v2"
 	"gopkg.in/inconshreveable/log15.v2/stack"
 )

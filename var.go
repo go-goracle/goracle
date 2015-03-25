@@ -19,8 +19,8 @@ package godrv
 import (
 	"database/sql/driver"
 
-	"github.com/tgulacsi/goracle/oracle"
 	"gopkg.in/errgo.v1"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 type varCreator interface {

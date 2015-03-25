@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tgulacsi/goracle/oracle"
 	"gopkg.in/errgo.v1"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 const tbl = "tst_goracle_godrv"

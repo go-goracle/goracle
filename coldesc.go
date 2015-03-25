@@ -16,10 +16,6 @@ limitations under the License.
 
 package godrv
 
-import (
-//"github.com/tgulacsi/goracle/oracle"
-)
-
 // ColumnDescriber interface allows the column's description
 type ColumnDescriber interface {
 	// DescribeColumn returns the column description

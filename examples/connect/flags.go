@@ -20,9 +20,9 @@ import (
 	"flag"
 	"os"
 
-	_ "github.com/tgulacsi/goracle/godrv"
-	"github.com/tgulacsi/goracle/oracle"
 	"gopkg.in/errgo.v1"
+	_ "gopkg.in/goracle.v1"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 var (

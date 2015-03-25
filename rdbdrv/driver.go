@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 
 	"bitbucket.org/kardianos/rdb"
-	"github.com/tgulacsi/goracle/oracle"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 // Interface implementation checks.

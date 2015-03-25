@@ -27,9 +27,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tgulacsi/goracle/examples/connect"
-	"github.com/tgulacsi/goracle/oracle"
 	"gopkg.in/errgo.v1"
+	"gopkg.in/goracle.v1/examples/connect"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 func getQuery(table, where string, columns []string) string {

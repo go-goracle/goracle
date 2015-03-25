@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/loghlp/tsthlp"
-	"github.com/tgulacsi/goracle/oracle"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 var fDsn = flag.String("dsn", "", "Oracle DSN")

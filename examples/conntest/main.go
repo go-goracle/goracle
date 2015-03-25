@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/tgulacsi/goracle/examples/connect"
+	"github.com/go-goracle/goracle/examples/connect"
 )
 
 var fWait = flag.Bool("wait", false, "wait for USR1 signal?")

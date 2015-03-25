@@ -20,7 +20,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tgulacsi/goracle/oracle"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 func init() {
