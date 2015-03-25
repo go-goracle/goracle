@@ -16,4 +16,4 @@ limitations under the License.
 
 // Package oracle is translated from cx_Oracle ((c) Anthony Tuininga)
 // by Tamás Gulácsi
-package oracle
+package oracle // import "gopkg.in/goracle.v1/oracle"
