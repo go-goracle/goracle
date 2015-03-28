@@ -3,12 +3,12 @@ sudo: false
 
 go:
     - 1.4.2
-    - tip
+      #- tip
 before_install: 
     - curl http://git.gthomas.eu/gthomas/oracle-instantclient.tar.xz | tar xJf -
       #- /sbin/ldconfig $(pwd)/lib
-    - export CGO_CFLAGS=-I./include
-    - export CGO_LDFLAGS=-I./lib
+    - export CGO_CFLAGS=-I$(pwd)/include
+    - export CGO_LDFLAGS=-L$(pwd)/lib
     - mkdir -p src/gopkg.in
     - ln -s ../../github.com/go-goracle/goracle src/gopkg.in/goracle.v1
 install: go get -t gopkg.in/goracle.v1
