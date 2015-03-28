@@ -11,11 +11,13 @@ before_install:
     - sudo dpkg -i oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
     - sudo dpkg -i oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
     - echo /usr/lib/oracle/12.1/client64/lib/ | sudo tee /etc/ld.so.conf.d/oracle.conf && sudo ldconfig
+    - export CGO_CFLAGS=-I/usr/include/oracle/12.1/client64
+    - export CGO_LDFLAGS=-L/usr/lib/oracle/12.1/client64/lib
     #- curl https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient.tar.xz | tar xJf -
     #- curl http://git.gthomas.eu/gthomas/oracle-instantclient.tar.xz | tar xJf -
     #- sudo ldconfig $(pwd)/lib
-    - export CGO_CFLAGS=-I$(pwd)/include
-    - export CGO_LDFLAGS=-L$(pwd)/lib
+    #- export CGO_CFLAGS=-I$(pwd)/include
+    #- export CGO_LDFLAGS=-L$(pwd)/lib
     - mkdir -p src/gopkg.in
     - ln -s ../../github.com/go-goracle/goracle src/gopkg.in/goracle.v1
 install: go get -t gopkg.in/goracle.v1
