@@ -1,12 +1,12 @@
 # goracle #
-*goracle/oracle* is a package is a translated version of
-[cx_Oracle](http://cx-oracle.sourceforge.net/html/index.html)
-(by Anthony Tuininga) converted from C (Python module) to Go.
-
-[goracle/godrv](godrv/driver.go) is a package which is a
+[goracle](driver.go) is a package which is a
 [database/sql/driver.Driver](http://golang.org/pkg/database/sql/driver/#Driver)
 compliant wrapper for goracle/oracle - passes github.com/bradfitz/go-sql-test
 (as github.com/tgulacsi/go-sql-test).
+
+*goracle/oracle* is a package is a translated version of
+[cx_Oracle](http://cx-oracle.sourceforge.net/html/index.html)
+(by Anthony Tuininga) converted from C (Python module) to Go.
 
 ## Versions ##
 ### v1 ###
@@ -57,7 +57,7 @@ See [c](./c) for example.
 
 
 # Install #
-It is `go get`'able  with `go get github.com/tgulacsi/goracle/godrv`
+It is `go get`'able  with `go get gopkg.in/goracle.v1`
 iff you have
 [Oracle DB](http://www.oracle.com/technetwork/database/enterprise-edition/index.html) installed
 OR the Oracle's
@@ -72,7 +72,7 @@ AND you have set proper environment variables:
 
     export CGO_CFLAGS=-I$(dirname $(find $ORACLE_HOME -type f -name oci.h))
     export CGO_LDFLAGS=-L$(dirname $(find $ORACLE_HOME -type f -name libclntsh.so\*))
-    go get github.com/tgulacsi/goracle/godrv
+    go get gopkg.in/goracle.v1
 
 For example, with my [XE](http://www.oracle.com/technetwork/products/express-edition/downloads/index.html):
 
@@ -121,13 +121,13 @@ Thanks to Johann Kropf!
   * go
   * Oracle InstantClient Basic 64bit
   * Oracle InstantClient SDK 64bit
-  * `github.com\tgulacsi\goracle` under `%GOPATH%`
+  * `gopkg.in/goracle.v1` under `%GOPATH%`
 
 Set `CGO_CFLAGS=-IC:\Oracle64Instant\sdk\include`
 Set `CGO_LDFLAGS=-LC:\Oracle64Instant\sdk\lib`
 
 On Windows the library `libclntsh.so` does not exist.
-So change the line in _all_ the source files of `github.com\tgulacsi\goracle\oracle`
+So change the line in _all_ the source files of `gopkg.in/goracle.v1/oracle`
 
 From 
 ```#cgo LDFLAGS: -lclntsh```
@@ -147,6 +147,6 @@ by "Download snapshot"
   1. `copy liboci.a C:\Oracle64Instant\sdk\lib`
 
 Build oracle with
-`%GOPATH%\github.com\tgulacsi\goracle\oracle>go install`
+`%GOPATH%\gopkg.in\goracle.v1\oracle>go install`
 
-You can build now your program which imports "github.com/tgulacsi/goracle/oracle"!
+You can build now your program which imports "gopkg.in/goracle.v1/oracle"!

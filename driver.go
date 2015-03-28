@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package godrv implements a Go Oracle driver.
-package godrv
+package goracle // import "gopkg.in/goracle.v1"
 
 import (
 	"database/sql"
