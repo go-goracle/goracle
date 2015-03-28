@@ -8,8 +8,8 @@ before_install:
     - wget https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
     - wget https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
     - sudo apt-get install libaio1
-    - sudo dpkg -i oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.dev
-    - sudo dpkg -i oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.dev
+    - sudo dpkg -i oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
+    - sudo dpkg -i oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
     - echo /usr/lib/oracle/12.1/client64/lib/ | sudo tee /etc/ld.so.conf.d/oracle.conf && sudo ldconfig
     #- curl https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient.tar.xz | tar xJf -
     #- curl http://git.gthomas.eu/gthomas/oracle-instantclient.tar.xz | tar xJf -
