@@ -12,4 +12,4 @@ before_install:
 before_script:
     - go test -i . ./oracle/
 script:
-    - go test ./... '-dsn=system/oracle@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=git.gthomas.eu)(PORT=49161)))(CONNECT_DATA=(SERVICE_NAME=xe)))'
+    - go test ./...  '-dsn=system/oracle@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=git.gthomas.eu)(PORT=49161)))(CONNECT_DATA=(SERVICE_NAME=xe)))'
