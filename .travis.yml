@@ -9,7 +9,7 @@ before_install:
       #- /sbin/ldconfig $(pwd)/lib
     - export CGO_CFLAGS=-I./include
     - export CGO_LDFLAGS=-I./lib
-install: go get -f -t ./...
+install: go get -f -u -t ./...
 before_script:
     - go test -i . ./oracle/
 script:
