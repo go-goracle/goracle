@@ -13,11 +13,6 @@ before_install:
     - echo /usr/lib/oracle/12.1/client64/lib/ | sudo tee /etc/ld.so.conf.d/oracle.conf && sudo ldconfig
     - export CGO_CFLAGS=-I/usr/include/oracle/12.1/client64
     - export CGO_LDFLAGS=-L/usr/lib/oracle/12.1/client64/lib
-    #- curl https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient.tar.xz | tar xJf -
-    #- curl http://git.gthomas.eu/gthomas/oracle-instantclient.tar.xz | tar xJf -
-    #- sudo ldconfig $(pwd)/lib
-    #- export CGO_CFLAGS=-I$(pwd)/include
-    #- export CGO_LDFLAGS=-L$(pwd)/lib
     - mkdir -p $HOME/gopath/src/gopkg.in
     - ln -s $HOME/gopath/src/github.com/go-goracle/goracle $HOME/gopath/src/gopkg.in/goracle.v1
 install: go get -t gopkg.in/goracle.v1
@@ -25,4 +20,4 @@ before_script:
     - cd $HOME/gopath/src/gopkg.in/goracle.v1
     - go test -i . ./oracle/
 script:
-    - go test ./... '-dsn=system/oracle@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=git.gthomas.eu)(PORT=49161)))(CONNECT_DATA=(SERVICE_NAME=xe)))'
+    - go test . ./oracle '-dsn=system/oracle@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=git.gthomas.eu)(PORT=49161)))(CONNECT_DATA=(SERVICE_NAME=xe)))'
