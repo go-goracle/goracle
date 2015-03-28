@@ -21,8 +21,12 @@ package oracle
 #cgo LDFLAGS: -lclntsh
 
 #include <stdlib.h>
-#include <oci.h>
 #include <string.h>
+#include "version.h"
+
+static void setHandle(void *data, void *src, size_t count) {
+	memcpy(data, src, count);
+}
 */
 import "C"
 
@@ -61,7 +65,8 @@ type Variable struct {
 	environment                    *Environment
 	isArray, isAllocatedInternally bool
 	indicator                      []C.sb2
-	returnCode, actualLength       []C.ub2
+	returnCode                     []C.ub2
+	actualLength                   []C.ACTUAL_LENGTH_TYPE
 	dataBytes                      []byte
 	dataInts                       []int64
 	dataFloats                     []float64
@@ -108,7 +113,7 @@ func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uin
 	// for variable length data, also allocate the return code
 	if v.typ.isVariableLength {
 		v.returnCode = make([]C.ub2, v.allocatedElements)
-		v.actualLength = make([]C.ub2, v.allocatedElements)
+		v.actualLength = make([]C.ACTUAL_LENGTH_TYPE, v.allocatedElements)
 	}
 
 	// perform extended initialization
@@ -813,7 +818,7 @@ static udt_Variable *Variable_NewByOutputTypeHandler(
 }
 */
 
-func (v *Variable) aLrC() (indic unsafe.Pointer, aL, rC *C.ub2) {
+func (v *Variable) aLrC() (indic unsafe.Pointer, aL *C.ACTUAL_LENGTH_TYPE, rC *C.ub2) {
 	indic = unsafe.Pointer(&v.indicator[0])
 	if len(v.actualLength) > 0 && len(v.returnCode) > 0 {
 		aL = &v.actualLength[0]
@@ -900,10 +905,10 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 			aL, rC)
 	}
 	if err = cur.environment.CheckStatus(
-		C.OCIDefineByPos(cur.handle,
+		C.OCIDEFINEBYPOS(cur.handle,
 			&v.defineHandle,
 			v.environment.errorHandle, C.ub4(position), v.getDataArr(),
-			C.sb4(v.bufferSize), v.typ.oracleType,
+			C.LENGTH_TYPE(v.bufferSize), v.typ.oracleType,
 			indic, aL, rC, C.OCI_DEFAULT),
 		"define"); err != nil {
 		return nil, errgo.Newf("error defining: %s", err)
@@ -1006,11 +1011,11 @@ func (v *Variable) internalBind() (err error) {
 				allElts, pActElts)
 		}
 		bindName = fmt.Sprintf("%q", bname)
-		status = C.OCIBindByName(v.boundCursorHandle,
+		status = C.OCIBINDBYNAME(v.boundCursorHandle,
 			&v.bindHandle,
 			v.environment.errorHandle,
 			(*C.OraText)(&bname[0]), C.sb4(len(bname)),
-			v.getDataArr(), C.sb4(v.bufferSize), v.typ.oracleType,
+			v.getDataArr(), C.LENGTH_TYPE(v.bufferSize), v.typ.oracleType,
 			indic, aL, rC,
 			allElts, pActElts, C.OCI_DEFAULT)
 	} else {
@@ -1042,9 +1047,9 @@ func (v *Variable) internalBind() (err error) {
 				allElts, pActElts)
 		}
 		bindName = fmt.Sprintf("%d", v.boundPos)
-		status = C.OCIBindByPos(v.boundCursorHandle, &v.bindHandle,
+		status = C.OCIBINDBYPOS(v.boundCursorHandle, &v.bindHandle,
 			v.environment.errorHandle, C.ub4(v.boundPos), v.getDataArr(),
-			C.sb4(v.bufferSize), v.typ.oracleType,
+			C.LENGTH_TYPE(v.bufferSize), v.typ.oracleType,
 			indic, aL, rC,
 			allElts, pActElts, C.OCI_DEFAULT)
 	}
@@ -1535,8 +1540,8 @@ func (v Variable) getHandle(pos uint) unsafe.Pointer {
 }
 func (v Variable) setHandle(pos uint, val unsafe.Pointer) {
 	//void* memcpy( void *dest, const void *src, size_t count );
-	C.memcpy(unsafe.Pointer(&v.dataBytes[int(pos*v.typ.size)]),
-		unsafe.Pointer(&val),
+	C.setHandle(unsafe.Pointer(&v.dataBytes[int(pos*v.typ.size)]),
+		val,
 		C.size_t(v.typ.size))
 }
 func (v Variable) getHandleBytes(pos uint) []byte {

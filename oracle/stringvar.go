@@ -22,6 +22,7 @@ package oracle
 
 #include <stdlib.h>
 #include <oci.h>
+#include "version.h"
 */
 import "C"
 
@@ -60,14 +61,14 @@ func (t *VariableType) IsBinary() bool {
 
 // Initialize the variable.
 func stringVarInitialize(v *Variable, cur *Cursor) error {
-	v.actualLength = make([]C.ub2, v.allocatedElements)
+	v.actualLength = make([]C.ACTUAL_LENGTH_TYPE, v.allocatedElements)
 	return nil
 }
 
 // Set the value of the variable.
 func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 	if value == nil {
-		v.actualLength[pos] = C.ub2(0)
+		v.actualLength[pos] = C.ACTUAL_LENGTH_TYPE(0)
 		return nil
 	}
 	var (
@@ -123,7 +124,7 @@ func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 	}
 
 	// keep a copy of the string
-	v.actualLength[pos] = C.ub2(length)
+	v.actualLength[pos] = C.ACTUAL_LENGTH_TYPE(length)
 	if length > 0 {
 		copy(v.dataBytes[int(v.bufferSize*pos):], buf)
 	}

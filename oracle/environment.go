@@ -23,6 +23,8 @@ package oracle
 //#include <stdio.h>
 #include <oci.h>
 #include <ociap.h>
+#include "version.h"
+
 char* AttrGetName(const dvoid *mypard,
 				  ub4 parType,
 				  ub4 key,
@@ -52,6 +54,8 @@ import (
 // Log is discarded by default. Use Log.SetHandler to set.
 var Log = log15.New("lib", "goracle")
 
+const OracleVersion = C.ORACLE_VERSION_HEX
+
 func init() {
 	Log.SetHandler(log15.DiscardHandler())
 }
@@ -72,8 +76,8 @@ type Environment struct {
 
 // maximum number of characters/bytes applicable to strings/binaries
 const (
-	MaxStringChars = 4000
-	MaxBinaryBytes = 4000
+	MaxStringChars = C.MAX_BINARY_BYTES
+	MaxBinaryBytes = C.MAX_BINARY_BYTES
 )
 
 // CsIDAl32UTF8 holds the charaterset ID for UTF8
