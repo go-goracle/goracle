@@ -22,6 +22,7 @@ before_install:
     - ln -s ../../github.com/go-goracle/goracle src/gopkg.in/goracle.v1
 install: go get -t gopkg.in/goracle.v1
 before_script:
+    - cd $GOPATH/src/gopkg.in/goracle.v1
     - go test -i . ./oracle/
 script:
     - go test ./... '-dsn=system/oracle@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=git.gthomas.eu)(PORT=49161)))(CONNECT_DATA=(SERVICE_NAME=xe)))'
