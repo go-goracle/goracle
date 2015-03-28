@@ -54,14 +54,19 @@ import (
 // Log is discarded by default. Use Log.SetHandler to set.
 var Log = log15.New("lib", "goracle")
 
+// OracleVersionHex returns the major.minor version as one number,
+// ready to compare with OracleVersion.
 func OracleVersionHex(major, minor int) int {
 	return ((major << 8) | minor)
 }
 
 const (
+	// OracleVersion is the OCI version
 	OracleVersion = C.ORACLE_VERSION_HEX
-	OracleV10_1   = ((10 << 8) | 1)
-	OracleV12_1   = ((12 << 8) | 1)
+	// OracleV10_1 is version 10 rev 1 (begin of 4GB LOBs)
+	OracleV10_1 = ((10 << 8) | 1)
+	// OracleV12_1 is version 12 rev 1 (begin of 32kB strings)
+	OracleV12_1 = ((12 << 8) | 1)
 )
 
 func init() {

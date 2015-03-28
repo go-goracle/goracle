@@ -8,6 +8,10 @@
 compliant wrapper for goracle/oracle - passes github.com/bradfitz/go-sql-test
 (as github.com/tgulacsi/go-sql-test).
 
+## Versions ##
+### v1 ###
+The initial version, coming from `github.com/tgulacsi/goracle`.
+
 ## There ##
 CHAR, VARCHAR2, NUMBER, DATETIME, INTERVAL simple AND array bind/define.
 CURSOR, CLOB, BLOB
