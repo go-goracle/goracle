@@ -11,7 +11,7 @@ before_install:
     - export CGO_LDFLAGS=-I./lib
     - mkdir -p src/gopkg.in
     - ln -s ../../github.com/go-goracle/goracle src/gopkg.in/goracle.v1
-install: go get -f -u -t gopkg.in/goracle.v1/...
+install: go get -f -t gopkg.in/goracle.v1
 before_script:
     - go test -i . ./oracle/
 script:
