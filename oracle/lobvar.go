@@ -112,25 +112,21 @@ func (v *Variable) getLobInternalSize(pos uint) (length C.LOB_LENGTH_TYPE, err e
 	default:
 		return 0, errgo.Newf("getLobInternalSize is usable only for LOB vars! not for %T", v.typ)
 	}
-	lob, _ := v.getLobLoc(pos)
-	// Py_BEGIN_ALLOW_THREADS
-	if CTrace {
-		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
-			v.connection.handle, pos*v.typ.size, lob, &length)
-		//buf := make([]byte, 8192)
-		//ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
-		//ctrace("data[%d]=%p", pos, lob)
+	lob, err := v.getLobLoc(pos)
+	if err != nil {
+		return 0, err
 	}
-	if err = v.environment.CheckStatus(
+	// Py_BEGIN_ALLOW_THREADS
+	err = v.environment.CheckStatus(
 		C.OCILOBGETLENGTH(v.connection.handle,
 			v.environment.errorHandle, lob,
 			&length),
-		"LobGetLength"); err != nil {
-		return
+		"LobGetLength")
+	if CTrace {
+		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x): (%v, %v)",
+			v.connection.handle, pos*v.typ.size, lob, length, err)
 	}
-	// Py_END_ALLOW_THREADS
-
-	return
+	return length, err
 }
 
 // Free temporary LOBs prior to fetch.
@@ -195,32 +191,19 @@ func lobVarFinalize(v *Variable) error {
 
 // Write data to the LOB variable.
 func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, err error) {
+	// verify the data type
+	if v.typ == BFileVarType {
+		return 0, errgo.New("BFILEs are read only")
+	}
 	if !(v.typ == BlobVarType || v.typ == ClobVarType ||
 		v.typ == NClobVarType || v.typ == BFileVarType) {
 		return 0, errgo.Newf("only LOBs an be written into, not %T", v.typ)
 	}
 
 	amount = len(data)
-	// verify the data type
-	if v.typ == BFileVarType {
-		return 0, errgo.New("BFILEs are read only")
-	}
-	if v.typ == BlobVarType {
-		// amount = len(data)
-		/*
-			#if PY_MAJOR_VERSION < 3
-			    } else if (var->type == &vt_NCLOB) {
-			        if (cxBuffer_FromObject(&buffer, dataObj,
-			                var->environment->nencoding) < 0)
-			            return -1;
-			        *amount = buffer.size;
-			#endif
-		*/
-	} else {
+	if v.typ != BlobVarType {
 		if v.environment.FixedWidth && (v.environment.MaxBytesPerCharacter > 1) {
 			amount /= int(v.environment.MaxBytesPerCharacter)
-		} else {
-			// amount = len(p)
 		}
 	}
 
@@ -231,9 +214,8 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 
 	// Py_BEGIN_ALLOW_THREADS
 	hndl, err := v.getLobLoc(pos)
-	off++ // "first position is 1"
 	if CTrace {
-		ctrace("OCILobWrite(conn=%p, lob=%p, amount=%d, off=%d, cF=%d): %v",
+		ctrace("OCILobWrite.getLobLoc(conn=%p, lob=%p, amount=%d, off=%d, cF=%d): %v",
 			v.connection.handle, hndl, amount, off, v.typ.charsetForm, err)
 	}
 	if err != nil {
@@ -247,8 +229,8 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 		status = C.OCILobWrite2(v.connection.handle,
 			v.environment.errorHandle,
 			hndl,
-			&byte_amount, &char_amount, C.LOB_LENGTH_TYPE(off),
-			unsafe.Pointer(&data[1]), C.LOB_LENGTH_TYPE(len(data)),
+			&byte_amount, &char_amount, C.LOB_LENGTH_TYPE(off+1),
+			unsafe.Pointer(&data[0]), C.LOB_LENGTH_TYPE(len(data)),
 			C.OCI_ONE_PIECE, nil, nil,
 			0, v.typ.charsetForm)
 		amount = int(byte_amount)
@@ -257,13 +239,18 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 		status = C.OCILobWrite(v.connection.handle,
 			v.environment.errorHandle,
 			hndl,
-			&oamount, C.ub4(off),
-			unsafe.Pointer(&data[1]), C.ub4(len(data)),
+			&oamount, C.ub4(off+1),
+			unsafe.Pointer(&data[0]), C.ub4(len(data)),
 			C.OCI_ONE_PIECE, nil, nil,
 			0, v.typ.charsetForm)
 		amount = int(oamount)
 	}
-	if err := v.environment.CheckStatus(status, "LobWrite"); err != nil {
+	err = v.environment.CheckStatus(status, "LobWrite")
+	if CTrace {
+		ctrace("OCILobWrite(conn=%p, lob=%p, off=%d, cF=%d): (%v, %v)",
+			v.connection.handle, hndl, off, v.typ.charsetForm, amount, err)
+	}
+	if err != nil {
 		return 0, errgo.Mask(err)
 	}
 	// Py_END_ALLOW_THREADS

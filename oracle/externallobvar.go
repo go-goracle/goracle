@@ -143,18 +143,14 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int, err err
 		pos      = int(0)
 		byteLen2 = C.LOB_LENGTH_TYPE(len(p))
 		charLen2 = C.LOB_LENGTH_TYPE(0)
-		byteLen  = C.ub4(len(p))
+		byteLen  = C.ub4(byteLen2)
 	)
+	if CTrace {
+		ctrace("internalRead is called with byteLen2=%d byteLen=%d off=%d bufl=%d",
+			byteLen2, byteLen, off, len(p)-pos)
+	}
 	for {
 		if useLobRead2 {
-			if CTrace {
-				ctrace("OCILobRead2(conn=%p, lob=%x, byteLen=%d, charLen=%d, off=%d, &p=%p "+
-					"len(p)=%d, piece=%d, csID=%d, csF=%d",
-					lv.lobVar.connection.handle,
-					lv.getHandleBytes(), byteLen2, charLen2, off+1,
-					&p[pos], len(p)-pos, C.OCI_ONE_PIECE,
-					charsetID, lv.lobVar.typ.charsetForm)
-			}
 			status = C.OCILobRead2(lv.lobVar.connection.handle,
 				lv.lobVar.environment.errorHandle,
 				lv.getHandle(), &byteLen2, &charLen2, C.LOB_LENGTH_TYPE(off+1),
@@ -162,21 +158,23 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int, err err
 				C.OCI_ONE_PIECE,
 				nil, nil, charsetID, lv.lobVar.typ.charsetForm)
 		} else {
-			if CTrace {
-				//log.Printf("p=%q len(p)=%d pos=%d byteLen=%d", p, len(p), pos, byteLen)
-				ctrace("OCILobRead(conn=%p, lob=%x, byteLen=%d, off=%d, &p=%p "+
-					"len(p)=%d, csID=%d, csF=%d",
-					lv.lobVar.connection.handle,
-					lv.getHandleBytes(), byteLen, off+1,
-					&p[pos], len(p)-pos,
-					charsetID, lv.lobVar.typ.charsetForm)
-			}
 			status = C.OCILobRead(lv.lobVar.connection.handle,
 				lv.lobVar.environment.errorHandle,
 				lv.getHandle(), &byteLen, C.ub4(off+1),
 				unsafe.Pointer(&p[pos]), C.ub4(len(p)-pos),
 				nil, nil,
 				charsetID, lv.lobVar.typ.charsetForm)
+		}
+		if CTrace {
+			ctrace("OCILobRead(conn=%p, lob=%x, byteLen=%d, off=%d, &p=%p "+
+				"len(p)=%d, csID=%d, csF=%d): "+
+				"(byteLen2=%d charLen2=%d byteLen=%d status=%d)",
+				lv.lobVar.connection.handle,
+				lv.getHandleBytes(), byteLen, off,
+				&p[pos], len(p)-pos,
+				charsetID, lv.lobVar.typ.charsetForm,
+				byteLen2, charLen2, byteLen, status,
+			)
 		}
 		if !(status == C.OCI_SUCCESS || status == C.OCI_NEED_DATA) {
 			err = lv.lobVar.environment.CheckStatus(status, "LobRead")
@@ -188,14 +186,6 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int, err err
 		}
 		off += int64(byteLen)
 		length += int(byteLen)
-		if CTrace {
-			if useLobRead2 {
-				ctrace("(byteLen2=%d charLen2=%d) => length=%d off=%d",
-					byteLen2, charLen2, length, off)
-			} else {
-				ctrace("byteLen=%d => length=%d off=%d", byteLen, length, off)
-			}
-		}
 		if status == C.OCI_SUCCESS {
 			break
 		}
@@ -218,24 +208,18 @@ func (lv *ExternalLobVar) internalRead(p []byte, off int64) (length int, err err
 
 // internalSize returns the size in bytes (!) of the LOB variable for internal comsumption.
 func (lv *ExternalLobVar) internalSize() (length C.LOB_LENGTH_TYPE, err error) {
-	if CTrace {
-		ctrace("%s.internalSize", lv)
-	}
-
 	// Py_BEGIN_ALLOW_THREADS
-	if CTrace {
-		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x, &length=%p)",
-			lv.lobVar.connection.handle, lv.idx*lv.lobVar.typ.size,
-			lv.getHandleBytes(), &length)
-		//buf := make([]byte, 8192)
-		//ctrace("Stack: %s", buf[:runtime.Stack(buf, false)])
-		//ctrace("data[%d]=%p", lv.idx, lob)
-	}
-	if err = lv.lobVar.environment.CheckStatus(
+	err = lv.lobVar.environment.CheckStatus(
 		C.OCILOBGETLENGTH(lv.lobVar.connection.handle,
 			lv.lobVar.environment.errorHandle,
 			lv.getHandle(), &length),
-		"LobGetLength"); err != nil {
+		"LobGetLength")
+	if CTrace {
+		ctrace("OCILobGetLength(conn=%p, pos=%d lob=%x): (%v, %v)",
+			lv.lobVar.connection.handle, lv.idx*lv.lobVar.typ.size,
+			lv.getHandleBytes(), length, err)
+	}
+	if err != nil {
 		return
 	}
 	// Py_END_ALLOW_THREADS
@@ -271,17 +255,7 @@ func (lv *ExternalLobVar) String() string {
 
 // ReadAt returns a portion (or all) of the data in the external LOB variable.
 func (lv *ExternalLobVar) ReadAt(p []byte, off int64) (int, error) {
-	/*
-		length, err := lv.Size(false)
-		if err != nil {
-			return 0, err
-		}
-		var bufferSize C.ub4
-	*/
 	length, err := lv.internalSize()
-	if CTrace {
-		ctrace("length=%d", length)
-	}
 	if err != nil {
 		return 0, errgo.Mask(err)
 	} else if int64(length) < off {
@@ -292,48 +266,15 @@ func (lv *ExternalLobVar) ReadAt(p []byte, off int64) (int, error) {
 	if off < 0 {
 		off = 0
 	}
-	/*
-		bufferSize = C.ub4(len(p))
-		length = bufferSize
-		if lv.lobVar.typ == ClobVarType {
-			length = bufferSize / C.ub4(lv.lobVar.environment.maxBytesPerCharacter)
-		} else if lv.lobVar.typ == NClobVarType {
-			length = bufferSize / 2
-		}
-		if C.ub4(len(p)) > length-C.ub4(off) {
-			p = p[:size-off]
-		}
-		if C.ub4(len(p)) < length-C.ub4(off) {
-			length = C.ub4(len(p)) - C.ub4(off)
-		}
-	*/
 
 	n, err := lv.internalRead(p, off)
 	return int(n), err
-
-	/*
-	   // return the result
-	   if (lv.lobVar.type == &vt_CLOB) {
-	       if (lv.lobVar.environment->fixedWidth)
-	           length = length * lv.lobVar.environment->maxBytesPerCharacter;
-	       result = cxString_FromEncodedString(buffer, length,
-	               lv.lobVar.environment->encoding);
-	   } else if (lv.lobVar.type == &vt_NCLOB) {
-	       result = PyUnicode_DecodeUTF16(buffer, length * 2, NULL, NULL);
-	   } else {
-	       result = PyBytes_FromStringAndSize(buffer, length);
-	   }
-	   PyMem_Free(buffer);
-	*/
 }
 
 // Open the LOB to speed further accesses.
 func (lv *ExternalLobVar) Open() error {
 	if err := lv.Verify(); err != nil {
-		return errgo.Mask(
-
-			// Py_BEGIN_ALLOW_THREADS
-			err)
+		return errgo.Mask(err)
 	}
 
 	if CTrace {
@@ -345,7 +286,6 @@ func (lv *ExternalLobVar) Open() error {
 			lv.lobVar.environment.errorHandle,
 			lv.getHandle(), C.OCI_LOB_READWRITE),
 		"LobOpen")
-	// Py_END_ALLOW_THREADS
 }
 
 // Close the LOB.
@@ -394,12 +334,14 @@ func (lv *ExternalLobVar) ReadAll() ([]byte, error) {
 		return nil, errgo.Mask(err)
 	}
 	amount, err := lv.internalSize()
+	Log.Debug("internalSize", "lob", lv, "amount", amount, "err", err)
 	if err != nil {
 		return nil, errgo.Newf("cannot get internal size of %s: %s", lv, err)
 	}
-	p := make([]byte, uint(amount))
+	p := make([]byte, int(amount))
 	var n int
 	n, err = lv.ReadAt(p, 0)
+	Log.Debug("ReadAt", "lob", lv, "p", p, "n", n, "error", err)
 	if n >= 0 && n < len(p) {
 		p = p[:n]
 	}

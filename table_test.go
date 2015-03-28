@@ -30,27 +30,8 @@ import (
 const tbl = "tst_goracle_godrv"
 
 func TestTable(t *testing.T) {
-	conn := getConnection(t)
+	conn, tx := prepareTable(t)
 	defer conn.Close()
-	conn.Exec("DROP TABLE " + tbl)
-	if _, err := conn.Exec(`CREATE TABLE ` + tbl + ` (
-			F_int NUMBER(10,0), F_bigint NUMBER(20),
-			F_real NUMBER(6,3), F_bigreal NUMBER(20,10),
-			F_text VARCHAR2(1000), F_date DATE,
-			F_text_spanish VARCHAR2(100),
-			F_text_chinese VARCHAR2(100),
-			F_text_russian VARCHAR2(100),
-                        F_clob CLOB
-		)`); err != nil {
-		t.Skipf("Skipping table test, as cannot create "+tbl+": %v", err)
-		return
-	}
-	//defer conn.Exec("DROP TABLE " + tbl)
-	tx, err := conn.Begin()
-	if err != nil {
-		t.Errorf("cannot start transaction: %v", err)
-		t.FailNow()
-	}
 	defer tx.Rollback()
 
 	insertNum(t, tx, 1, "1234567890123456", 123.456,
@@ -61,7 +42,41 @@ func TestTable(t *testing.T) {
 
 	insertText(t, tx, "Habitación doble", "雙人房", "двухместный номер")
 
+}
+
+func TestTableClob(t *testing.T) {
+	conn, tx := prepareTable(t)
+	defer conn.Close()
+	defer tx.Rollback()
+
 	insertClob(t, tx, "árvíztűrő tükörfúrógép")
+}
+
+func prepareTable(t *testing.T) (*sql.DB, *sql.Tx) {
+	conn := getConnection(t)
+	conn.Exec("DROP TABLE " + tbl)
+	if _, err := conn.Exec(`CREATE TABLE ` + tbl + ` (
+			F_int NUMBER(10,0), F_bigint NUMBER(20),
+			F_real NUMBER(6,3), F_bigreal NUMBER(20,10),
+			F_text VARCHAR2(1000), F_date DATE,
+			F_text_spanish VARCHAR2(100),
+			F_text_chinese VARCHAR2(100),
+			F_text_russian VARCHAR2(100),
+                        F_clob CLOB
+		)`,
+	); err != nil {
+		t.Skipf("Skipping table test, as cannot create "+tbl+": %v", err)
+		conn.Close()
+		return nil, nil
+	}
+	//defer conn.Exec("DROP TABLE " + tbl)
+	tx, err := conn.Begin()
+	if err != nil {
+		conn.Close()
+		t.Errorf("cannot start transaction: %v", err)
+		t.FailNow()
+	}
+	return conn, tx
 }
 
 func insertText(t *testing.T, conn *sql.Tx, spanish, chinese, russian string) bool {
@@ -163,14 +178,14 @@ func insertClob(t *testing.T, conn *sql.Tx, text string) bool {
 		t.Errorf("cannot select empty clob: %v", err)
 		return false
 	}
-	t.Logf("clob=%v", clob)
+	t.Logf("%v.WriteAt(%v, 0)", clob, text)
 
 	if n, err := clob.WriteAt([]byte(text), 0); err != nil {
 		t.Errorf("WriteAt clob: %v", err)
-	} else if n != len([]rune(text)) {
-		t.Errorf("written %d chars, awaited %d", n, len([]rune(text)))
+	} else if n != len(text) {
+		t.Errorf("written %d chars, awaited %d", n, len(text))
 	} else {
-		t.Logf("written %d chars", n)
+		t.Logf("written %d bytes", n)
 	}
 	clob.Close()
 
@@ -187,7 +202,7 @@ func insertClob(t *testing.T, conn *sql.Tx, text string) bool {
 		return false
 	}
 	if string(got) != text {
-		t.Errorf("got %q, awaited %q", got, text)
+		t.Errorf("got %q (%v), awaited %q", got, got, text)
 		return false
 	}
 	return true

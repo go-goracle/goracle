@@ -283,6 +283,7 @@ func getConnection(t *testing.T) *sql.DB {
 	}
 	flag.Parse()
 	Log.SetHandler(tsthlp.TestHandler(t))
+	oracle.Log.SetHandler(tsthlp.TestHandler(t))
 	if testDB, err = sql.Open("goracle", *fDsn); err != nil {
 		t.Fatalf("error connecting to %q: %s", *fDsn, err)
 	}
