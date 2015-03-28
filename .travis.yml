@@ -5,7 +5,7 @@ go:
     - 1.4.2
     - tip
 before_install: 
-    - curl http://git.gthomas.eu/gthomas/oracle-instantclient.tar.xz | tar xaf -
+    - curl http://git.gthomas.eu/gthomas/oracle-instantclient.tar.xz | tar xJf -
     - sudo ldconfig lib
     - export CGO_CFLAGS=-I./include
     - export CGO_LDFLAGS=-I./lib
