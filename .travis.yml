@@ -19,10 +19,10 @@ before_install:
     #- export CGO_CFLAGS=-I$(pwd)/include
     #- export CGO_LDFLAGS=-L$(pwd)/lib
     - mkdir -p src/gopkg.in
-    - ln -s ../../github.com/go-goracle/goracle src/gopkg.in/goracle.v1
+    - ln -s $HOME/gopath/srcgithub.com/go-goracle/goracle $HOME/gopath/src/gopkg.in/goracle.v1
 install: go get -t gopkg.in/goracle.v1
 before_script:
-    - cd $GOPATH/src/gopkg.in/goracle.v1
+    - cd $HOME/gopath/src/gopkg.in/goracle.v1
     - go test -i . ./oracle/
 script:
     - go test ./... '-dsn=system/oracle@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=git.gthomas.eu)(PORT=49161)))(CONNECT_DATA=(SERVICE_NAME=xe)))'
