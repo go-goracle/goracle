@@ -5,10 +5,12 @@ go:
     - 1.4.2
     - tip
 before_install: 
-    - curl http://git.gthomas.eu/gthomas/oracle-instantclient.tar.xz | tar xJf -
+    #- curl http://git.gthomas.eu/gthomas/oracle-instantclient.tar.xz | tar xJf -
       #- /sbin/ldconfig $(pwd)/lib
     - export CGO_CFLAGS=-I./include
     - export CGO_LDFLAGS=-I./lib
+    - mkdir -p src/gopkg.in
+    - ln -s ../../github.com/go-goracle/goracle src/gopkg.in/oracle.v1
 install: go get -f -u -t ./...
 before_script:
     - go test -i . ./oracle/
