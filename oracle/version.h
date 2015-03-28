@@ -33,3 +33,14 @@
 	#define LENGTH_TYPE					sb4
 #endif
 
+#if ORACLE_VERSION_HEX >= ORACLE_VERSION(10,1)
+	#define LOB_LENGTH_TYPE				oraub8
+	#define OCILOBGETLENGTH				OCILobGetLength2
+	#define OCILOBTRIM 					OCILobTrim2
+	#define OCILOBWRITE					OCILobWrite2
+#else
+	#define LOB_LENGTH_TYPE				ub4
+	#define OCILOBGETLENGTH				OCILobGetLength
+	#define OCILOBTRIM 					OCILobTrim
+	#define OCILOBWRITE					OCILobWrite
+#endif

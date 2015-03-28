@@ -23,6 +23,7 @@ package oracle
 //#include <stdlib.h>
 #include <stdio.h>
 #include <oci.h>
+#include "version.h"
 
 const unsigned int sof_OCILobLocatorp = sizeof(OCILobLocator*); // element length
 
@@ -105,7 +106,7 @@ func (v *Variable) getLobLoc(pos uint) (*C.OCILobLocator, error) {
 	return C.getLobLoc(unsafe.Pointer(&v.dataBytes[0]), C.int(pos)), nil
 }
 
-func (v *Variable) getLobInternalSize(pos uint) (length C.ub4, err error) {
+func (v *Variable) getLobInternalSize(pos uint) (length C.LOB_LENGTH_TYPE, err error) {
 	switch v.typ {
 	case ClobVarType, NClobVarType, BlobVarType, BFileVarType:
 	default:
@@ -121,7 +122,7 @@ func (v *Variable) getLobInternalSize(pos uint) (length C.ub4, err error) {
 		//ctrace("data[%d]=%p", pos, lob)
 	}
 	if err = v.environment.CheckStatus(
-		C.OCILobGetLength(v.connection.handle,
+		C.OCILOBGETLENGTH(v.connection.handle,
 			v.environment.errorHandle, lob,
 			&length),
 		"LobGetLength"); err != nil {
@@ -228,32 +229,45 @@ func (v *Variable) lobVarWrite(data []byte, pos uint, off int64) (amount int, er
 		return 0, nil
 	}
 
-	oamount := C.ub4(amount)
 	// Py_BEGIN_ALLOW_THREADS
 	hndl, err := v.getLobLoc(pos)
 	off++ // "first position is 1"
 	if CTrace {
-		ctrace("OCILobWrite(conn=%p, lob=%p, oamount=%d, off=%d, cF=%d): %v",
-			v.connection.handle, hndl, oamount, off, v.typ.charsetForm, err)
+		ctrace("OCILobWrite(conn=%p, lob=%p, amount=%d, off=%d, cF=%d): %v",
+			v.connection.handle, hndl, amount, off, v.typ.charsetForm, err)
 	}
 	if err != nil {
 		return 0, err
 	}
-	if err := v.environment.CheckStatus(
-		// http://www-rohan.sdsu.edu/doc/oracle/appdev.102/b14250/oci16msc002.htm#i578761
-		C.OCILobWrite(v.connection.handle,
+	// http://www-rohan.sdsu.edu/doc/oracle/appdev.102/b14250/oci16msc002.htm#i578761
+	var status C.sword
+	if OracleVersion >= OracleV10_1 {
+		byte_amount := C.LOB_LENGTH_TYPE(amount)
+		char_amount := C.LOB_LENGTH_TYPE(0)
+		status = C.OCILobWrite2(v.connection.handle,
+			v.environment.errorHandle,
+			hndl,
+			&byte_amount, &char_amount, C.LOB_LENGTH_TYPE(off),
+			unsafe.Pointer(&data[1]), C.LOB_LENGTH_TYPE(len(data)),
+			C.OCI_ONE_PIECE, nil, nil,
+			0, v.typ.charsetForm)
+		amount = int(byte_amount)
+	} else {
+		oamount := C.ub4(amount)
+		status = C.OCILobWrite(v.connection.handle,
 			v.environment.errorHandle,
 			hndl,
 			&oamount, C.ub4(off),
-			unsafe.Pointer(&data[0]), C.ub4(len(data)),
+			unsafe.Pointer(&data[1]), C.ub4(len(data)),
 			C.OCI_ONE_PIECE, nil, nil,
-			0, v.typ.charsetForm),
-		"LobWrite"); err != nil {
+			0, v.typ.charsetForm)
+		amount = int(oamount)
+	}
+	if err := v.environment.CheckStatus(status, "LobWrite"); err != nil {
 		return 0, errgo.Mask(err)
 	}
-	amount = int(oamount)
 	// Py_END_ALLOW_THREADS
-	return int(oamount), nil
+	return amount, nil
 }
 
 // Returns the value stored at the given array position.
@@ -317,8 +331,9 @@ func lobVarSetValue(v *Variable, pos uint, value interface{}) error {
 	// trim the current value
 	// Py_BEGIN_ALLOW_THREADS
 	if err = v.environment.CheckStatus(
-		C.OCILobTrim(v.connection.handle, v.environment.errorHandle, hndl, 0),
-		"LobTrim"); err != nil {
+		C.OCILOBTRIM(v.connection.handle, v.environment.errorHandle, hndl, 0),
+		"LobTrim",
+	); err != nil {
 		return errgo.Mask(
 
 			// Py_END_ALLOW_THREADS

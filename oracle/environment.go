@@ -54,7 +54,15 @@ import (
 // Log is discarded by default. Use Log.SetHandler to set.
 var Log = log15.New("lib", "goracle")
 
-const OracleVersion = C.ORACLE_VERSION_HEX
+func OracleVersionHex(major, minor int) int {
+	return ((major << 8) | minor)
+}
+
+const (
+	OracleVersion = C.ORACLE_VERSION_HEX
+	OracleV10_1   = ((10 << 8) | 1)
+	OracleV12_1   = ((12 << 8) | 1)
+)
 
 func init() {
 	Log.SetHandler(log15.DiscardHandler())
