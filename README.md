@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/go-goracle/goracle.svg?branch=v1)](https://travis-ci.org/go-goracle/goracle)
+[![GoDoc](https://godoc.org/gopkg.in/goracle.v1?status.svg)](http://godoc.org/gopkg.in/goracle.v1)
+
 # goracle #
 [goracle](driver.go) is a package which is a
 [database/sql/driver.Driver](http://golang.org/pkg/database/sql/driver/#Driver)
