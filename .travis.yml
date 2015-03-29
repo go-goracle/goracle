@@ -7,9 +7,8 @@ go:
 env:
     - secure: "YkNq7PZEUYh4JRtEjYXXynKwKxlhpHbtOv48sJHtMNjjyZp3WSultA/RkWdy8OcqfkERDPKEDKYNyX4M10BLQbLcpd0l6NKZqklqwtHjEbXh2Ty4mWDOSukBRMot+fZqBHO8BZrOEWFCyUoI6R4kigVBKfq4H+JH3KVASvsSQdU="
 before_install: 
-    - sudo apt-get install s3cmd
-    - s3cmd get https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
-    - s3cmd get https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
+    - wget https://github.com/barnybug/s3/releases/download/1.0.0/s3-linux-amd64 && mv s3-linux-amd64 s3 && chmod +x s3
+    - ./s3 get s3://tgulacsi-oracle-instantclient/
       #- wget https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
       #- wget https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
     - sudo apt-get install libaio1
