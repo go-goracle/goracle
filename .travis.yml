@@ -4,9 +4,14 @@ sudo: required
 go:
     - 1.4.2
       #- tip
+env:
+    - secure: "YkNq7PZEUYh4JRtEjYXXynKwKxlhpHbtOv48sJHtMNjjyZp3WSultA/RkWdy8OcqfkERDPKEDKYNyX4M10BLQbLcpd0l6NKZqklqwtHjEbXh2Ty4mWDOSukBRMot+fZqBHO8BZrOEWFCyUoI6R4kigVBKfq4H+JH3KVASvsSQdU="
 before_install: 
-    - wget https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
-    - wget https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
+    - sudo apt-get install s3cmd
+    - s3cmd get https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
+    - s3cmd get https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
+      #- wget https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
+      #- wget https://s3.amazonaws.com/tgulacsi-static-priv/oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
     - sudo apt-get install libaio1
     - sudo dpkg -i oracle-instantclient12.1-basiclite_12.1.0.2.0-2_amd64.deb
     - sudo dpkg -i oracle-instantclient12.1-devel_12.1.0.2.0-2_amd64.deb
