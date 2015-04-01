@@ -876,19 +876,6 @@ func (cur *Cursor) performBind() (err error) {
 				return errgo.Mask(err)
 			}
 		}
-		/*
-			log.Printf("statementVars: %v", FindStatementVars(string(cur.statement)))
-			for k, num := range FindStatementVars(string(cur.statement)) {
-				if num <= 1 {
-					continue
-				}
-				for i := 1; i < num; i++ {
-					if err = cur.bindVarsMap[k].Bind(cur, k, uint(i+1)); err != nil {
-						return err
-					}
-				}
-			}
-		*/
 	} else if cur.bindVarsArr != nil {
 		for i, v := range cur.bindVarsArr {
 			if err = v.Bind(cur, "", uint(i+1)); err != nil {
@@ -1121,7 +1108,7 @@ func (cur *Cursor) Parse(statement string) error {
 		mode = C.OCI_PARSE_ONLY
 	}
 	// Py_BEGIN_ALLOW_THREADS
-	log.Printf("%p.StmtExecute(%s, mode=%d) in Parse", cur, cur.statement, mode)
+	Log.Debug("Parse.StmtExecute", "cur", cur, "statement", cur.statement, "mode", mode)
 	if CTrace {
 		ctrace("OCIStmtExecute", cur.connection.handle, cur.handle,
 			cur.environment.errorHandle, 0, 0, nil, nil, mode)
@@ -1400,11 +1387,11 @@ func (cur *Cursor) Execute(statement string,
 			sort.Ints(positions)
 			for i := len(positions) - 1; i >= 0; i-- {
 				p := positions[i]
-				log.Printf("changing %q to %q at %d", toBeChanged[p][0], toBeChanged[p][1], p)
+				Log.Debug("changing", "from", toBeChanged[p][0], "to", toBeChanged[p][1], "at", p)
 				statement = statement[:p+1] + toBeChanged[p][1] + statement[p+1+len(toBeChanged[p][0]):]
 				keywordArgs[toBeChanged[p][1]] = keywordArgs[toBeChanged[p][0]]
 			}
-			log.Printf("statement=%q", statement)
+			Log.Debug("ByPassMultipleArgs", "statement", statement)
 		}
 	}
 

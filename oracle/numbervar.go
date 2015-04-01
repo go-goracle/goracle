@@ -27,7 +27,6 @@ import "C"
 
 import (
 	"fmt"
-	"log"
 	"math/big"
 	"strings"
 	"unsafe"
@@ -312,12 +311,13 @@ func numberVarGetValue(v *Variable, pos uint) (interface{}, error) {
 				num,
 				C.sizeof_double, unsafe.Pointer(&floatVal)),
 			"numberToFloat")
-		log.Printf("floatVal=%f format=%q len=%d num=%p (%d) size=%p buf=%p",
-			floatVal,
-			v.environment.numberToStringFormatBuffer,
-			len(v.environment.numberToStringFormatBuffer),
-			num, *((*byte)(unsafe.Pointer(num))),
-			&size, &buf[0])
+		Log.Error("numberVarGetValue",
+			"float", floatVal, "format",
+			"format", v.environment.numberToStringFormatBuffer,
+			"len", len(v.environment.numberToStringFormatBuffer),
+			"num", num,
+			"num-pointer", fmt.Sprintf("%p", *((*byte)(unsafe.Pointer(num)))),
+			"size", size)
 		return 0, errgo.Notef(err, "want string (%f)", floatVal)
 	}
 	numS := strings.Replace(

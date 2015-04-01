@@ -38,6 +38,7 @@ import (
 	"unsafe"
 
 	"gopkg.in/errgo.v1"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var (
@@ -214,14 +215,7 @@ func (cur *Cursor) NewVar(value interface{}, /*inconverter, outconverter, typena
 	if varType.isVariableLength && size == 0 {
 		size = varType.size
 	}
-	log.Printf("varType=%v size=%d numElements=%d", varType, size, numElements)
-	/*
-	   if (type == (PyObject*) &g_ObjectVarType && !typeNameObj) {
-	       PyErr_SetString(PyExc_TypeError,
-	               "expecting type name for object variables");
-	       return NULL;
-	   }
-	*/
+	Log.Debug("NewVar", "varType", varType, "size", size, "numElements", numElements)
 
 	// create the variable
 	v, err = cur.NewVariable(numElements, varType, size)
@@ -580,7 +574,6 @@ func varTypeByOraDataType(oracleDataType C.ub2, charsetForm C.ub1) (*VariableTyp
 	case C.SQLT_NUM, C.SQLT_VNU:
 		return FloatVarType, nil
 	}
-	log.Printf("unhandled data type: %d", oracleDataType)
 	return nil, errgo.Newf("TypeByOracleDataType: unhandled data type %d",
 		oracleDataType)
 }
@@ -593,8 +586,9 @@ func varTypeByOracleDescriptor(param *C.OCIParam, environment *Environment) (*Va
 	if _, err := environment.AttrGet(
 		unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 		C.OCI_ATTR_DATA_TYPE, unsafe.Pointer(&dataType),
-		"data type"); err != nil {
-		log.Printf("error with data type: %s", err)
+		"data type",
+	); err != nil {
+		Log.Error("error with data type", "param", param, "error", err)
 		return nil, err
 	}
 
@@ -607,8 +601,9 @@ func varTypeByOracleDescriptor(param *C.OCIParam, environment *Environment) (*Va
 		if _, err := environment.AttrGet(
 			unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 			C.OCI_ATTR_CHARSET_FORM, unsafe.Pointer(&charsetForm),
-			"charset form"); err != nil {
-			log.Printf("error with charsetForm: %s", err)
+			"charset form",
+		); err != nil {
+			Log.Error("error with charsetForm", "param", param, "error", err)
 			return nil, err
 		}
 	}
@@ -836,7 +831,7 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 	// determine data type
 	varType, err = varTypeByOracleDescriptor(param, cur.environment)
 	if err != nil {
-		log.Printf("error determining data type: %s", err)
+		Log.Error("error determining data type", "param", param, "error", err)
 		return nil, err
 	}
 	// if (cursor->numbersAsStrings && varType == &vt_Float)
@@ -850,12 +845,13 @@ func (cur *Cursor) variableDefineHelper(param *C.OCIParam, position, numElements
 		if _, err = cur.environment.AttrGet(
 			unsafe.Pointer(param), C.OCI_HTYPE_DESCRIBE,
 			C.OCI_ATTR_DATA_SIZE, unsafe.Pointer(&sizeFromOracle),
-			"data size"); err != nil {
-			log.Printf("error getting data size: %+v", err)
+			"data size",
+		); err != nil {
+			Log.Error("error getting data size", "param", param, "error", err)
 			return nil, err
 		}
 		if CTrace {
-			log.Printf("size of %p[%s] @ %d: %d", param, varType, position, sizeFromOracle)
+			ctrace("size of %p[%s] @ %d: %d", param, varType, position, sizeFromOracle)
 		}
 
 		// use the length from Oracle directly if available
@@ -929,7 +925,7 @@ func (cur *Cursor) varDefine(numElements, position uint) (*Variable, error) {
 	var param *C.OCIParam
 	// retrieve parameter descriptor
 	if cur.handle == nil {
-		log.Printf("WARN: nil cursor handle in varDefine!")
+		Log.Warn("nil cursor handle in varDefine!")
 	}
 	// log.Printf("retrieve parameter descriptor cur.handle=%s pos=%d", cur.handle, position)
 	if CTrace {
@@ -941,8 +937,9 @@ func (cur *Cursor) varDefine(numElements, position uint) (*Variable, error) {
 		C.OCIParamGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 			cur.environment.errorHandle,
 			(*unsafe.Pointer)(unsafe.Pointer(&param)), C.ub4(position)),
-		"parameter"); err != nil {
-		log.Printf("NO PARAM! %s", err)
+		"parameter",
+	); err != nil {
+		Log.Error("NO PARAM!", "error", err)
 		return nil, err
 	}
 	// log.Printf("got param handle")
@@ -1227,7 +1224,10 @@ func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 	// calculate value to return
 	err := v.typ.getValueInto(dest, v, arrayPos)
 	if err != nil {
-		log.Printf("%s.getSingleValueInto dest=%T(%+v) err=%s", v.typ, *dest, *dest, errgo.Details(err))
+		Log.Error("getSingleValueInto",
+			"type", v.typ,
+			"dest", log15.Lazy{func() string { return fmt.Sprintf("%T(%+v)", *dest, *dest) }},
+			"error", errgo.Details(err))
 		return errgo.Notef(err, "dest=%T(%#v)", *dest, *dest)
 	}
 	return nil
