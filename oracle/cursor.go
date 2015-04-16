@@ -924,37 +924,24 @@ func (cur *Cursor) createRow() ([]interface{}, error) {
 func (cur *Cursor) fetchInto(row ...interface{}) error {
 	var err error
 	// create a new tuple
-	numItems := len(cur.fetchVariables)
-	if numItems != len(row) {
-		return errgo.Newf("colnum mismatch: got %d, have %d", len(row), numItems)
+	if len(cur.fetchVariables) != len(row) {
+		return errgo.Newf("colnum mismatch: got %d, have %d",
+			len(row), len(cur.fetchVariables))
 	}
 
 	// acquire the value for each item
-	var (
-		ok bool
-		x  *interface{}
-		v  *Variable
-	)
-	for pos := 0; pos < len(row); pos++ {
-		if x, ok = row[pos].(*interface{}); !ok {
-			// return fmt.Errorf("awaited *interface{}, got %T (%+v) at pos %d (row=%+v)",
-			// 	dst, dst, pos, row)
-			x = &row[pos]
+	for pos := range row {
+		v := cur.fetchVariables[pos]
+		debug("fetchInto[%d]: %v -> %T", pos, v, row[pos])
+		if err = v.GetValueInto(row[pos], uint(cur.rowNum)); err != nil {
+			return errgo.Mask(err)
 		}
-		v = cur.fetchVariables[pos]
-		if err = v.GetValueInto(x, uint(cur.rowNum)); err != nil {
-			return errgo.Mask(
-
-				// row[pos] = *x
-				err)
-		}
-
 	}
 
 	// increment row counters
 	cur.rowNum++
 	cur.rowCount++
-	// debug("fetchInto rn=%d rc=%d row=%+v", cur.rowNum, cur.rowCount, row)
+	debug("fetchInto rn=%d rc=%d row=%+v", cur.rowNum, cur.rowCount, row)
 
 	return nil
 }
@@ -1656,14 +1643,16 @@ func (cur *Cursor) internalFetch(numRows uint) error {
 	if err = cur.environment.CheckStatus(
 		C.OCIStmtFetch(cur.handle, cur.environment.errorHandle,
 			C.ub4(numRows), C.OCI_FETCH_NEXT, C.OCI_DEFAULT),
-		"internalFetch(): fetch"); err != nil && err != NoDataFound {
+		"internalFetch(): fetch",
+	); err != nil && err != NoDataFound {
 		return err
 	}
 	// debug("fetched, getting row count")
 	var rowCount int
 	if _, err = cur.environment.AttrGet(unsafe.Pointer(cur.handle), C.OCI_HTYPE_STMT,
 		C.OCI_ATTR_ROW_COUNT, unsafe.Pointer(&rowCount),
-		"internalFetch(): row count"); err != nil {
+		"internalFetch(): row count",
+	); err != nil {
 		return errgo.Mask(
 
 			// debug("row count = %d", rowCount)
@@ -1745,7 +1734,7 @@ func (cur *Cursor) FetchOneInto(row ...interface{}) (err error) {
 		return io.EOF
 	}
 	err = cur.fetchInto(row...)
-	debug("FetchOneInto result row=%v", row)
+	debug("FetchOneInto result row=%#v", row)
 	return
 }
 

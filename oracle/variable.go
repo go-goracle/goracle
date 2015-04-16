@@ -163,7 +163,6 @@ type VariableType struct {
 	getBufferSize                func(*Variable) uint
 }
 
-// FIXME: proper Into, not just this dummy
 // getValueInto fetches value into the dest pointer
 func (t *VariableType) getValueInto(dest interface{}, v *Variable, pos uint) error {
 	rval := reflect.ValueOf(dest)
@@ -174,8 +173,7 @@ func (t *VariableType) getValueInto(dest interface{}, v *Variable, pos uint) err
 	if err != nil {
 		return errgo.Mask(err)
 	}
-	reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(val))
-	// log.Printf("%s.getValueInto dest=%+v err=%s", t, *dest, err)
+	reflectSet(dest, val)
 	return nil
 }
 
@@ -1186,12 +1184,17 @@ func (v *Variable) getSingleValue(arrayPos uint) (interface{}, error) {
 }
 
 // getSingleValueInto inserts the value of the variable at the given position into the pointer
-func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
+func (v *Variable) getSingleValueInto(dest interface{}, arrayPos uint) error {
 	var isNull bool
 
 	// ensure we do not exceed the number of allocated elements
 	if arrayPos >= v.allocatedElements {
 		return errgo.New("Variable_GetSingleValue: array size exceeded")
+	}
+
+	d := reflect.ValueOf(dest)
+	if d.Kind() != reflect.Ptr {
+		return errgo.Newf("destination must be a pointer, not %T!", dest)
 	}
 
 	// check for a NULL value
@@ -1201,18 +1204,7 @@ func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 		isNull = v.indicator[arrayPos] == C.OCI_IND_NULL
 	}
 	if isNull {
-		switch v.typ {
-		case DateTimeVarType:
-			*dest = time.Time{}
-		case IntervalVarType:
-			*dest = time.Duration(0)
-		case NumberAsStringVarType, LongIntegerVarType, Int64VarType, Int32VarType, FloatVarType, NativeFloatVarType:
-			*dest = 0
-		case BooleanVarType:
-			*dest = false
-		default:
-			*dest = ""
-		}
+		d.Elem().Set(reflect.Zero(d.Type()))
 		return nil
 	}
 
@@ -1226,9 +1218,9 @@ func (v *Variable) getSingleValueInto(dest *interface{}, arrayPos uint) error {
 	if err != nil {
 		Log.Error("getSingleValueInto",
 			"type", v.typ,
-			"dest", log15.Lazy{func() string { return fmt.Sprintf("%T(%+v)", *dest, *dest) }},
+			"dest", log15.Lazy{func() string { return fmt.Sprintf("%T(%+v)", dest, dest) }},
 			"error", errgo.Details(err))
-		return errgo.Notef(err, "dest=%T(%#v)", *dest, *dest)
+		return errgo.Notef(err, "dest=%T(%#v)", dest, dest)
 	}
 	return nil
 }
@@ -1293,7 +1285,7 @@ func (v *Variable) GetValue(arrayPos uint) (interface{}, error) {
 }
 
 // GetValueInto inserts the value of the variable into the given pointer
-func (v *Variable) GetValueInto(dest *interface{}, arrayPos uint) error {
+func (v *Variable) GetValueInto(dest interface{}, arrayPos uint) error {
 	//if v.isArray {
 	//	return v.getArrayValueInto(dest, uint(v.actualElements))
 	//}
@@ -1415,32 +1407,7 @@ func (cur *Cursor) getPtrValues() error {
 			if err != nil {
 				return errgo.Notef(err, "error getting value of %s", v)
 			}
-			if val == nil {
-				v.destination.Elem().Set(reflect.Zero(v.destination.Elem().Type()))
-			} else {
-				ok := false
-				switch x := v.destination.Interface().(type) {
-				case *int32:
-					switch y := val.(type) {
-					case int32:
-						*x, ok = y, true
-					case int64:
-						*x, ok = int32(y), true
-					}
-				case *int64:
-					switch y := val.(type) {
-					case int32:
-						*x, ok = int64(y), true
-					case int64:
-						*x, ok = y, true
-					}
-				}
-				if !ok {
-					elem := v.destination.Elem()
-					elem.Set(reflect.ValueOf(val).Convert(elem.Type()))
-				}
-
-			}
+			reflectSet(v.destination, val)
 		}
 	}
 	for k, v := range cur.bindVarsMap {
@@ -1450,22 +1417,60 @@ func (cur *Cursor) getPtrValues() error {
 			if err != nil {
 				return errgo.Notef(err, "error getting value of %s(%s)", k, v)
 			}
-			if val == nil {
-				v.destination.Elem().Set(reflect.Zero(v.destination.Elem().Type()))
-			} else {
-				src := reflect.ValueOf(val)
-				switch src.Kind() {
-				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					v.destination.Elem().SetInt(src.Int())
-				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-					v.destination.Elem().SetUint(src.Uint())
-				default:
-					v.destination.Elem().Set(src)
-				}
-			}
+			reflectSet(v.destination, val)
 		}
 	}
 	return nil
+}
+
+func reflectSet(dest, val interface{}) {
+	var destV, valV reflect.Value
+	getV := func(x interface{}) (interface{}, reflect.Value) {
+		if rv, ok := x.(reflect.Value); ok {
+			return rv.Interface(), rv
+		}
+		return x, reflect.ValueOf(x)
+	}
+
+	dest, destV = getV(dest)
+	if val == nil {
+		destV.Elem().Set(reflect.Zero(destV.Elem().Type()))
+		return
+	}
+
+	val, valV = getV(val)
+	switch x := dest.(type) {
+	case *interface{}:
+		*x = val
+		return
+	case *int32:
+		switch y := val.(type) {
+		case int32:
+			*x = y
+			return
+		case int64:
+			*x = int32(y)
+			return
+		}
+	case *int64:
+		switch y := val.(type) {
+		case int32:
+			*x = int64(y)
+			return
+		case int64:
+			*x = y
+			return
+		}
+	}
+
+	switch valV.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		destV.Elem().SetInt(valV.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		destV.Elem().SetUint(valV.Uint())
+	default:
+		destV.Elem().Set(valV.Convert(destV.Elem().Type()))
+	}
 }
 
 // externalCopy the contents of the source variable to the destination variable.

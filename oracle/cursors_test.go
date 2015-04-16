@@ -17,9 +17,64 @@ limitations under the License.
 package oracle
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestSelectBindInto(t *testing.T) {
+	IsDebug = true
+
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+	cur := conn.NewCursor()
+	defer cur.Close()
+
+	numbers := []int64{1, 2, 1234567890123}
+	parts := make([]string, 0, len(numbers))
+	for _, n := range numbers {
+		parts = append(parts, fmt.Sprintf("SELECT %d id FROM DUAL", n))
+	}
+	tbl := "(" + strings.Join(parts, "\nUNION ALL\n") + ")"
+
+	var num interface{}
+	qry := "SELECT * FROM " + tbl
+	if err := cur.Execute(qry, nil, nil); err != nil {
+		t.Errorf("get all rows: %v", err)
+		return
+	}
+	for i, n := range numbers {
+		if err := cur.FetchOneInto(&num); err != nil {
+			t.Errorf("fetch %d: %v", i+1, err)
+		}
+		if !reflect.DeepEqual(num, n) && fmt.Sprintf("%v", num) != fmt.Sprintf("%d", n) {
+			t.Errorf("fetch %d: got %v, awaited %d", i+1, num, n)
+		}
+	}
+
+	//
+	// DUMP(1234567890123)
+	// -----------------------------------
+	// Typ=2 Len=8: 199,2,24,46,68,90,2,24
+
+	qry = "SELECT id FROM " + tbl + " WHERE id = :1"
+	for i, id := range []int64{1, 2, 1234567890123} {
+		i++
+		if err := cur.Execute(qry, []interface{}{id}, nil); err != nil {
+			t.Errorf("%d. bind: %v", i, err)
+			return
+		}
+		if err := cur.FetchOneInto(&num); err != nil {
+			t.Errorf("%d.bind fetch: %v", i, err)
+			return
+		}
+		t.Logf("%d. bind: %v", i, num)
+	}
+}
 
 func TestSelectBind(t *testing.T) {
 	conn := getConnection(t)
