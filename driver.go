@@ -20,6 +20,7 @@ package goracle // import "gopkg.in/goracle.v1"
 import (
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -167,9 +168,9 @@ func (s stmt) run(args []driver.Value) (*rowsRes, error) {
 
 	var err error
 	// driver.Value = interface{}, convert []driver.Value to []interface{}
-	a := (*[]interface{})(unsafe.Pointer(&args))
+	a := *(*[]interface{})(unsafe.Pointer(&args))
 	debug("run", "cursor", s.cu, "statement", s.statement, "args", a)
-	if err = s.cu.Execute(s.statement, *a, nil); err != nil {
+	if err = s.cu.Execute(s.statement, a, nil); err != nil {
 		return nil, filterErr(err)
 	}
 
@@ -221,17 +222,25 @@ func (r rowsRes) Close() error {
 
 // DATE, DATETIME, TIMESTAMP are treated as they are in Local time zone
 func (r rowsRes) Next(dest []driver.Value) error {
-	row := (*[]interface{})(unsafe.Pointer(&dest))
-	// Log.Debug("FetcOneInto", "row", rowm "*row", *row, "length", len(*row))
-	err := r.cu.FetchOneInto(*row...)
-	debug("Next", "row", row, "*row", *row, "length", len(*row), "error", err)
-	if err != nil {
-		if err == io.EOF {
-			return io.EOF
-		}
-		return errgo.Mask(err)
+	row := *(*[]interface{})(unsafe.Pointer(&dest))
+	//row := make([]interface{}, len(dest))
+	err := r.cu.FetchOneInto(row...)
+	//row, err := r.cu.FetchOne()
+	debug("Next result",
+		"row", fmt.Sprintf("%#v", row),
+		"dest", fmt.Sprintf("%#v", dest),
+		"length", len(row),
+		"error", err)
+	if len(dest) > 0 {
+		debug("dest[0]", "dest[0]", fmt.Sprintf("%T", dest[0]))
 	}
-	return nil
+	if err == nil || err == io.EOF {
+		for i, v := range row {
+			dest[i] = v
+		}
+		return err
+	}
+	return errgo.Mask(err)
 }
 
 // Driver implements a Driver

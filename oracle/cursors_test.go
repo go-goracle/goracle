@@ -47,10 +47,12 @@ func TestSelectBindInto(t *testing.T) {
 		t.Errorf("get all rows: %v", err)
 		return
 	}
+	res := []interface{}{&num}
 	for i, n := range numbers {
-		if err := cur.FetchOneInto(&num); err != nil {
+		if err := cur.FetchOneInto(res...); err != nil {
 			t.Errorf("fetch %d: %v", i+1, err)
 		}
+		t.Logf("res=%#v num=%#v", res, num)
 		if !reflect.DeepEqual(num, n) && fmt.Sprintf("%v", num) != fmt.Sprintf("%d", n) {
 			t.Errorf("fetch %d: got %v, awaited %d", i+1, num, n)
 		}

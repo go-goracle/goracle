@@ -42,14 +42,14 @@ func TestNull(t *testing.T) {
 	qry := "SELECT '' FROM DUAL"
 	row := conn.QueryRow(qry)
 	if err = row.Scan(&str); err != nil {
-		t.Errorf("0. error with %q test: %s", qry, err)
+		t.Fatalf("0. error with %q test: %s", qry, err)
 	}
 	t.Logf("0. %q result: %#v (%T)", qry, str, str)
 
 	qry = "SELECT TO_DATE(NULL) FROM DUAL"
 	row = conn.QueryRow(qry)
 	if err = row.Scan(&dt); err != nil {
-		t.Errorf("0. error with %q test: %s", qry, err)
+		t.Fatalf("1. error with %q test: %s", qry, err)
 	}
 	t.Logf("1. %q result: %#v (%T)", qry, dt, dt)
 }
@@ -74,7 +74,7 @@ func TestSimple(t *testing.T) {
 	} {
 		row := conn.QueryRow(qry)
 		if err = row.Scan(&dst); err != nil {
-			t.Errorf("%d. error with %q test: %s", i, qry, err)
+			t.Fatalf("%d. error with %q test: %s", i, qry, err)
 		}
 		t.Logf("%d. %q result: %#v", i, qry, dst)
 		if strings.Index(qry, " TO_CLOB(") >= 0 {

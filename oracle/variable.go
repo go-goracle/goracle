@@ -1204,7 +1204,23 @@ func (v *Variable) getSingleValueInto(dest interface{}, arrayPos uint) error {
 		isNull = v.indicator[arrayPos] == C.OCI_IND_NULL
 	}
 	if isNull {
-		d.Elem().Set(reflect.Zero(d.Type()))
+		debug("getSingleValueInto NULL", "dest", dest, "pos", arrayPos)
+
+		var val reflect.Value
+		switch v.typ {
+		case DateTimeVarType:
+			val = reflect.ValueOf(time.Time{})
+		case IntervalVarType:
+			val = reflect.ValueOf(time.Duration(0))
+		case NumberAsStringVarType, LongIntegerVarType, Int64VarType, Int32VarType, FloatVarType, NativeFloatVarType:
+			val = reflect.ValueOf(0)
+		case BooleanVarType:
+			val = reflect.ValueOf(false)
+		default:
+			val = reflect.ValueOf("")
+		}
+		//d.Elem().Set(reflect.Zero(d.Type()))
+		d.Elem().Set(val)
 		return nil
 	}
 
@@ -1215,6 +1231,7 @@ func (v *Variable) getSingleValueInto(dest interface{}, arrayPos uint) error {
 
 	// calculate value to return
 	err := v.typ.getValueInto(dest, v, arrayPos)
+	debug("getValueInto(dest=%v, v=%v, pos=%d, error=%v)", dest, v, arrayPos, err)
 	if err != nil {
 		Log.Error("getSingleValueInto",
 			"type", v.typ,

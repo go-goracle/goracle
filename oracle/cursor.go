@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
+	"reflect"
 
 	// "reflect"
 	"io"
@@ -659,7 +660,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 	isValueVar = isVariable(value) //FIXME
 
 	// handle case where variable is already bound
-	debug("origVar=%#v value=%#v (%T)", origVar, value, value)
+	//debug("origVar=%#v value=%#v (%T)", origVar, value, value)
 	if origVar != nil {
 
 		// if the value is a variable object, rebind it if necessary
@@ -720,7 +721,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 		if isValueVar && value != nil && value.(*Variable) != nil {
 			debug("A")
 			newVar = value.(*Variable)
-			debug("newVar=%#v typ.Name=%s", newVar, string(newVar.typ.Name))
+			//debug("newVar=%#v typ.Name=%s", newVar, string(newVar.typ.Name))
 			debug("newVar.typ=%#v", newVar.typ)
 			newVar.boundPos = 0
 			newVar.boundName = ""
@@ -907,16 +908,6 @@ func (cur *Cursor) createRow() ([]interface{}, error) {
 	cur.rowNum++
 	cur.rowCount++
 
-	/*
-	   // if a row factory is defined, call it
-	   if (self->rowFactory && self->rowFactory != Py_None) {
-	       result = PyObject_CallObject(self->rowFactory, tuple);
-	       Py_DECREF(tuple);
-	       return result;
-	   }
-
-	   return tuple;
-	*/
 	return row, nil
 }
 
@@ -933,7 +924,11 @@ func (cur *Cursor) fetchInto(row ...interface{}) error {
 	for pos := range row {
 		v := cur.fetchVariables[pos]
 		debug("fetchInto[%d]: %v -> %T", pos, v, row[pos])
-		if err = v.GetValueInto(row[pos], uint(cur.rowNum)); err != nil {
+		d := row[pos]
+		if d == nil || reflect.ValueOf(d).Kind() != reflect.Ptr {
+			d = &row[pos]
+		}
+		if err = v.GetValueInto(d, uint(cur.rowNum)); err != nil {
 			return errgo.Mask(err)
 		}
 	}
