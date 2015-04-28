@@ -18,6 +18,9 @@ package goracle
 
 import (
 	"database/sql"
+	"encoding/hex"
+	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -29,34 +32,42 @@ func TestCS(t *testing.T) {
 	defer conn.Close()
 	defer tx.Rollback()
 
-	for _, txt := range []string{"Habitación doble", "雙人房", "двухместный номер"} {
-		insertCS(t, tx, txt)
+	for i, txt := range []string{"Habitación doble", "雙人房", "двухместный номер"} {
+		if err := insertCS(tx, txt); err != nil {
+			t.Errorf("%d. %v", i, err)
+		}
 	}
 }
 
 var id int32
 
-func insertCS(t *testing.T, conn *sql.Tx, txt string) bool {
+func insertCS(conn *sql.Tx, txt string) error {
 	qry := "INSERT INTO tst_goracle_cs (F_id, F_txt, F_hex)" +
 		" VALUES (?, ?, RAWTOHEX(UTL_RAW.CAST_TO_RAW(?)))"
 	id := atomic.AddInt32(&id, 1)
 	if _, err := conn.Exec(qry, id, txt, txt); err != nil {
-		t.Errorf("cannot insert into "+tbl+" (%q): %v", qry, err)
+		return fmt.Errorf("cannot insert into tst_goracle_cs (%q): %v", qry, err)
 	}
 	row := conn.QueryRow("SELECT F_txt, RAWTOHEX(UTL_RAW.CAST_TO_RAW(F_txt)), F_hex FROM tst_goracle_cs WHERE F_id = ?", id)
 	var sTxt, sTxtRH, sHex string
 	if err := row.Scan(&sTxt, &sTxtRH, &sHex); err != nil {
-		t.Errorf("error scanning row: %v", errgo.Details(err))
-		return false
+		return fmt.Errorf("error scanning row: %v", errgo.Details(err))
 	}
-	t.Logf("txt=%q raw=%q hex=%q", sTxt, sTxtRH, sHex)
-	if sTxt != txt || sTxtRH != sHex {
-		t.Errorf("got txt=%q != %q", sTxt, txt)
+	//t.Logf("txt=%q raw=%q hex=%q", sTxt, sTxtRH, sHex)
+	if sTxt != txt {
+		return fmt.Errorf("got txt=%q != %q", sTxt, txt)
 	}
 	if sTxtRH != sHex {
-		t.Errorf("got hex=%q != %q", sTxtRH, sHex)
+		return fmt.Errorf("got hex=%q != %q", sTxtRH, sHex)
 	}
-	return true
+	if sHex != strToHex(txt) {
+		return fmt.Errorf("got hex=%q != %q", sHex, strToHex(txt))
+	}
+	return nil
+}
+
+func strToHex(txt string) string {
+	return strings.ToUpper(hex.EncodeToString([]byte(txt)))
 }
 
 func prepareTableCS(t *testing.T) (*sql.DB, *sql.Tx) {
