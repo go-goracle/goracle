@@ -751,7 +751,8 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 }
 
 // setBindVariablesByPos creates or sets bind variables by position.
-func (cur *Cursor) setBindVariablesByPos(parameters []interface{}, // parameters to bind
+func (cur *Cursor) setBindVariablesByPos(
+	parameters []interface{}, // parameters to bind
 	numElements, // number of elements to create
 	arrayPos uint, // array position to set
 	deferTypeAssignment bool) ( // defer type assignment if null?
@@ -1340,8 +1341,11 @@ func (cur *Cursor) CallProc(name string,
 
 // Execute the statement.
 // For pointer-backed Variables, get their values, too.
-func (cur *Cursor) Execute(statement string,
-	listArgs []interface{}, keywordArgs map[string]interface{}) error {
+func (cur *Cursor) Execute(
+	statement string,
+	listArgs []interface{},
+	keywordArgs map[string]interface{},
+) error {
 
 	if CTrace {
 		ctrace("%s.Execute; IsOpen? %t", cur, cur.isOpen)

@@ -79,7 +79,8 @@ type Variable struct {
 func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uint) (v *Variable, err error) {
 	// log.Printf("cur=%+v varType=%+v", cur, varType)
 	// perform basic initialization
-	isArray := numElements > 0
+	Log.Debug("NewVariable", "type", varType, "size", size, "numElements", numElements)
+	isArray := numElements > 1
 	if numElements < 1 {
 		numElements = 1
 	}
@@ -614,6 +615,7 @@ func (v *Variable) makeArray() error {
 	if !v.typ.canBeInArray {
 		return errgo.Newf("type does not support arrays")
 	}
+	Log.Debug("makeArray", "variable", v)
 	v.isArray = true
 	return nil
 }
@@ -622,10 +624,11 @@ func (v *Variable) makeArray() error {
 // type of variable to use for the data.
 func (cur *Cursor) NewVariableByValue(value interface{}, numElements uint) (v *Variable, err error) {
 	var varType *VariableType
-	var size uint
-	if varType, size, numElements, err = VarTypeByValue(value); err != nil {
+	var ne, size uint
+	if varType, size, ne, err = VarTypeByValue(value); err != nil {
 		return
 	}
+	Log.Debug("NewVariableByValue", "value", value, "numElements", numElements, "VarTypeByValue.numElements", ne)
 	if v, err = cur.NewVariable(numElements, varType, size); err != nil {
 		return
 	}
@@ -1403,6 +1406,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		v.destination = reflect.ValueOf(nil)
 	}
 	if v.isArray {
+		Log.Debug("SetValue on array", "value", value)
 		//if reflect.TypeOf(value).Kind == reflect.Slice {
 		if x, ok := value.([]interface{}); ok {
 			return v.setArrayValue(x)
