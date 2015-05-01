@@ -141,32 +141,29 @@ func TestReuseBinds(t *testing.T) {
 		text            string
 	)
 	if timVar, err = cur.NewVar(&tim); err != nil {
-		t.Errorf("error creating variable for %s(%T): %s", tim, tim, err)
+		t.Fatalf("error creating variable for %s(%T): %s", tim, tim, err)
 	}
+	//text = strings.Repeat("\x00\x00\x00\x00", 20)
 	if textVar, err = cur.NewVar(&text); err != nil {
-		t.Errorf("error creating variable for %s(%T): %s", tim, tim, err)
+		t.Fatalf("error creating variable for %s(%T): %s", tim, tim, err)
 	}
 	qry2 := `BEGIN SELECT SYSDATE, TO_CHAR(SYSDATE) INTO :1, :2 FROM DUAL; END;`
 	if err = cur.Execute(qry2, []interface{}{timVar, textVar}, nil); err != nil {
-		t.Errorf("error executing `%s`: %s", qry2, err)
-		return
+		t.Fatalf("error executing `%s`: %s", qry2, err)
 	}
 	t.Logf("1. tim=%q text=%q", tim, text)
 	qry1 := `BEGIN SELECT SYSDATE INTO :1 FROM DUAL; END;`
 	if err = cur.Execute(qry1, []interface{}{timVar}, nil); err != nil {
-		t.Errorf("error executing `%s`: %s", qry1, err)
-		return
+		t.Fatalf("error executing `%s`: %s", qry1, err)
 	}
 	t.Logf("2. tim=%q", tim)
 
 	if err = cur.Execute(qry2, nil, map[string]interface{}{"1": timVar, "2": textVar}); err != nil {
-		t.Errorf("error executing `%s`: %s", qry2, err)
-		return
+		t.Fatalf("error executing `%s`: %s", qry2, err)
 	}
 	t.Logf("2. tim=%q text=%q", tim, text)
 	if err = cur.Execute(qry1, nil, map[string]interface{}{"1": timVar}); err != nil {
-		t.Errorf("error executing `%s`: %s", qry1, err)
-		return
+		t.Fatalf("error executing `%s`: %s", qry1, err)
 	}
 	t.Logf("3. tim=%q", tim)
 }

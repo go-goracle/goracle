@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/inconshreveable/log15.v2"
+
 	"github.com/tgulacsi/go/loghlp/tsthlp"
 )
 
@@ -187,7 +189,7 @@ func getConnection(t *testing.T) *Connection {
 	if conn.IsConnected() {
 		return conn
 	}
-	Log.SetHandler(tsthlp.TestHandler(t))
+	Log.SetHandler(log15.CallerStackHandler("%v", tsthlp.TestHandler(t)))
 
 	if !(dsn != nil && *dsn != "") {
 		t.Logf("cannot test connection without dsn!")

@@ -237,23 +237,20 @@ BEGIN
 	:2 := v_out;
 END;`
 		if out, err = cur.NewVar(""); err != nil {
-			t.Errorf("error creating output variable: %s", err)
-			t.FailNow()
+			t.Fatalf("error creating output variable: %s", err)
 		}
 		if err = cur.Execute(qry, []interface{}{tt.in, out}, nil); err != nil {
-			t.Errorf("error executing `%s`: %s", qry, err)
-			continue
+			t.Fatalf("error executing `%s`: %s", qry, err)
 		}
 		if val, err = out.GetValue(0); err != nil {
-			t.Errorf("%d. error getting value: %s", i, err)
-			continue
+			t.Fatalf("%d. error getting value: %s", i, err)
 		}
 		if outStr, ok = val.(string); !ok {
 			t.Logf("output is not string!?!, but %T (%v)", val, val)
 		}
 		//t.Logf("%d. out:%s =?= %s", i, outStr, tt.out)
 		if outStr != tt.out {
-			t.Errorf("%d. exec(%q) => %q, want %q", i, tt.in, outStr, tt.out)
+			t.Fatalf("%d. exec(%q) => %q, want %q", i, tt.in, outStr, tt.out)
 		}
 	}
 }
@@ -372,6 +369,7 @@ func TestArrayOutBinds(t *testing.T) {
 		outStr string
 		ok     bool
 	)
+	IsDebug = true
 	placeholder := string(make([]byte, 1000))
 	for i, tt := range arrOutBindsTests {
 		//if out, err = cur.NewVar(""); err != nil {
@@ -396,22 +394,20 @@ BEGIN
 END;`
 		if err = cur.Execute(qry, nil,
 			map[string]interface{}{"inp": tt.in, "out": out}); err != nil {
-			t.Errorf("%d. error executing `%s`: %s", i, qry, err)
-			continue
+			t.Fatalf("%d. error executing `%s`: %s", i, qry, err)
 		}
 		n := out.ArrayLength()
 		//n = 2
 		for j := uint(0); j < n; j++ {
 			if val, err = out.GetValue(j); err != nil {
-				t.Errorf("%d. error getting %d. value: %s", i, j, err)
-				continue
+				t.Fatalf("%d. error getting %d. value: %s", i, j, err)
 			}
 			if outStr, ok = val.(string); !ok {
 				t.Logf("%d/%d. output is not string!?!, but %T (%v)", i, j, val, val)
 			}
 			t.Logf("%d/%d. => out:%#v", i, j, outStr)
 			if j < uint(len(tt.out)) && outStr != tt.out[j] {
-				t.Errorf("%d. exec(%q)[%d]\n got %q,\nwant %q", i, tt.in, j,
+				t.Fatalf("%d. exec(%q)[%d]\n got %q,\nwant %q", i, tt.in, j,
 					outStr, tt.out[j])
 			}
 		}

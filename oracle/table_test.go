@@ -49,6 +49,35 @@ func TestTable(t *testing.T) {
 
 	insert(t, cur, 2, "22345678901234567890", 223.456,
 		"223456789.123456789", "big.Int", time.Now())
+
+	t.Skip()
+	insertArray(t, cur, []int{1, 2, 3}, []string{"a", "b", "c"})
+}
+
+// Oracle does not allow passing arrays to SQL statements, only PL/SQL
+// statements and this has been that way since as long as I have known
+// Oracle. The driver you were using before may have simply converted the
+// result to a string. cx_Oracle takes lists and converts them to PL/SQL
+// arrays -- which are not possible to be used in straight SQL
+// statements. So you will have to modify how you are using the driver.
+// In my opinion, converting lists to strings in some arbitrary fashion
+// is not the best way to handle such things!
+
+func insertArray(t *testing.T, cur *Cursor, small []int, text []string) bool {
+	qry := `INSERT INTO ` + tbl + ` (F_int, F_text) VALUES (:small, :text)`
+	params := make([]map[string]interface{}, len(small))
+	for i := range small {
+		params[i] = map[string]interface{}{
+			"small": small[i],
+			"text":  text[i],
+		}
+	}
+	t.Logf("ExecuteMany params=%#v", params)
+	if err := cur.ExecuteMany(qry, params); err != nil {
+		t.Errorf("ExecuteMany(%d): %v", len(small), err)
+		return false
+	}
+	return true
 }
 
 func insert(t *testing.T, cur *Cursor,

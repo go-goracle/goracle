@@ -732,10 +732,10 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 			if newVar, err = cur.NewVariableByValue(value, numElements); err != nil {
 				return
 			}
+			debug("%v.SetValue(%d, %v)", newVar, arrayPos, value)
 			if err = newVar.SetValue(arrayPos, value); err != nil {
 				return
 			}
-			debug("%v.SetValue(%d, %v)", newVar, arrayPos, value)
 		}
 
 		if newVar.typ.Name == "" {
@@ -755,9 +755,8 @@ func (cur *Cursor) setBindVariablesByPos(
 	parameters []interface{}, // parameters to bind
 	numElements, // number of elements to create
 	arrayPos uint, // array position to set
-	deferTypeAssignment bool) ( // defer type assignment if null?
-	err error) {
-
+	deferTypeAssignment bool, // defer type assignment if null?
+) (err error) {
 	if CTrace {
 		ctrace("%s.setBindVariablesByPos", cur)
 	}
@@ -774,6 +773,9 @@ func (cur *Cursor) setBindVariablesByPos(
 		origNumParams = len(cur.bindVarsArr)
 		newNumParams := len(parameters)
 		for _, v := range cur.bindVarsArr {
+			if v == nil {
+				continue
+			}
 			v.unbind()
 		}
 		if newNumParams < origNumParams {
@@ -810,7 +812,8 @@ func (cur *Cursor) setBindVariablesByPos(
 }
 
 // setBindVariablesByName creates or sets bind variables by name (nap).
-func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // parameters to bind
+func (cur *Cursor) setBindVariablesByName(
+	parameters map[string]interface{}, // parameters to bind
 	numElements, // number of elements to create
 	arrayPos uint, // array position to set
 	deferTypeAssignment bool, // defer type assignment if null?
@@ -840,8 +843,11 @@ func (cur *Cursor) setBindVariablesByName(parameters map[string]interface{}, // 
 	// handle named binds
 	for k, v := range parameters {
 		origVar = cur.bindVarsMap[k]
-		if newVar, err = cur.setBindVariableHelper(numElements, arrayPos, deferTypeAssignment,
-			v, origVar); err != nil {
+		if newVar, err = cur.setBindVariableHelper(
+			numElements, arrayPos,
+			deferTypeAssignment,
+			v, origVar,
+		); err != nil {
 			return errgo.Mask(err)
 		}
 		if newVar != nil {
@@ -1525,12 +1531,10 @@ func (cur *Cursor) ExecuteMany(statement string, params []map[string]interface{}
 	var err error
 	// prepare the statement
 	if err = cur.internalPrepare(statement, ""); err != nil {
-		return errgo.Mask(
-
-			// queries are not supported as the result is undefined
-			err)
+		return errgo.Mask(err)
 	}
 
+	// queries are not supported as the result is undefined
 	if cur.statementType == C.OCI_STMT_SELECT {
 		return QueriesNotSupported
 	}
@@ -1544,13 +1548,11 @@ func (cur *Cursor) ExecuteMany(statement string, params []map[string]interface{}
 		}
 	}
 	if err = cur.performBind(); err != nil {
-		return errgo.Mask(
-
-			// execute the statement, but only if the number of rows is greater than
-			// zero since Oracle raises an error otherwise
-			err)
+		return errgo.Mask(err)
 	}
 
+	// execute the statement, but only if the number of rows is greater than
+	// zero since Oracle raises an error otherwise
 	if numRows > 0 {
 		if err = cur.internalExecute(uint(numRows)); err != nil {
 			return errgo.Mask(err)

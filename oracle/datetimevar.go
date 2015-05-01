@@ -123,6 +123,9 @@ func dateTimeVarSetValue(v *Variable, pos uint, value interface{}) error {
 				x.Hour(), x.Minute(), x.Second()),
 			"OCIDateSetTime")
 	*/
+	if len(v.dataBytes) <= int(pos*v.typ.size) {
+		return errgo.Newf("dateTimeVarSetValue: pos=%d >= len=%d", pos*v.typ.size, len(v.dataBytes))
+	}
 	C.setDateTime((*C.OCIDate)(v.getHandle(pos)),
 		C.sb2(x.Year()), C.ub1(x.Month()), C.ub1(x.Day()),
 		C.ub1(x.Hour()), C.ub1(x.Minute()), C.ub1(x.Second()))

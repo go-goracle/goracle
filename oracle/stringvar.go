@@ -124,6 +124,9 @@ func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 	}
 
 	// keep a copy of the string
+	if len(v.actualLength) <= int(pos) {
+		return errgo.Newf("stringVarSetValue: pos=%d >= len=%d", pos, len(v.actualLength))
+	}
 	v.actualLength[pos] = C.ACTUAL_LENGTH_TYPE(length)
 	if length > 0 {
 		copy(v.dataBytes[int(v.bufferSize*pos):], buf)

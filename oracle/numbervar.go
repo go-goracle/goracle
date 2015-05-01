@@ -184,15 +184,27 @@ func numberVarSetValue(v *Variable, pos uint, value interface{}) error {
 		pos, len(v.dataBytes), value, value)
 	nfInt := func(intVal int64) error {
 		if v.dataInts != nil {
+			if len(v.dataInts) <= int(pos) {
+				return errgo.Newf("numberVarSetValue: pos=%d >= len=%d", pos, len(v.dataInts))
+			}
 			v.dataInts[pos] = intVal
 			return nil
+		}
+		if len(v.dataBytes) <= int(pos*v.typ.size) {
+			return errgo.Newf("numberVarSetValue: pos=%d >= len=%d", pos*v.typ.size, len(v.dataBytes))
 		}
 		return v.environment.numberFromInt(intVal, v.getHandle(pos))
 	}
 	nfFloat := func(floatVal float64) error {
 		if v.dataFloats != nil {
+			if len(v.dataFloats) <= int(pos) {
+				return errgo.Newf("numberVarSetValue: pos=%d >= floatsLen=%d", pos, len(v.dataFloats))
+			}
 			v.dataFloats[pos] = floatVal
 			return nil
+		}
+		if len(v.dataBytes) <= int(pos*v.typ.size) {
+			return errgo.Newf("numberVarSetValue: pos=%d >= len=%d", pos*v.typ.size, len(v.dataBytes))
 		}
 		return v.environment.numberFromFloat(floatVal, v.getHandle(pos))
 	}

@@ -41,6 +41,11 @@ import (
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
+const (
+	MaxInt     = int64(int(^uint(0) >> 1))
+	IntIs64bit = MaxInt > (1 << 32)
+)
+
 var (
 	//NotImplemented prints not implemented
 	NotImplemented = errgo.New("not implemented")
@@ -76,6 +81,8 @@ type Variable struct {
 }
 
 // NewVariable allocates a new variable
+//
+// WARNING: if you want an array, use numElements > 1!
 func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uint) (v *Variable, err error) {
 	// log.Printf("cur=%+v varType=%+v", cur, varType)
 	// perform basic initialization
@@ -84,12 +91,13 @@ func (cur *Cursor) NewVariable(numElements uint, varType *VariableType, size uin
 	if numElements < 1 {
 		numElements = 1
 	}
-	v = &Variable{typ: varType, environment: cur.connection.environment,
-		isAllocatedInternally: true, allocatedElements: numElements,
-		size:      varType.size,
-		indicator: make([]C.sb2, numElements), //sizeof(sb2)
-		// returnCode:   make([]C.ub2, numElements),
-		// actualLength: make([]C.ub2, numElements),
+	v = &Variable{
+		typ:                   varType,
+		environment:           cur.connection.environment,
+		isAllocatedInternally: true,
+		allocatedElements:     numElements,
+		size:                  varType.size,
+		indicator:             make([]C.sb2, numElements),
 	}
 	if isArray {
 		v.makeArray()
@@ -350,15 +358,17 @@ func (v *Variable) allocateData() error {
 		//(v.typ == NativeFloatVarType || v.typ.IsInteger()) {
 		if v.typ == NativeFloatVarType {
 			v.dataFloats = make([]float64, v.allocatedElements)
-			//log.Printf("floats=%v", unsafe.Pointer(&v.dataFloats[0]))
+			debug("floats[%d]=%v", v.allocatedElements, unsafe.Pointer(&v.dataFloats[0]))
 		} else {
 			v.dataInts = make([]int64, v.allocatedElements)
-			//log.Printf("ints=%v", unsafe.Pointer(&v.dataInts[0]))
+			debug("ints[%d]=%v", v.allocatedElements, unsafe.Pointer(&v.dataInts[0]))
 		}
 	} else {
 		v.dataBytes = make([]byte, dataLength)
-		// log.Printf("bytes=%v (%d)", unsafe.Pointer(&v.dataBytes[0]), len(v.dataBytes))
+		debug("bytes[%d]=%v (%d)", dataLength, unsafe.Pointer(&v.dataBytes[0]), len(v.dataBytes))
 	}
+	Log.Debug("allocateData", "type", v.typ, "size", v.size, "buffer", v.bufferSize,
+		"floats", len(v.dataFloats), "ints", len(v.dataInts), "bytes", len(v.dataBytes))
 
 	return nil
 }
@@ -446,10 +456,13 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		return x.typ, x.typ.size, 0, nil
 
 	case string:
-		if len(x) > MaxStringChars {
-			return LongStringVarType, uint(len(x)), 0, nil
+		if len(x) == 0 {
+			return StringVarType, MaxStringChars, 0, nil
 		}
-		return StringVarType, uint(len(x)), 0, nil
+		if len(x) > MaxStringChars {
+			return LongStringVarType, uint(len(x) + 1), 0, nil
+		}
+		return StringVarType, uint(len(x) + 1), 0, nil
 	case *string:
 		return VarTypeByValue(*x)
 	case []string:
@@ -459,36 +472,41 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 			size = maxUint(size, uint(len(y)+1))
 		}
 		return
+
 	case bool:
 		return BooleanVarType, 0, 0, nil
 	case *bool:
 		return VarTypeByValue(*x)
 
-	case int8, uint8, int16, uint16, int, uint, int32, uint32:
+	case int8, uint8, int16, uint16, int32, uint32:
 		return Int32VarType, 0, 0, nil
-	case []int32:
-		numElements = uint(len(x))
-		vt, size, _, err = VarTypeByValue(int32(0))
-		return
+	case *int:
+		return VarTypeByValue(*x)
+	case *uint:
+		return VarTypeByValue(*x)
+	case int, uint:
+		if IntIs64bit {
+			return Int64VarType, 0, 0, nil
+		}
 
 	case int64, uint64:
 		return Int64VarType, 0, 0, nil
 	case *int64:
 		return VarTypeByValue(*x)
-	case []int64:
-		numElements = uint(len(x))
-		vt, size, _, err = VarTypeByValue(int64(0))
-		return
+	case *uint64:
+		return VarTypeByValue(*x)
 
 	case float32, float64:
 		return FloatVarType, 0, 0, nil
-	case []float32:
-		numElements = uint(len(x))
-		vt, size, _, err = VarTypeByValue(float32(0))
-		return
-	case []float64:
-		numElements = uint(len(x))
-		vt, size, _, err = VarTypeByValue(float64(0))
+	case *float32:
+		return VarTypeByValue(*x)
+	case *float64:
+		return VarTypeByValue(*x)
+
+	case []int8, []int16, []uint16, []int32, []uint32, []int64, []uint64, []int, []uint, []float32, []float64:
+		rV := reflect.ValueOf(x)
+		numElements = uint(rV.Len())
+		vt, size, _, err = VarTypeByValue(reflect.Zero(rV.Type().Elem()).Interface())
 		return
 
 	case time.Time:
@@ -518,7 +536,19 @@ func VarTypeByValue(data interface{}) (vt *VariableType, size uint, numElements 
 		if numElements == 0 {
 			return nil, 0, 0, ListIsEmpty
 		}
-		vt, size, _, err = VarTypeByValue(x[0])
+		for i, y := range x {
+			if i == 0 {
+				if vt, size, _, err = VarTypeByValue(y); err != nil {
+					return
+				}
+				if _, s, _, e := VarTypeByValue(y); e != nil {
+					err = e
+					return
+				} else {
+					size = maxUint(size, s)
+				}
+			}
+		}
 		return
 
 	case *Cursor:
@@ -632,11 +662,6 @@ func (cur *Cursor) NewVariableByValue(value interface{}, numElements uint) (v *V
 	if v, err = cur.NewVariable(numElements, varType, size); err != nil {
 		return
 	}
-	//log.Printf("NewVariableByValue(%v, %d) isArray? %s", value, numElements,
-	//	reflect.TypeOf(value).Kind() == reflect.Slice)
-	//if reflect.TypeOf(value).Kind() == reflect.Slice {
-	//	err = v.makeArray()
-	//}
 	return
 }
 
@@ -1392,9 +1417,6 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		*v = *x
 		return nil
 	}
-	if v.isArray && arrayPos > 0 {
-		return errgo.New("arrays of arrays are not supported by the OCI")
-	}
 	rval := reflect.ValueOf(value)
 	if rval.Kind() == reflect.Ptr && !rval.IsNil() {
 		v.destination = rval
@@ -1407,11 +1429,16 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	}
 	if v.isArray {
 		Log.Debug("SetValue on array", "value", value)
-		//if reflect.TypeOf(value).Kind == reflect.Slice {
-		if x, ok := value.([]interface{}); ok {
-			return v.setArrayValue(x)
+		if rval.Kind() == reflect.Slice {
+			if arrayPos > 0 {
+				return errgo.New("arrays of arrays are not supported by the OCI")
+			}
+			if x, ok := value.([]interface{}); ok {
+				return v.setArrayValue(x)
+			}
+			return v.setArrayReflectValue(rval)
 		}
-		return v.setArrayReflectValue(rval)
+		return v.setSingleValue(arrayPos, value)
 		//return fmt.Errorf("%v is %T, not array!", value, value)
 	}
 	debug("calling %s.setValue(%d, %v (%T))", v.typ, arrayPos, value, value)

@@ -17,7 +17,7 @@ limitations under the License.
 package oracle
 
 import (
-	"log"
+	"fmt"
 	"strconv"
 
 	"gopkg.in/errgo.v1"
@@ -82,6 +82,6 @@ var IsDebug bool
 // debug prints with log.Printf iff IsDebug
 func debug(format string, args ...interface{}) {
 	if IsDebug {
-		log.Printf(format, args...)
+		Log.Debug(fmt.Sprintf(format, args...))
 	}
 }

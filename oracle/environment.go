@@ -52,7 +52,12 @@ import (
 )
 
 // Log is discarded by default. Use Log.SetHandler to set.
-var Log = log15.New("lib", "goracle")
+var (
+	// Set it to something like
+	// Log.SetHandler(log15.CallerStackHandler("%v", log15.StderrHandler))
+	// if you want to see the call stack, too.
+	Log = log15.New("lib", "goracle")
+)
 
 // OracleVersionHex returns the major.minor version as one number,
 // ready to compare with OracleVersion.
