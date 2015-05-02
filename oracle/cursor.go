@@ -754,7 +754,7 @@ func (cur *Cursor) setBindVariablesByPos(
 	deferTypeAssignment bool, // defer type assignment if null?
 ) (err error) {
 	if CTrace {
-		ctrace("%s.setBindVariablesByPos", cur)
+		ctrace("%s.setBindVariablesByPos arrayPos=%d bindVarsMap=%d bindVarsArr=%d", cur, arrayPos, len(cur.bindVarsMap), len(cur.bindVarsArr))
 	}
 
 	var origNumParams int
@@ -770,6 +770,7 @@ func (cur *Cursor) setBindVariablesByPos(
 			cur.bindVarsArr = make([]*Variable, len(parameters))
 		} else {
 			newNumParams := len(parameters)
+			debug("unbinding %#v", cur.bindVarsArr)
 			for _, v := range cur.bindVarsArr {
 				v.unbind()
 			}
@@ -779,6 +780,7 @@ func (cur *Cursor) setBindVariablesByPos(
 			}
 		}
 		if len(cur.bindVarsMap) > 0 {
+			debug("unbinding %#v", cur.bindVarsMap)
 			for k, v := range cur.bindVarsMap {
 				delete(cur.bindVarsMap, k)
 				v.unbind()
@@ -813,6 +815,9 @@ func (cur *Cursor) setBindVariablesByName(
 	arrayPos uint, // array position to set
 	deferTypeAssignment bool, // defer type assignment if null?
 ) (err error) {
+	if CTrace {
+		ctrace("%s.setBindVariablesByPos arrayPos=%d bindVarsMap=%d bindVarsArr=%d", cur, arrayPos, len(cur.bindVarsMap), len(cur.bindVarsArr))
+	}
 	// PyObject *key, *value, *origVar;
 	var origVar, newVar *Variable // udt_Variable *newVar;
 
@@ -825,12 +830,14 @@ func (cur *Cursor) setBindVariablesByName(
 		if cur.bindVarsMap == nil {
 			cur.bindVarsMap = make(map[string]*Variable, len(parameters))
 		} else if len(cur.bindVarsMap) > 0 {
+			debug("unbinding %#v", cur.bindVarsMap)
 			for k, v := range cur.bindVarsMap {
 				delete(cur.bindVarsMap, k)
 				v.unbind()
 			}
 		}
 		if len(cur.bindVarsArr) > 0 {
+			debug("unbinding %#v", cur.bindVarsArr)
 			for _, v := range cur.bindVarsArr {
 				v.unbind()
 			}

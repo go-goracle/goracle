@@ -64,12 +64,12 @@ func TestTable(t *testing.T) {
 // is not the best way to handle such things!
 
 func insertArray(t *testing.T, cur *Cursor, small []int, text []string) bool {
-	qry := `INSERT INTO ` + tbl + ` (F_int, F_text) VALUES (:small, :text)`
+	qry := `INSERT INTO ` + tbl + ` (F_int) VALUES (:small)`
 	params := make([]map[string]interface{}, len(small))
 	for i := range small {
 		params[i] = map[string]interface{}{
 			"small": small[i],
-			"text":  text[i],
+			//"text":  text[i],
 		}
 	}
 	t.Logf("ExecuteMany params=%#v", params)
