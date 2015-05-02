@@ -44,14 +44,14 @@ func TestTable(t *testing.T) {
 	}
 	defer cur.Execute("DROP TABLE "+tbl, nil, nil)
 
+	insertArray(t, cur, []int{1, 2, 3}, []string{"a", "b", "c"})
+	return
+
 	insert(t, cur, 1, "1234567890123456", 123.456,
 		"123456789.123456789", "int64", time.Now())
 
 	insert(t, cur, 2, "22345678901234567890", 223.456,
 		"223456789.123456789", "big.Int", time.Now())
-
-	t.Skip()
-	insertArray(t, cur, []int{1, 2, 3}, []string{"a", "b", "c"})
 }
 
 // Oracle does not allow passing arrays to SQL statements, only PL/SQL
@@ -73,6 +73,7 @@ func insertArray(t *testing.T, cur *Cursor, small []int, text []string) bool {
 		}
 	}
 	t.Logf("ExecuteMany params=%#v", params)
+	IsDebug = true
 	if err := cur.ExecuteMany(qry, params); err != nil {
 		t.Errorf("ExecuteMany(%d): %v", len(small), err)
 		return false

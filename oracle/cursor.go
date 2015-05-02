@@ -643,7 +643,8 @@ func (cur *Cursor) Close() {
 }
 
 // setBindVariableHelper is a helper for setting a bind variable.
-func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to create
+func (cur *Cursor) setBindVariableHelper(
+	numElements, // number of elements to create
 	arrayPos uint, // array position to set
 	deferTypeAssignment bool, // defer type assignment if null?
 	value interface{}, // value to bind
@@ -653,16 +654,13 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 		ctrace("%s.setBindVariableHelper", cur)
 	}
 
-	var isValueVar bool
-
 	// initialization
 	newVar = nil
-	isValueVar = isVariable(value) //FIXME
+	isValueVar := isVariable(value) //FIXME
 
 	// handle case where variable is already bound
 	//debug("origVar=%#v value=%#v (%T)", origVar, value, value)
 	if origVar != nil {
-
 		// if the value is a variable object, rebind it if necessary
 		if isValueVar {
 			if origVar != value {
@@ -682,8 +680,9 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 				origVar = nil
 			} else {
 				if numElements > origVar.allocatedElements {
-					if newVar, err = cur.NewVariable(numElements, origVar.typ,
-						origVar.size); err != nil {
+					if newVar, err = cur.NewVariable(
+						numElements, origVar.typ, origVar.size,
+					); err != nil {
 						return
 					}
 					if err = newVar.SetValue(arrayPos, value); err != nil {
@@ -692,7 +691,6 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 
 					// otherwise, attempt to set the value
 				} else if origVar.SetValue(arrayPos, value); err != nil {
-
 					// executemany() should simply fail after the first element
 					if arrayPos > 0 {
 						return
@@ -767,25 +765,24 @@ func (cur *Cursor) setBindVariablesByPos(
 	if parameters == nil || len(parameters) <= 0 {
 		return ListIsEmpty
 	}
-	if cur.bindVarsArr != nil {
-		origNumParams = len(cur.bindVarsArr)
-		newNumParams := len(parameters)
-		for _, v := range cur.bindVarsArr {
-			if v == nil {
-				continue
+	if arrayPos == 0 {
+		if cur.bindVarsArr == nil {
+			cur.bindVarsArr = make([]*Variable, len(parameters))
+		} else {
+			newNumParams := len(parameters)
+			for _, v := range cur.bindVarsArr {
+				v.unbind()
 			}
-			v.unbind()
+			cur.bindVarsArr = cur.bindVarsArr[:cap(cur.bindVarsArr)]
+			if newNumParams < len(cur.bindVarsArr) {
+				cur.bindVarsArr = cur.bindVarsArr[:newNumParams]
+			}
 		}
-		if newNumParams < origNumParams {
-			cur.bindVarsArr = cur.bindVarsArr[:newNumParams]
-		}
-	} else {
-		cur.bindVarsArr = make([]*Variable, len(parameters))
-	}
-	if len(cur.bindVarsMap) > 0 {
-		for k, v := range cur.bindVarsMap {
-			delete(cur.bindVarsMap, k)
-			v.unbind()
+		if len(cur.bindVarsMap) > 0 {
+			for k, v := range cur.bindVarsMap {
+				delete(cur.bindVarsMap, k)
+				v.unbind()
+			}
 		}
 	}
 
@@ -823,24 +820,28 @@ func (cur *Cursor) setBindVariablesByName(
 	if parameters == nil || len(parameters) <= 0 {
 		return ListIsEmpty
 	}
-	if cur.bindVarsMap == nil {
-		cur.bindVarsMap = make(map[string]*Variable, len(parameters))
-	} else if len(cur.bindVarsMap) > 0 {
-		for k, v := range cur.bindVarsMap {
-			delete(cur.bindVarsMap, k)
-			v.unbind()
+	cur.bindVarsArr = cur.bindVarsArr[:0]
+	if arrayPos == 0 {
+		if cur.bindVarsMap == nil {
+			cur.bindVarsMap = make(map[string]*Variable, len(parameters))
+		} else if len(cur.bindVarsMap) > 0 {
+			for k, v := range cur.bindVarsMap {
+				delete(cur.bindVarsMap, k)
+				v.unbind()
+			}
 		}
-	}
-	if len(cur.bindVarsArr) > 0 {
-		for _, v := range cur.bindVarsArr {
-			v.unbind()
+		if len(cur.bindVarsArr) > 0 {
+			for _, v := range cur.bindVarsArr {
+				v.unbind()
+			}
+			cur.bindVarsArr = cur.bindVarsArr[:0]
 		}
-		cur.bindVarsArr = cur.bindVarsArr[:0]
 	}
 
 	// handle named binds
 	for k, v := range parameters {
 		origVar = cur.bindVarsMap[k]
+		//debug("setBindVars bindVarsMap[%s]=%p pos=%d", k, origVar, arrayPos)
 		if newVar, err = cur.setBindVariableHelper(
 			numElements, arrayPos,
 			deferTypeAssignment,
@@ -851,6 +852,7 @@ func (cur *Cursor) setBindVariablesByName(
 		if newVar != nil {
 			cur.bindVarsMap[k] = newVar
 		}
+		//debug("setBindVars bindVarsMap[%s]=%p pos=%d", k, cur.bindVarsMap[k], arrayPos)
 	}
 
 	return
@@ -1540,8 +1542,10 @@ func (cur *Cursor) ExecuteMany(statement string, params []map[string]interface{}
 	// perform binds
 	numRows := len(params)
 	for i, arguments := range params {
-		if err = cur.setBindVariablesByName(arguments, uint(numRows), uint(i),
-			(i < numRows-1)); err != nil {
+		if err = cur.setBindVariablesByName(
+			arguments, uint(numRows), uint(i),
+			(i < numRows-1),
+		); err != nil {
 			return errgo.Mask(err)
 		}
 	}

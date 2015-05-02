@@ -659,6 +659,12 @@ func (cur *Cursor) NewVariableByValue(value interface{}, numElements uint) (v *V
 		return
 	}
 	debug("NewVariableByValue value=%#v numElements=%d VarTypeByValue.numElements=%d", value, numElements, ne)
+	if numElements > ne {
+		ne = numElements
+	}
+	if varType.IsString() {
+		size = maxUint(varType.size, size)
+	}
 	if v, err = cur.NewVariable(ne, varType, size); err != nil {
 		return
 	}
@@ -998,34 +1004,10 @@ func (v *Variable) internalBind() (err error) {
 	}
 	//log.Printf("%v isArray? %b allElts=%d", v.typ.Name, v.isArray, allElts)
 	var bindName string
-	var bufSlice interface{}
-	var m int
-	if CTrace {
-		m = int(v.bufferSize)
-		if m > 40 {
-			m = 40
-		}
-		switch {
-		case v.dataInts != nil:
-			if m > len(v.dataInts) {
-				m = len(v.dataInts)
-			}
-			bufSlice = v.dataInts[:m]
-		case v.dataFloats != nil:
-			if m > len(v.dataFloats) {
-				m = len(v.dataFloats)
-			}
-			bufSlice = v.dataFloats[:m]
-		default:
-			if m > len(v.dataBytes) {
-				m = len(v.dataBytes)
-			}
-			bufSlice = v.dataBytes[:m]
-		}
-	}
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {
+			bufSlice, m := v.bufSlice(40)
 			ctrace("internalBind.OCIBindByName(cur=%p, bind=%p, env=%p, name=%q, bufferSize=%d, oracleType=%d, data[:%d]=%v, indicator=%v, aL=%v, rC=%v, allElts=%v, pActElts=%v, DEFAULT)",
 				v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, bname,
@@ -1043,27 +1025,7 @@ func (v *Variable) internalBind() (err error) {
 			allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
-			m := int(v.bufferSize)
-			if m > 40 {
-				m = 40
-			}
-			switch {
-			case v.dataInts != nil:
-				if m > len(v.dataInts) {
-					m = len(v.dataInts)
-				}
-				bufSlice = v.dataInts[:m]
-			case v.dataFloats != nil:
-				if m > len(v.dataFloats) {
-					m = len(v.dataFloats)
-				}
-				bufSlice = v.dataFloats[:m]
-			default:
-				if m > len(v.dataBytes) {
-					m = len(v.dataBytes)
-				}
-				bufSlice = v.dataBytes[:m]
-			}
+			bufSlice, m := v.bufSlice(40)
 			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data[:%d]=%v, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
 				v.boundCursorHandle, v.boundPos, m, bufSlice,
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
@@ -1112,6 +1074,29 @@ func (v *Variable) internalBind() (err error) {
 	}
 
 	return
+}
+
+func (v Variable) bufSlice(max int) (interface{}, int) {
+	m := int(v.bufferSize)
+	if m > max {
+		m = max
+	}
+	switch {
+	case v.dataInts != nil:
+		if m > len(v.dataInts) {
+			m = len(v.dataInts)
+		}
+		return v.dataInts[:m], m
+	case v.dataFloats != nil:
+		if m > len(v.dataFloats) {
+			m = len(v.dataFloats)
+		}
+		return v.dataFloats[:m], m
+	}
+	if m > len(v.dataBytes) {
+		m = len(v.dataBytes)
+	}
+	return v.dataBytes[:m], m
 }
 
 // unbind undoes the binding
@@ -1182,7 +1167,7 @@ func (v *Variable) getSingleValue(arrayPos uint) (interface{}, error) {
 
 	// ensure we do not exceed the number of allocated elements
 	if arrayPos >= v.allocatedElements {
-		return nil, errgo.New("Variable_GetSingleValue: array size exceeded")
+		return nil, errgo.Newf("Variable_GetSingleValue: array size (%d) exceeded", v.allocatedElements)
 	}
 
 	// check for a NULL value
@@ -1217,7 +1202,7 @@ func (v *Variable) getSingleValueInto(dest interface{}, arrayPos uint) error {
 
 	// ensure we do not exceed the number of allocated elements
 	if arrayPos >= v.allocatedElements {
-		return errgo.New("Variable_GetSingleValue: array size exceeded")
+		return errgo.Newf("Variable_GetSingleValue: array size (%d) exceeded", v.allocatedElements)
 	}
 
 	d := reflect.ValueOf(dest)
@@ -1341,7 +1326,7 @@ func (v *Variable) GetValueInto(dest interface{}, arrayPos uint) error {
 func (v *Variable) setSingleValue(arrayPos uint, value interface{}) error {
 	// ensure we do not exceed the number of allocated elements
 	if arrayPos >= v.allocatedElements {
-		return errgo.New("Variable_SetSingleValue: array size exceeded")
+		return errgo.Newf("Variable_SetSingleValue: array size (%d) exceeded", v.allocatedElements)
 	}
 
 	// convert value, if necessary
@@ -1373,14 +1358,17 @@ func (v *Variable) setArrayValue(value []interface{}) error {
 	// ensure we haven't exceeded the number of allocated elements
 	numElements := uint(len(value))
 	if numElements > v.allocatedElements {
-		return errgo.New("Variable_SetArrayValue: array size exceeded")
+		return errgo.Newf("Variable_SetArrayValue: array size (%d) exceeded", v.allocatedElements)
 	}
 
 	// set all of the values
+	dbg := IsDebug || CTrace
 	v.actualElements = C.ub4(numElements)
-	var err error
 	for i, elt := range value {
-		if err = v.setSingleValue(uint(i), elt); err != nil {
+		if dbg {
+			Log.Debug("setSingleValue", "pos", i, "elt", elt)
+		}
+		if err := v.setSingleValue(uint(i), elt); err != nil {
 			return errgo.Mask(err)
 		}
 	}
@@ -1394,15 +1382,17 @@ func (v *Variable) setArrayReflectValue(value reflect.Value) error {
 	}
 	numElements := uint(value.Len())
 	if numElements > v.allocatedElements {
-		return errgo.New("Variable_setArrayReflectValue: array size exceeded")
+		return errgo.Newf("Variable_setArrayReflectValue: array size (%d) exceeded", v.allocatedElements)
 	}
 
 	// set all of the values
+	dbg := IsDebug || CTrace
 	v.actualElements = C.ub4(numElements)
-	var err error
 	for i := uint(0); i < numElements; i++ {
-		//for i, elt := range value {
-		if err = v.setSingleValue(i,
+		if dbg {
+			Log.Debug("setSingleValue", "pos", i, "elt", value.Index(int(i)).Interface())
+		}
+		if err := v.setSingleValue(i,
 			value.Index(int(i)).Interface()); err != nil {
 			return errgo.Mask(err)
 		}
@@ -1417,6 +1407,12 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		*v = *x
 		return nil
 	}
+	if IsDebug {
+		defer func() {
+			bufSlice, m := v.bufSlice(40)
+			Log.Debug("SetValue result", "value", value, "bufSlice", bufSlice, "len", m)
+		}()
+	}
 	rval := reflect.ValueOf(value)
 	if rval.Kind() == reflect.Ptr && !rval.IsNil() {
 		v.destination = rval
@@ -1428,7 +1424,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		v.destination = reflect.ValueOf(nil)
 	}
 	if v.isArray {
-		Log.Debug("SetValue on array", "value", value)
+		debug("SetValue on array", "value", value)
 		if rval.Kind() == reflect.Slice {
 			if arrayPos > 0 {
 				return errgo.New("arrays of arrays are not supported by the OCI")
@@ -1438,6 +1434,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 			}
 			return v.setArrayReflectValue(rval)
 		}
+		debug("setSingleValue", "pos", arrayPos, "value", value)
 		return v.setSingleValue(arrayPos, value)
 		//return fmt.Errorf("%v is %T, not array!", value, value)
 	}
@@ -1529,15 +1526,15 @@ func (targetVar *Variable) externalCopy(sourceVar *Variable, sourcePos, targetPo
 
 	// ensure array positions are not violated
 	if sourcePos >= sourceVar.allocatedElements {
-		return errgo.New("Variable_ExternalCopy: source array size exceeded")
+		return errgo.Newf("Variable_ExternalCopy: source array size (%d) exceeded", sourceVar.allocatedElements)
 	}
 	if targetPos >= targetVar.allocatedElements {
-		return errgo.New("Variable_ExternalCopy: target array size exceeded")
+		return errgo.Newf("Variable_ExternalCopy: target array size (%d) exceeded", targetVar.allocatedElements)
 	}
 
 	// ensure target can support amount data from the source
 	if targetVar.bufferSize < sourceVar.bufferSize {
-		return errgo.New("target variable has insufficient space to copy source data")
+		return errgo.Newf("target variable has insufficient space to copy source data")
 	}
 
 	// handle null case directly

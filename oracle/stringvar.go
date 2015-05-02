@@ -76,6 +76,7 @@ func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 		length int
 	)
 
+	debug("stringVarSetValue[%d] %#v (%T)", pos, value, value)
 	switch x := value.(type) {
 	case string:
 		buf = []byte(x)
@@ -129,7 +130,8 @@ func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 	}
 	v.actualLength[pos] = C.ACTUAL_LENGTH_TYPE(length)
 	if length > 0 {
-		copy(v.dataBytes[int(v.bufferSize*pos):], buf)
+		debug("copy(%p.dataBytes[bufSize=%d * pos=%d:], %v)", v, v.bufferSize, pos, buf)
+		copy(v.dataBytes[int(v.bufferSize*pos):int(v.bufferSize*pos)+length], buf)
 	}
 
 	return nil

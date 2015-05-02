@@ -19,7 +19,7 @@ limitations under the License.
 */
 
 import (
-	"log"
+	"fmt"
 	"runtime"
 )
 
@@ -28,7 +28,7 @@ const CTrace = true
 
 //ctrace prints with log.Printf the C-call trace
 func ctrace(name string, args ...interface{}) {
-	log.Printf("CTRACE "+name, args...)
+	Log.Debug(fmt.Sprintf("CTRACE "+name, args...))
 }
 
 var pc = make([]byte, 4096)
