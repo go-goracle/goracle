@@ -719,9 +719,7 @@ func (cur *Cursor) setBindVariableHelper(numElements, // number of elements to c
 
 		// if the value is a variable object, bind it directly
 		if isValueVar && value != nil && value.(*Variable) != nil {
-			debug("A")
 			newVar = value.(*Variable)
-			//debug("newVar=%#v typ.Name=%s", newVar, string(newVar.typ.Name))
 			debug("newVar.typ=%#v", newVar.typ)
 			newVar.boundPos = 0
 			newVar.boundName = ""

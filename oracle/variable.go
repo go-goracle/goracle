@@ -658,8 +658,8 @@ func (cur *Cursor) NewVariableByValue(value interface{}, numElements uint) (v *V
 	if varType, size, ne, err = VarTypeByValue(value); err != nil {
 		return
 	}
-	Log.Debug("NewVariableByValue", "value", value, "numElements", numElements, "VarTypeByValue.numElements", ne)
-	if v, err = cur.NewVariable(numElements, varType, size); err != nil {
+	debug("NewVariableByValue value=%#v numElements=%d VarTypeByValue.numElements=%d", value, numElements, ne)
+	if v, err = cur.NewVariable(ne, varType, size); err != nil {
 		return
 	}
 	return
