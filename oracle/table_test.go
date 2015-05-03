@@ -64,21 +64,36 @@ func TestTable(t *testing.T) {
 // is not the best way to handle such things!
 
 func insertArray(t *testing.T, cur *Cursor, small []int, text []string) bool {
-	qry := `INSERT INTO ` + tbl + ` (F_int) VALUES (:small)`
-	params := make([]map[string]interface{}, len(small))
+	qry := []string{
+		`INSERT INTO ` + tbl + ` (F_text) VALUES (:text)`,
+		`INSERT INTO ` + tbl + ` (F_small) VALUES (:small)`,
+		`INSERT INTO ` + tbl + ` (F_small, F_text) VALUES (:small, :text)`,
+	}
+	params := make([][]map[string]interface{}, 3)
+
 	for i := range small {
-		params[i] = map[string]interface{}{
+		params[0] = append(params[0], map[string]interface{}{
+			"text": text[i],
+		})
+		params[1] = append(params[1], map[string]interface{}{
 			"small": small[i],
-			//"text":  text[i],
+		})
+		params[2] = append(params[2], map[string]interface{}{
+			"small": small[i],
+			"text":  text[i],
+		})
+	}
+
+	ok := true
+	IsDebug = true
+	for i, params := range params {
+		t.Logf("%d. ExecuteMany params=%#v", i, params)
+		if err := cur.ExecuteMany(qry[i], params); err != nil {
+			t.Errorf("ExecuteMany(%d): %v", len(small), err)
+			ok = false
 		}
 	}
-	t.Logf("ExecuteMany params=%#v", params)
-	IsDebug = true
-	if err := cur.ExecuteMany(qry, params); err != nil {
-		t.Errorf("ExecuteMany(%d): %v", len(small), err)
-		return false
-	}
-	return true
+	return ok
 }
 
 func insert(t *testing.T, cur *Cursor,
