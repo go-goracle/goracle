@@ -31,6 +31,7 @@ static void setHandle(void *data, void *src, size_t count) {
 import "C"
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"reflect"
@@ -1007,11 +1008,10 @@ func (v *Variable) internalBind() (err error) {
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {
-			bufSlice, m := v.bufSlice(40)
-			ctrace("internalBind.OCIBindByName(cur=%p, bind=%p, env=%p, name=%q, bufferSize=%d, oracleType=%d, data[:%d]=%v, indicator=%v, aL=%v, rC=%v, allElts=%v, pActElts=%v, DEFAULT)",
+			ctrace("internalBind.OCIBindByName(cur=%p, bind=%p, env=%p, name=%q, bufferSize=%d, oracleType=%d, data=%s, indicator=%v, aL=%v, rC=%v, allElts=%v, pActElts=%v, DEFAULT)",
 				v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, bname,
-				v.bufferSize, v.typ.oracleType, m, bufSlice,
+				v.bufferSize, v.typ.oracleType, v.printBufSlice(),
 				v.indicator, aL, rC,
 				allElts, pActElts)
 		}
@@ -1025,9 +1025,8 @@ func (v *Variable) internalBind() (err error) {
 			allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
-			bufSlice, m := v.bufSlice(40)
-			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data[:%d]=%v, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
-				v.boundCursorHandle, v.boundPos, m, bufSlice,
+			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data=%s, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
+				v.boundCursorHandle, v.boundPos, v.printBufSlice(),
 				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
 				allElts, pActElts)
 		}
@@ -1076,27 +1075,54 @@ func (v *Variable) internalBind() (err error) {
 	return
 }
 
-func (v Variable) bufSlice(max int) (interface{}, int) {
-	m := int(v.bufferSize)
-	if m > max {
-		m = max
-	}
+func (v Variable) printBufSlice() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+	buf.WriteByte('[')
+	var zero int
 	switch {
 	case v.dataInts != nil:
-		if m > len(v.dataInts) {
-			m = len(v.dataInts)
+		for _, i := range v.dataInts {
+			if i == 0 {
+				zero++
+				continue
+			}
+			if i != 0 && zero != 0 {
+				fmt.Fprintf(buf, "%d*0 ", zero)
+				zero = 0
+			}
+			fmt.Fprintf(buf, "%d ", i)
 		}
-		return v.dataInts[:m], m
 	case v.dataFloats != nil:
-		if m > len(v.dataFloats) {
-			m = len(v.dataFloats)
+		for _, f := range v.dataFloats {
+			if f == 0 {
+				zero++
+				continue
+			}
+			if f != 0 && zero != 0 {
+				fmt.Fprintf(buf, "%d*0 ", zero)
+				zero = 0
+			}
+			fmt.Fprintf(buf, "%.3f ", f)
 		}
-		return v.dataFloats[:m], m
+	default:
+		for _, b := range v.dataBytes {
+			if b == 0 {
+				zero++
+				continue
+			}
+			if b != 0 && zero != 0 {
+				fmt.Fprintf(buf, "%d*0 ", zero)
+				zero = 0
+			}
+			fmt.Fprintf(buf, "%x ", b)
+		}
 	}
-	if m > len(v.dataBytes) {
-		m = len(v.dataBytes)
+	if zero > 0 {
+		fmt.Fprintf(buf, "%d*0 ", zero)
 	}
-	return v.dataBytes[:m], m
+	b := buf.Bytes()
+	b[len(b)-1] = ']'
+	return string(b)
 }
 
 // unbind undoes the binding
@@ -1409,8 +1435,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	}
 	if IsDebug {
 		defer func() {
-			bufSlice, m := v.bufSlice(40)
-			Log.Debug("SetValue result", "value", value, "bufSlice", bufSlice, "len", m)
+			Log.Debug("SetValue result", "value", value, "bufSlice", v.printBufSlice())
 		}()
 	}
 	rval := reflect.ValueOf(value)
