@@ -848,6 +848,20 @@ static udt_Variable *Variable_NewByOutputTypeHandler(
 
 func (v *Variable) aLrC() (indic unsafe.Pointer, aL *C.ACTUAL_LENGTH_TYPE, rC *C.ub2) {
 	indic = unsafe.Pointer(&v.indicator[0])
+	if v.allocatedElements < 1 {
+		return
+	}
+	debug("aLrC aE=%d aL=%v rC=%v array?%t", v.allocatedElements, v.actualLength, v.returnCode, v.isArray)
+	// if this is skipped, then we see ORA-1459 everywhere
+	if !(len(v.actualLength) > 0 && len(v.returnCode) > 0) {
+		return
+	}
+	if i := int(v.allocatedElements) - len(v.actualLength); i > 0 {
+		v.actualLength = append(v.actualLength, make([]C.ub4, i)...)
+	}
+	if i := int(v.allocatedElements) - len(v.returnCode); i > 0 {
+		v.returnCode = append(v.returnCode, make([]C.ub2, i)...)
+	}
 	if len(v.actualLength) > 0 && len(v.returnCode) > 0 {
 		aL = &v.actualLength[0]
 		rC = &v.returnCode[0]
