@@ -887,7 +887,7 @@ func (cur *Cursor) performBind() (err error) {
 	// set values and perform binds for all bind variables
 	if cur.bindVarsMap != nil {
 		for k, v := range cur.bindVarsMap {
-			if err = v.Bind(cur, k, 1); err != nil {
+			if err = v.Bind(cur, k, 0); err != nil {
 				return errgo.Mask(err)
 			}
 		}

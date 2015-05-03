@@ -68,7 +68,7 @@ func stringVarInitialize(v *Variable, cur *Cursor) error {
 // Set the value of the variable.
 func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 	if value == nil {
-		v.actualLength[pos] = C.ACTUAL_LENGTH_TYPE(0)
+		v.actualLength[pos] = 0
 		return nil
 	}
 	var (
@@ -131,7 +131,7 @@ func stringVarSetValue(v *Variable, pos uint, value interface{}) (err error) {
 	v.actualLength[pos] = C.ACTUAL_LENGTH_TYPE(length)
 	if length > 0 {
 		debug("copy(%p.dataBytes[bufSize=%d * pos=%d:], %v)", v, v.bufferSize, pos, buf)
-		copy(v.dataBytes[int(v.bufferSize*pos):int(v.bufferSize*pos)+length], buf)
+		copy(v.dataBytes[int(v.bufferSize*pos):], buf)
 	}
 
 	return nil
