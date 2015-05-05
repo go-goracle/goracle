@@ -31,6 +31,7 @@ static void setHandle(void *data, void *src, size_t count) {
 import "C"
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"reflect"
@@ -847,6 +848,20 @@ static udt_Variable *Variable_NewByOutputTypeHandler(
 
 func (v *Variable) aLrC() (indic unsafe.Pointer, aL *C.ACTUAL_LENGTH_TYPE, rC *C.ub2) {
 	indic = unsafe.Pointer(&v.indicator[0])
+	if v.allocatedElements < 1 {
+		return
+	}
+	debug("aLrC aE=%d aL=%v rC=%v array?%t", v.allocatedElements, v.actualLength, v.returnCode, v.isArray)
+	// if this is skipped, then we see ORA-1459 everywhere
+	if !(len(v.actualLength) > 0 && len(v.returnCode) > 0) {
+		return
+	}
+	if i := int(v.allocatedElements) - len(v.actualLength); i > 0 {
+		v.actualLength = append(v.actualLength, make([]C.ub4, i)...)
+	}
+	if i := int(v.allocatedElements) - len(v.returnCode); i > 0 {
+		v.returnCode = append(v.returnCode, make([]C.ub2, i)...)
+	}
 	if len(v.actualLength) > 0 && len(v.returnCode) > 0 {
 		aL = &v.actualLength[0]
 		rC = &v.returnCode[0]
@@ -987,6 +1002,8 @@ func (cur *Cursor) varDefine(numElements, position uint) (*Variable, error) {
 }
 
 // Allocate a variable and bind it to the given statement.
+//
+// For details, see http://docs.oracle.com/database/121/LNOCI/oci16rel003.htm#LNOCI72805
 func (v *Variable) internalBind() (err error) {
 	if CTrace {
 		ctrace("%s.internalBind", v)
@@ -1007,13 +1024,12 @@ func (v *Variable) internalBind() (err error) {
 	if v.boundName != "" {
 		bname := []byte(v.boundName)
 		if CTrace {
-			bufSlice, m := v.bufSlice(40)
-			ctrace("internalBind.OCIBindByName(cur=%p, bind=%p, env=%p, name=%q, bufferSize=%d, oracleType=%d, data[:%d]=%v, indicator=%v, aL=%v, rC=%v, allElts=%v, pActElts=%v, DEFAULT)",
+			ctrace("internalBind.OCIBindByName(cur=%p, bind=%p, env=%p, name=%q, bufferSize=%d, oracleType=%d, data=%s, indicator=%v, aL=%v, rC=%v, allElts=%v, actElts=%v, DEFAULT)",
 				v.boundCursorHandle, &v.bindHandle,
 				v.environment.errorHandle, bname,
-				v.bufferSize, v.typ.oracleType, m, bufSlice,
-				v.indicator, aL, rC,
-				allElts, pActElts)
+				v.bufferSize, v.typ.oracleType, v.printBufSlice(),
+				v.indicator, v.actualLength, v.returnCode,
+				allElts, v.actualElements)
 		}
 		bindName = fmt.Sprintf("%q", bname)
 		status = C.OCIBINDBYNAME(v.boundCursorHandle,
@@ -1025,11 +1041,11 @@ func (v *Variable) internalBind() (err error) {
 			allElts, pActElts, C.OCI_DEFAULT)
 	} else {
 		if CTrace {
-			bufSlice, m := v.bufSlice(40)
-			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data[:%d]=%v, bufSize=%d, oracleType=%d, indicator=%v, actLen=%v, rc=%p, allElts=%p pActElts=%p)",
-				v.boundCursorHandle, v.boundPos, m, bufSlice,
-				v.bufferSize, v.typ.oracleType, v.indicator, aL, rC,
-				allElts, pActElts)
+			ctrace("internalBind.OCIBindByPos(cur=%p, boundPos=%d, data=%s, bufSize=%d, oracleType=%d, indicator=%v, aL=%v, rC=%v, allElts=%v actElts=%v)",
+				v.boundCursorHandle, v.boundPos, v.printBufSlice(),
+				v.bufferSize, v.typ.oracleType,
+				v.indicator, v.actualLength, v.returnCode,
+				allElts, v.actualElements)
 		}
 		bindName = fmt.Sprintf("%d", v.boundPos)
 		status = C.OCIBINDBYPOS(v.boundCursorHandle, &v.bindHandle,
@@ -1047,7 +1063,8 @@ func (v *Variable) internalBind() (err error) {
 		if err = v.environment.AttrSet(
 			unsafe.Pointer(v.bindHandle), C.OCI_HTYPE_BIND,
 			C.OCI_ATTR_CHARSET_FORM, unsafe.Pointer(&v.typ.size),
-			C.sizeof_ub4); err != nil {
+			C.sizeof_ub4,
+		); err != nil {
 			err = errgo.Mask(err)
 			return
 		}
@@ -1055,7 +1072,8 @@ func (v *Variable) internalBind() (err error) {
 		if err = v.environment.AttrSet(
 			unsafe.Pointer(v.bindHandle), C.OCI_HTYPE_BIND,
 			C.OCI_ATTR_MAXDATA_SIZE, unsafe.Pointer(&v.bufferSize),
-			C.sizeof_ub4); err != nil {
+			C.sizeof_ub4,
+		); err != nil {
 			err = errgo.Mask(err)
 			return
 		}
@@ -1076,27 +1094,54 @@ func (v *Variable) internalBind() (err error) {
 	return
 }
 
-func (v Variable) bufSlice(max int) (interface{}, int) {
-	m := int(v.bufferSize)
-	if m > max {
-		m = max
-	}
+func (v Variable) printBufSlice() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+	buf.WriteByte('[')
+	var zero int
 	switch {
 	case v.dataInts != nil:
-		if m > len(v.dataInts) {
-			m = len(v.dataInts)
+		for _, i := range v.dataInts {
+			if i == 0 {
+				zero++
+				continue
+			}
+			if i != 0 && zero != 0 {
+				fmt.Fprintf(buf, "%d*0 ", zero)
+				zero = 0
+			}
+			fmt.Fprintf(buf, "%d ", i)
 		}
-		return v.dataInts[:m], m
 	case v.dataFloats != nil:
-		if m > len(v.dataFloats) {
-			m = len(v.dataFloats)
+		for _, f := range v.dataFloats {
+			if f == 0 {
+				zero++
+				continue
+			}
+			if f != 0 && zero != 0 {
+				fmt.Fprintf(buf, "%d*0 ", zero)
+				zero = 0
+			}
+			fmt.Fprintf(buf, "%.3f ", f)
 		}
-		return v.dataFloats[:m], m
+	default:
+		for _, b := range v.dataBytes {
+			if b == 0 {
+				zero++
+				continue
+			}
+			if b != 0 && zero != 0 {
+				fmt.Fprintf(buf, "%d*0 ", zero)
+				zero = 0
+			}
+			fmt.Fprintf(buf, "%x ", b)
+		}
 	}
-	if m > len(v.dataBytes) {
-		m = len(v.dataBytes)
+	if zero > 0 {
+		fmt.Fprintf(buf, "%d*0 ", zero)
 	}
-	return v.dataBytes[:m], m
+	b := buf.Bytes()
+	b[len(b)-1] = ']'
+	return string(b)
 }
 
 // unbind undoes the binding
@@ -1350,7 +1395,13 @@ func (v *Variable) setSingleValue(arrayPos uint, value interface{}) error {
 	if v.typ.isVariableLength {
 		v.returnCode[arrayPos] = 0
 	}
-	return errgo.Mask(v.typ.setValue(v, arrayPos, value))
+	if err := v.typ.setValue(v, arrayPos, value); err != nil {
+		return errgo.Mask(err)
+	}
+	if v.actualElements <= C.ub4(arrayPos) {
+		v.actualElements = C.ub4(arrayPos + 1)
+	}
+	return nil
 }
 
 // setArrayValue sets all of the array values for the variable.
@@ -1409,8 +1460,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	}
 	if IsDebug {
 		defer func() {
-			bufSlice, m := v.bufSlice(40)
-			Log.Debug("SetValue result", "value", value, "bufSlice", bufSlice, "len", m)
+			Log.Debug("SetValue result", "value", value, "bufSlice", v.printBufSlice())
 		}()
 	}
 	rval := reflect.ValueOf(value)
@@ -1424,7 +1474,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		v.destination = reflect.ValueOf(nil)
 	}
 	if v.isArray {
-		debug("SetValue on array", "value", value)
+		debug("SetValue on array(%#v)", value)
 		if rval.Kind() == reflect.Slice {
 			if arrayPos > 0 {
 				return errgo.New("arrays of arrays are not supported by the OCI")
@@ -1434,9 +1484,6 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 			}
 			return v.setArrayReflectValue(rval)
 		}
-		debug("setSingleValue", "pos", arrayPos, "value", value)
-		return v.setSingleValue(arrayPos, value)
-		//return fmt.Errorf("%v is %T, not array!", value, value)
 	}
 	debug("calling %s.setValue(%d, %v (%T))", v.typ, arrayPos, value, value)
 	return v.setSingleValue(arrayPos, value)

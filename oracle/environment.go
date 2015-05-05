@@ -117,9 +117,12 @@ func NewEnvironment() (*Environment, error) {
 
 	if CsIDAl32UTF8 == 0 {
 		// create the new environment handle
-		if err = checkStatus(C.OCIEnvNlsCreate(&env.handle,
-			C.OCI_DEFAULT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil, 0, 0),
-			false); err != nil { //, C.ub2(873), 0),
+		if err = checkStatus(
+			C.OCIEnvNlsCreate(&env.handle, C.OCI_DEFAULT|C.OCI_THREADED,
+				nil, nil, nil, nil, 0, nil,
+				0, 0),
+			false,
+		); err != nil { //, C.ub2(873), 0),
 			setErrAt(err, "Unable to acquire Oracle environment handle")
 			return nil, err
 		}
@@ -129,9 +132,12 @@ func NewEnvironment() (*Environment, error) {
 		C.OCIHandleFree(unsafe.Pointer(&env.handle), C.OCI_HTYPE_ENV)
 		// Log.Debug("Env", "csid", CsIDAl32UTF8)
 	}
-	if err = checkStatus(C.OCIEnvNlsCreate(
-		&env.handle, C.OCI_DEFAULT|C.OCI_THREADED, nil, nil, nil, nil, 0, nil,
-		CsIDAl32UTF8, CsIDAl32UTF8), false); err != nil {
+	if err = checkStatus(
+		C.OCIEnvNlsCreate(&env.handle, C.OCI_DEFAULT|C.OCI_THREADED,
+			nil, nil, nil, nil, 0, nil,
+			CsIDAl32UTF8, CsIDAl32UTF8),
+		false,
+	); err != nil {
 		setErrAt(err, "Unable to acquire Oracle environment handle with AL32UTF8 charset")
 		return nil, err
 	}
@@ -140,7 +146,8 @@ func NewEnvironment() (*Environment, error) {
 	// create the error handle
 	if err = ociHandleAlloc(unsafe.Pointer(env.handle),
 		C.OCI_HTYPE_ERROR, (*unsafe.Pointer)(unsafe.Pointer(&env.errorHandle)),
-		"env.errorHandle"); err != nil || env.handle == nil {
+		"env.errorHandle",
+	); err != nil || env.handle == nil {
 		return nil, err
 	}
 
@@ -148,7 +155,8 @@ func NewEnvironment() (*Environment, error) {
 	// acquire max bytes per character
 	if err = env.CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
 		env.errorHandle, &sb4, C.OCI_NLS_CHARSET_MAXBYTESZ),
-		"Environment_New(): get max bytes per character"); err != nil {
+		"Environment_New(): get max bytes per character",
+	); err != nil {
 		return nil, errgo.Mask(err)
 	}
 	env.MaxBytesPerCharacter = uint(sb4)
@@ -158,7 +166,8 @@ func NewEnvironment() (*Environment, error) {
 	// acquire whether character set is fixed width
 	if err = env.CheckStatus(C.OCINlsNumericInfoGet(unsafe.Pointer(env.handle),
 		env.errorHandle, &sb4, C.OCI_NLS_CHARSET_FIXEDWIDTH),
-		"Environment_New(): determine if charset fixed width"); err != nil {
+		"Environment_New(): determine if charset fixed width",
+	); err != nil {
 		return nil, errgo.Mask(err)
 	}
 	env.FixedWidth = sb4 > 0
