@@ -66,8 +66,8 @@ func TestTable(t *testing.T) {
 func insertArray(t *testing.T, cur *Cursor, small []int, text []string) bool {
 	qry := []string{
 		`INSERT INTO ` + tbl + ` (F_text) VALUES (:text)`,
-		`INSERT INTO ` + tbl + ` (F_small) VALUES (:small)`,
-		`INSERT INTO ` + tbl + ` (F_small, F_text) VALUES (:small, :text)`,
+		`INSERT INTO ` + tbl + ` (F_int) VALUES (:small)`,
+		`INSERT INTO ` + tbl + ` (F_int, F_text) VALUES (:small, :text)`,
 	}
 	params := make([][]map[string]interface{}, 3)
 

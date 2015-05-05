@@ -1474,7 +1474,7 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 		v.destination = reflect.ValueOf(nil)
 	}
 	if v.isArray {
-		debug("SetValue on array", "value", value)
+		debug("SetValue on array(%#v)", value)
 		if rval.Kind() == reflect.Slice {
 			if arrayPos > 0 {
 				return errgo.New("arrays of arrays are not supported by the OCI")

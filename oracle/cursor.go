@@ -1556,6 +1556,10 @@ func (cur *Cursor) ExecuteMany(statement string, params []map[string]interface{}
 			return errgo.Mask(err)
 		}
 	}
+	// Simple hack for issue #2: ExecuteMany can work only with non-array binds
+	for _, v := range cur.bindVarsMap {
+		v.isArray = false
+	}
 	if err = cur.performBind(); err != nil {
 		return errgo.Mask(err)
 	}
