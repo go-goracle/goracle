@@ -18,7 +18,6 @@ package oracle
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -566,7 +565,7 @@ END;`, BlobVarType},
 			t.Errorf("%d. cannot get out value: %s", i, err)
 			t.FailNow()
 		}
-		log.Printf("%d. outVal: %T %s", i, outVal, outVal)
+		t.Logf("%d. outVal: %T %s", i, outVal, outVal)
 		ext, ok := outVal.(*ExternalLobVar)
 		if !ok {
 			t.Errorf("%d. outVal is not *ExternalLobVar, but %T", i, outVal)
