@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strconv"
 	"time"
 	"unsafe"
 
@@ -1262,7 +1263,7 @@ func (v *Variable) getSingleValueInto(dest interface{}, arrayPos uint) error {
 		isNull = v.indicator[arrayPos] == C.OCI_IND_NULL
 	}
 	if isNull {
-		debug("getSingleValueInto NULL", "dest", dest, "pos", arrayPos)
+		debug("getSingleValueInto NULL (dest=%T, pos=%d)", dest, arrayPos)
 
 		var val reflect.Value
 		switch v.typ {
@@ -1278,7 +1279,7 @@ func (v *Variable) getSingleValueInto(dest interface{}, arrayPos uint) error {
 			val = reflect.ValueOf("")
 		}
 		//d.Elem().Set(reflect.Zero(d.Type()))
-		d.Elem().Set(val)
+		d.Elem().Set(val.Convert(d.Elem().Type()))
 		return nil
 	}
 
@@ -1553,6 +1554,13 @@ func reflectSet(dest, val interface{}) {
 		case int64:
 			*x = int32(y)
 			return
+		case string:
+			i, err := strconv.ParseInt(y, 10, 32)
+			if err != nil {
+				panic(err)
+			}
+			*x = int32(i)
+			return
 		}
 	case *int64:
 		switch y := val.(type) {
@@ -1562,14 +1570,65 @@ func reflectSet(dest, val interface{}) {
 		case int64:
 			*x = y
 			return
+		case string:
+			var err error
+			if *x, err = strconv.ParseInt(y, 10, 64); err != nil {
+				panic(err)
+			}
+			return
+		}
+	case *float64:
+		switch y := val.(type) {
+		case int32:
+			*x = float64(y)
+			return
+		case float32:
+			*x = float64(y)
+			return
+		case float64:
+			*x = y
+			return
+		case string:
+			var err error
+			if *x, err = strconv.ParseFloat(y, 64); err != nil {
+				panic(err)
+			}
+			return
 		}
 	}
+	Log.Debug("reflectSet", "dest", fmt.Sprintf("%T", dest), "val", fmt.Sprintf("%T", val))
 
+	destKind := destV.Elem().Kind()
 	switch valV.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		destV.Elem().SetInt(valV.Int())
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		destV.Elem().SetUint(valV.Uint())
+	case reflect.Float32, reflect.Float64:
+		destV.Elem().SetFloat(valV.Float())
+	case reflect.String:
+		switch destKind {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			i, err := strconv.ParseInt(valV.String(), 10, 64)
+			if err != nil {
+				panic(err)
+			}
+			destV.Elem().SetInt(i)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			u, err := strconv.ParseUint(valV.String(), 10, 64)
+			if err != nil {
+				panic(err)
+			}
+			destV.Elem().SetUint(u)
+		case reflect.Float32, reflect.Float64:
+			f, err := strconv.ParseFloat(valV.String(), 64)
+			if err != nil {
+				panic(err)
+			}
+			destV.Elem().SetFloat(f)
+		default:
+			destV.Elem().Set(valV.Convert(destV.Elem().Type()))
+		}
 	default:
 		destV.Elem().Set(valV.Convert(destV.Elem().Type()))
 	}
