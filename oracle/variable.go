@@ -857,7 +857,7 @@ func (v *Variable) aLrC() (indic unsafe.Pointer, aL *C.ACTUAL_LENGTH_TYPE, rC *C
 		return
 	}
 	if i := int(v.allocatedElements) - len(v.actualLength); i > 0 {
-		v.actualLength = append(v.actualLength, make([]C.ub4, i)...)
+		v.actualLength = append(v.actualLength, make([]C.ACTUAL_LENGTH_TYPE, i)...)
 	}
 	if i := int(v.allocatedElements) - len(v.returnCode); i > 0 {
 		v.returnCode = append(v.returnCode, make([]C.ub2, i)...)
@@ -1466,9 +1466,11 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	rval := reflect.ValueOf(value)
 	if rval.Kind() == reflect.Ptr && !rval.IsNil() {
 		v.destination = rval
-		rval = rval.Elem()
-		if rval.IsValid() {
-			value = rval.Interface()
+		if _, ok := value.(*Cursor); !ok {
+			rval = rval.Elem()
+			if rval.IsValid() {
+				value = rval.Interface()
+			}
 		}
 	} else if v.destination.IsValid() {
 		v.destination = reflect.ValueOf(nil)
@@ -1531,6 +1533,14 @@ func reflectSet(dest, val interface{}) {
 	}
 
 	val, valV = getV(val)
+
+	if v, ok := val.(*Cursor); ok {
+		if d, ok := dest.(*Cursor); ok {
+			*v = *d
+			return
+		}
+	}
+
 	switch x := dest.(type) {
 	case *interface{}:
 		*x = val
