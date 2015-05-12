@@ -192,9 +192,6 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 		if len(block) == batchLen {
 			blocks <- block
 			block = nil
-			if atomic.LoadInt32(rowCount) > 20000 {
-				break
-			}
 		}
 	}
 	if len(block) > 0 {
