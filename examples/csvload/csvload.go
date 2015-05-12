@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
 	"encoding/csv"
 	"flag"
@@ -28,6 +29,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/tgulacsi/go/term"
 	"github.com/tgulacsi/go/text"
@@ -38,7 +40,7 @@ import (
 
 var Log = log15.New()
 
-const batchLen = 1000
+const batchLen = 16
 
 func main() {
 	Log.SetHandler(log15.StderrHandler)
@@ -73,7 +75,7 @@ func main() {
 	r := io.Reader(fh)
 	if enc != nil {
 		Log.Debug("NewReader", "encoding", enc)
-		r = text.NewReader(r, enc)
+		r = text.NewReader(bufio.NewReaderSize(r, 1<<20), enc)
 	}
 
 	if *flagTruncate {
@@ -87,7 +89,7 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	cr := csv.NewReader(r)
+	cr := csv.NewReader(bufio.NewReaderSize(r, 16<<20))
 	cr.Comma = ([]rune(*flagSep))[0]
 	cr.TrimLeadingSpace = true
 	cr.LazyQuotes = true
@@ -114,7 +116,7 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 	conc := runtime.GOMAXPROCS(-1)
 	blocks := make(chan [][]string, conc)
 	errs := make(chan error, conc)
-	var rowCount int32
+	rowCount := new(int32)
 
 	R := func(f func() error) {
 		defer wg.Done()
@@ -151,16 +153,17 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 						return fmt.Errorf("error inserting %q with %q: %v", row, qry, err)
 					}
 					n++
-					if n%batchLen == 0 {
+					atomic.AddInt32(rowCount, 1)
+					if n%1000 == 0 {
 						if err = tx.Commit(); err != nil {
 							return err
 						}
 						tx = nil
-						Log.Info("commit", "n", n, "rowCount", atomic.AddInt32(&rowCount, batchLen))
+						Log.Info("commit", "n", n, "rowCount", atomic.LoadInt32(rowCount))
 					}
 				}
-				Log.Info("commit", "n", n, "rowCount", atomic.AddInt32(&rowCount, int32(n%batchLen)))
 			}
+			Log.Info("commit", "n", n, "rowCount", atomic.LoadInt32(rowCount))
 			if st != nil {
 				st.Close()
 			}
@@ -172,6 +175,7 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 	}
 
 	var block [][]string
+	t := time.Now()
 	for {
 		row, err := cr.Read()
 		if err != nil {
@@ -188,6 +192,9 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 		if len(block) == batchLen {
 			blocks <- block
 			block = nil
+			if atomic.LoadInt32(rowCount) > 20000 {
+				break
+			}
 		}
 	}
 	if len(block) > 0 {
@@ -195,6 +202,9 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 	}
 	close(blocks)
 	wg.Wait()
+	n, d := atomic.LoadInt32(rowCount), time.Since(t)
+	fmt.Fprintf(os.Stderr, "Written %d rows under %s: %.3f rows/sec\n",
+		n, d, float64(n)/float64(d/time.Second))
 	close(errs)
 	for err := range errs {
 		if err == nil {
