@@ -1,5 +1,4 @@
 /*
-
    Copyright 2013 Tamás Gulácsi
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +27,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/tgulacsi/go/term"
 	"github.com/tgulacsi/go/text"
@@ -37,6 +37,8 @@ import (
 )
 
 var Log = log15.New()
+
+const batchLen = 1000
 
 func main() {
 	Log.SetHandler(log15.StderrHandler)
@@ -80,6 +82,10 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	if os.Getenv("GOMAXPROCS") == "" {
+		Log.Info("Setting GOMAXPROCS", "numCPU", runtime.NumCPU())
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
 
 	cr := csv.NewReader(r)
 	cr.Comma = ([]rune(*flagSep))[0]
@@ -105,14 +111,18 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 	Log.Info("insert", "qry", qry)
 
 	var wg sync.WaitGroup
-	blocks := make(chan [][]string, 4)
 	conc := runtime.GOMAXPROCS(-1)
+	blocks := make(chan [][]string, conc)
 	errs := make(chan error, conc)
+	var rowCount int32
 
+	R := func(f func() error) {
+		defer wg.Done()
+		errs <- f()
+	}
 	for i := 0; i < conc; i++ {
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		go R(func() error {
 			var (
 				tx *sql.Tx
 				st *sql.Stmt
@@ -131,36 +141,34 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 							st = nil
 						}
 						if tx, err = db.Begin(); err != nil {
-							errs <- err
-							return
+							return err
 						}
 						if st, err = tx.Prepare(qry); err != nil {
-							errs <- err
-							return
+							return err
 						}
 					}
 					if _, err = st.Exec(values...); err != nil {
-						errs <- fmt.Errorf("error inserting %q with %q: %v", row, qry, err)
-						return
+						return fmt.Errorf("error inserting %q with %q: %v", row, qry, err)
 					}
 					n++
-					if n%1000 == 0 {
-						Log.Info("commit", "n", n)
+					if n%batchLen == 0 {
 						if err = tx.Commit(); err != nil {
-							errs <- err
-							return
+							return err
 						}
 						tx = nil
+						Log.Info("commit", "n", n, "rowCount", atomic.AddInt32(&rowCount, batchLen))
 					}
 				}
+				Log.Info("commit", "n", n, "rowCount", atomic.AddInt32(&rowCount, int32(n%batchLen)))
 			}
 			if st != nil {
 				st.Close()
 			}
 			if tx != nil {
-				errs <- tx.Commit()
+				return tx.Commit()
 			}
-		}()
+			return nil
+		})
 	}
 
 	var block [][]string
@@ -174,10 +182,10 @@ func load(db *sql.DB, tbl string, cr *csv.Reader) error {
 			continue
 		}
 		if block == nil {
-			block = make([][]string, 0, 1000)
+			block = make([][]string, 0, batchLen)
 		}
 		block = append(block, row)
-		if len(block) == 1000 {
+		if len(block) == batchLen {
 			blocks <- block
 			block = nil
 		}
