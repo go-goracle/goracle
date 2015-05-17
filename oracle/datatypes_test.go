@@ -18,7 +18,6 @@ package oracle
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -45,7 +44,7 @@ var dataTypesTests = []struct {
 	{"SELECT 9999999999 FROM DUAL", "9999999999"},
 	{"SELECT -1/4 FROM DUAL", "-.25"},
 	{"SELECT TO_DATE('2011-12-13 14:15:16', 'YYYY-MM-DD HH24:MI:SS') FROM DUAL",
-		"2011-12-13 14:15:16"},
+		"2011-12-13T14:15:16+01:00"},
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
 	{"SELECT NULL FROM DUAL", "%!s(<nil>)"},
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
@@ -79,25 +78,28 @@ func TestSimpleTypes(t *testing.T) {
 	for i, tt := range dataTypesTests {
 		if err = cur.Execute(tt.in, nil, nil); err != nil {
 			t.Errorf("error executing `%s`: %s", tt.in, err)
-		} else {
-			if row, err = cur.FetchOne(); err != nil {
-				t.Errorf("cannot fetch row (%q): %s", tt.in, err)
-			} else {
-				if ex, ok := row[0].(*ExternalLobVar); ok {
-					var reprB []byte
-					if reprB, err = ex.ReadAll(); err != nil {
-						t.Errorf("error reading LOB %s: %s", ex, err)
-					}
-					repr = "string(" + string(reprB) + ")"
-				} else {
-					repr = fmt.Sprintf("%s", row[0])
-				}
-				if repr != tt.out {
-					if !(strings.Contains(tt.in, "TO_DATE(") && strings.HasPrefix(repr, tt.out)) {
-						t.Errorf("%d. exec(%q) => %q (%#v), want %q", i, tt.in, row[0], repr, tt.out)
-					}
-				}
+			continue
+		}
+		if row, err = cur.FetchOne(); err != nil {
+			t.Errorf("cannot fetch row (%q): %s", tt.in, err)
+			continue
+		}
+		t.Logf("%d. got %#v", i, row)
+		if ti, ok := row[0].(time.Time); ok {
+			repr = ti.Format(time.RFC3339[:len(tt.out)])
+		} else if ex, ok := row[0].(*ExternalLobVar); ok {
+			var reprB []byte
+			if reprB, err = ex.ReadAll(); err != nil {
+				t.Errorf("error reading LOB %s: %s", ex, err)
 			}
+			repr = "string(" + string(reprB) + ")"
+		} else {
+			repr = fmt.Sprintf("%s", row[0])
+		}
+		if repr != tt.out {
+			//if !(strings.Contains(tt.in, "TO_DATE(") && strings.HasPrefix(repr, tt.out)) {
+			t.Errorf("%d. exec(%q) got %q (%#v), want %q.", i, tt.in, row[0], repr, tt.out)
+			//}
 		}
 	}
 }
