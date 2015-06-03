@@ -31,6 +31,47 @@ import (
 
 var fDsn = flag.String("dsn", "", "Oracle DSN")
 
+func Test_open_cursors(t *testing.T) {
+	conn := getConnection(t)
+	defer conn.Close()
+	var before, after int
+
+	// This needs "GRANT SELECT ANY DICTIONARY TO test"
+	// or at least "GRANT SELECT ON v_$mystat TO test".
+	if err := conn.QueryRow("select value from v$mystat where statistic#=4").Scan(&before); err != nil {
+		t.Skip(err)
+	}
+	rounds := 100
+	for i := 0; i < rounds; i++ {
+		func() {
+			stmt, err := conn.Prepare("SELECT 1 FROM user_objects WHERE ROWNUM < 100")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stmt.Close()
+			rows, err := stmt.Query()
+			if err != nil {
+				t.Errorf("ERROR SELECT: %v", err)
+				return
+			}
+			defer rows.Close()
+			j := 0
+			for rows.Next() {
+				j++
+			}
+			t.Logf("%d objects, error=%v", j, rows.Err())
+		}()
+	}
+	if err := conn.QueryRow("select value from v$mystat where statistic#=4").Scan(&after); err != nil {
+		t.Skip(err)
+	}
+	if after-before >= rounds {
+		t.Errorf("ERROR before=%d after=%d, awaited less than %d increment!", before, after, rounds)
+		return
+	}
+	t.Logf("before=%d after=%d", before, after)
+}
+
 func TestNull(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
