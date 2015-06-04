@@ -24,6 +24,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"gopkg.in/errgo.v1"
@@ -247,6 +248,7 @@ func (r rowsRes) Next(dest []driver.Value) error {
 type Driver struct {
 	// Defaults
 	user, passwd, db string
+	sync.Mutex
 
 	initCmds   []string
 	autocommit bool
@@ -258,10 +260,12 @@ type Driver struct {
 //
 // SID (database identifier) can be a DSN (see goracle/oracle.MakeDSN)
 func (d *Driver) Open(uri string) (driver.Conn, error) {
+	d.Lock()
 	d.user, d.passwd, d.db = oracle.SplitDSN(uri)
 
 	// Establish the connection
 	cx, err := oracle.NewConnection(d.user, d.passwd, d.db, d.autocommit)
+	d.Unlock()
 	if err == nil {
 		err = cx.Connect(0, false)
 	}

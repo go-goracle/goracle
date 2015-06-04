@@ -1897,13 +1897,11 @@ func (cur *Cursor) getNext() error {
 	return io.EOF
 }
 
-var statementTagHash = fnv.New64a()
-
 func hashTag(tag []byte) []byte {
-	statementTagHash.Reset()
-	statementTagHash.Write(tag)
+	hsh := fnv.New64a()
+	hsh.Write(tag)
 	// hsh := statementTagHash.Sum(nil)
 	// debug("hashTag(%s[%d])=%s[%d]", tag, len(tag), hsh, len(hsh))
 	// return hsh
-	return statementTagHash.Sum(make([]byte, 0, 8))
+	return hsh.Sum(make([]byte, 0, hsh.Size()))
 }
