@@ -1467,7 +1467,9 @@ func (v *Variable) SetValue(arrayPos uint, value interface{}) error {
 	rval := reflect.ValueOf(value)
 	if rval.Kind() == reflect.Ptr && !rval.IsNil() {
 		v.destination = rval
-		if _, ok := value.(*Cursor); !ok {
+		switch value.(type) {
+		case *Cursor, *ExternalLobVar:
+		default:
 			rval = rval.Elem()
 			if rval.IsValid() {
 				value = rval.Interface()
