@@ -1597,6 +1597,11 @@ func reflectSet(dest, val interface{}) {
 			}
 			return
 		}
+	case *ExternalLobVar:
+		if y, ok := val.(*ExternalLobVar); ok {
+			*x = *y
+			return
+		}
 	}
 	Log.Debug("reflectSet", "dest", fmt.Sprintf("%T", dest), "val", fmt.Sprintf("%T", val))
 
