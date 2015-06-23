@@ -1773,3 +1773,12 @@ static PyObject *Variable_Repr(
     return result;
 }
 */
+func (v Variable) AllocatedElements() uint {
+	return v.allocatedElements
+}
+func (v Variable) Size() uint {
+	return v.size
+}
+func (v Variable) IsArray() bool {
+	return v.isArray
+}
