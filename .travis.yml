@@ -5,8 +5,10 @@ go:
     - 1.4.2
       #- tip
 env:
-    - secure: "YkNq7PZEUYh4JRtEjYXXynKwKxlhpHbtOv48sJHtMNjjyZp3WSultA/RkWdy8OcqfkERDPKEDKYNyX4M10BLQbLcpd0l6NKZqklqwtHjEbXh2Ty4mWDOSukBRMot+fZqBHO8BZrOEWFCyUoI6R4kigVBKfq4H+JH3KVASvsSQdU="
-before_install: 
+    # alias travis='docker run --rm -v $PWD:/repo -v ~/.travis:/travis andredumas/travis-ci-cli'
+    # travis encrypt -r tgulacsi/ora  'AWS_ACCESS_KEY_ID=...' 'AWS_SECRET_ACCESS_KEY=...+hMtiMhFbmUhu2zB+UyjUdGveIMvWBRIV' 'GO_ORA_DRV_TEST_DB=host:port/sid' GO_ORA_DRV_TEST_USERNAME=... GO_ORA_DRV_TEST_PASSWORD=...
+    - secure: "OksEWQRpzRuwmO3LkXfHk7DQWNUZgeI8iM2DJlCY7g/89gVCKMy4dUyuPAdnU7dYKXIb51KIpwgwM+iOHzRPKRt92CwM3A/lfqOLabZs0JuwOp1LTN9A3fLEU1nqfqyXeSA6+TMy1n3RWm80KCOrH/vwouSPJL3KFITci8jUE6g="
+before_install:
     - wget https://github.com/barnybug/s3/releases/download/1.0.0/s3-linux-amd64 && mv s3-linux-amd64 s3 && chmod +x s3
     - ./s3 get s3://tgulacsi-oracle-instantclient/
     - sudo apt-get install libaio1
@@ -22,4 +24,4 @@ before_script:
     - cd $HOME/gopath/src/gopkg.in/goracle.v1
     - go test -i . ./oracle/
 script:
-    - go test . ./oracle '-dsn=system/oracle@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=git.gthomas.eu)(PORT=49161)))(CONNECT_DATA=(SERVICE_NAME=xe)))'
+    - go test . ./oracle '-dsn=system/oracle@git.gthomas.eu:49161/xe'
