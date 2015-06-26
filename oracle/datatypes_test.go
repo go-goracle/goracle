@@ -104,6 +104,41 @@ func TestSimpleTypes(t *testing.T) {
 		}
 	}
 }
+func TestFloat(t *testing.T) {
+	conn := getConnection(t)
+	if !conn.IsConnected() {
+		t.FailNow()
+	}
+	defer conn.Close()
+
+	cur := conn.NewCursor()
+	defer cur.Close()
+	if oci, client, db, err := conn.NlsSettings(cur); err != nil {
+		t.Logf("NlsSettings: %s", err)
+	} else {
+		t.Logf("NLS oci=%s client=%s database=%s", oci, client, db)
+	}
+
+	v, err := cur.NewVariable(0, FloatVarType, 0)
+	if err != nil {
+		t.Fatalf("Error with NewVariable: %v", err)
+
+	}
+	err = v.SetValue(0, 0.5)
+	if err != nil {
+		t.Fatalf("Error with SetValue: %v", err)
+	}
+
+	vv, err := v.GetValue(0)
+	if err != nil {
+		t.Fatalf("Error with GetValue: %v", err)
+	}
+	t.Logf("got %v (%T)", vv, vv)
+	err = v.SetValue(0, vv)
+	if err != nil {
+		t.Fatalf("Error with SetValue: %v", err)
+	}
+}
 
 var bindsTests = []struct {
 	in  interface{}

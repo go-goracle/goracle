@@ -140,38 +140,47 @@ func (env *Environment) numberFromFloat(value float64, dst unsafe.Pointer) error
 }
 
 func numberVarformatForString(text string) string {
-	format := make([]byte, len(text))
-	rational := false
-	i := 0
-	if text[i] == '-' {
-		format[0] = '-'
-		i++
-	}
-	for ; i < len(text); i++ {
-		if !rational && text[i] == '.' {
-			format[i] = '.'
-			rational = true
-		}
-		format[i] = '9'
-	}
+	format := strings.Map(
+		func(r rune) rune {
+			switch r {
+			case '-', '.', ',':
+				return r
+			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+				return '9'
+			default:
+				return r
+			}
+		},
+		text)
 	if CTrace {
-		ctrace("numberVarformatFoString(%q)=%q", text, string(format))
+		ctrace("numberVarformatFoString(%q)=%q", text, format)
 	}
-	return string(format)
+	return format
 }
 
 // Set the value of the variable from a Python decimal.Decimal object.
 func (env *Environment) numberFromText(value string, dst unsafe.Pointer) error {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, ".") {
+		value = "0" + value
+	} else if strings.HasPrefix(value, "-.") {
+		value = "-0" + value[1:]
+	}
+
 	valuebuf := []byte(value)
 	formatbuf := []byte(numberVarformatForString(value))
-	return env.CheckStatus(
+	if err := env.CheckStatus(
 		C.OCINumberFromText(env.errorHandle,
 			(*C.oratext)(&valuebuf[0]), C.ub4(len(valuebuf)),
 			(*C.oratext)(&formatbuf[0]), C.ub4(len(formatbuf)),
 			(*C.oratext)(&env.nlsNumericCharactersBuffer[0]),
 			C.ub4(len(env.nlsNumericCharactersBuffer)),
 			(*C.OCINumber)(dst)),
-		"numberFromText")
+		"numberFromText",
+	); err != nil {
+		return errgo.Notef(err, "numberFromText(%q format=%q)", value, formatbuf)
+	}
+	return nil
 }
 
 // Set the value of the variable.
