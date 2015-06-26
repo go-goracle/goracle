@@ -18,6 +18,7 @@ package oracle
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,7 +45,7 @@ var dataTypesTests = []struct {
 	{"SELECT 9999999999 FROM DUAL", "9999999999"},
 	{"SELECT -1/4 FROM DUAL", "-.25"},
 	{"SELECT TO_DATE('2011-12-13 14:15:16', 'YYYY-MM-DD HH24:MI:SS') FROM DUAL",
-		"2011-12-13T14:15:16+01:00"},
+		"2011-12-13T14:15:16"},
 	{"SELECT 'AbraKA' FROM DUAL", "AbraKA"},
 	{"SELECT NULL FROM DUAL", "%!s(<nil>)"},
 	{"SELECT 'árvíztűrő tükörfúrógép' FROM DUAL", "árvíztűrő tükörfúrógép"},
@@ -97,9 +98,9 @@ func TestSimpleTypes(t *testing.T) {
 			repr = fmt.Sprintf("%s", row[0])
 		}
 		if repr != tt.out {
-			//if !(strings.Contains(tt.in, "TO_DATE(") && strings.HasPrefix(repr, tt.out)) {
-			t.Errorf("%d. exec(%q) got %q (%#v), want %q.", i, tt.in, row[0], repr, tt.out)
-			//}
+			if !(strings.Contains(tt.in, "TO_DATE(") && strings.HasPrefix(repr, tt.out)) {
+				t.Errorf("%d. exec(%q) got %q (%#v), want %q.", i, tt.in, row[0], repr, tt.out)
+			}
 		}
 	}
 }
