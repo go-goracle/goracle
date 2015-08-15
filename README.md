@@ -88,6 +88,9 @@ With InstantClient:
     CGO_CFLAGS=-I/usr/include/oracle/11.2/client64
     CGO_LDFLAGS=-L/usr/include/oracle/11.2/client64
 
+You may need to either set LD_LIBRARY_PATH to the path with `libclntsh.so`, or
+specify it in a file under /etc/ld.so.conf.d and call `sudo ldconfig`.
+
 ### RHEL 5 ###
 If your git is too old, gopkg.in may present too much hops. You can do
 
@@ -132,10 +135,10 @@ Set `CGO_LDFLAGS=-LC:\Oracle64Instant\sdk\lib`
 On Windows the library `libclntsh.so` does not exist.
 So change the line in _all_ the source files of `gopkg.in/goracle.v1/oracle`
 
-From 
+From
 ```#cgo LDFLAGS: -lclntsh```
 
-to 
+to
 ```#cgo LDFLAGS: -loci```
 
 Create the liboci.a file from the oci.dll by doing
