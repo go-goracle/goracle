@@ -18,7 +18,6 @@ package oracle
 
 /*
 
-#cgo LDFLAGS: -lclntsh
 
 #include <stdio.h>
 #include <string.h>
