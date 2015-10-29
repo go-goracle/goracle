@@ -18,6 +18,7 @@ package goracle
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -27,6 +28,8 @@ import (
 
 	"gopkg.in/errgo.v1"
 	"gopkg.in/goracle.v1/oracle"
+
+	unic "golang.org/x/text/encoding/unicode"
 )
 
 const tbl = "tst_goracle_godrv"
@@ -84,8 +87,9 @@ func prepareTable(t *testing.T) (*sql.DB, *sql.Tx) {
 }
 
 func insertNVarchar(t *testing.T, conn *sql.Tx, text string) bool {
+	textU16 := utf16.Encode([]rune(text))
 	unistr := "\\0" + strings.Replace(
-		fmt.Sprintf("%04x", utf16.Encode([]rune(text))), " ", "\\0", -1)[1:]
+		fmt.Sprintf("%04x", textU16), " ", "\\0", -1)[1:]
 	unistr = unistr[:len(unistr)-1]
 	qry := "INSERT INTO " + tbl + " (F_int, F_nvarchar) VALUES (-2, COMPOSE(UNISTR('" + unistr + "')))"
 	if _, err := conn.Exec(qry); err != nil {
@@ -99,8 +103,33 @@ func insertNVarchar(t *testing.T, conn *sql.Tx, text string) bool {
 		return false
 	}
 	t.Logf("nvarchar=%q", nvc)
-	if string(nvc) != text {
-		t.Errorf("mismatch: got %q, wanted %q.", nvc, text)
+
+	// the result is hex-encoded, decode it
+	dec := make([]byte, len(nvc)/2+1)
+	n, err := hex.Decode(dec, nvc)
+	if err != nil {
+		t.Error(err)
+	}
+	dec = dec[:n]
+	t.Logf("dec=%v oriU16=%v oriRunes=%v oriU8=%v", dec, textU16, []rune(text), []byte(text))
+	got := string(dec)
+
+	// the database representation may be UTF8 or AL16UTF16.
+	var ncharset string
+	if err := conn.QueryRow(`SELECT property_value FROM database_properties
+		WHERE property_name = 'NLS_NCHAR_CHARACTERSET'`).Scan(&ncharset); err != nil {
+		t.Fatal(err)
+	}
+	if ncharset == "AL16UTF16" {
+
+		decoded := make([]byte, 2*len(dec))
+		if n, _, err = unic.UTF16(unic.BigEndian, unic.UseBOM).NewDecoder().Transform(decoded, dec, true); err != nil {
+			t.Fatal(err)
+		}
+		got = string(decoded[:n])
+	}
+	if got != text {
+		t.Errorf("mismatch: got %q, wanted %q.", got, text)
 		return false
 	}
 	return true
