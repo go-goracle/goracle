@@ -27,7 +27,7 @@ for bdn in /usr/lib $ORACLE_HOME; do
 done
 echo "cdir=$cdir ldir=$ldir"
 export CGO_CFLAGS=-I$cdir
-export CGO_LDFLAGS=-L$ldir
+export CGO_LDFLAGS="-L$ldir -lclntsh"
 
 echo "export ORACLE_HOME=$ORACLE_HOME"
 echo "export CGO_CFLAGS=$CGO_CFLAGS"

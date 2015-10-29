@@ -20,8 +20,10 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"gopkg.in/errgo.v1"
 	"gopkg.in/goracle.v1/oracle"
@@ -42,6 +44,7 @@ func TestTable(t *testing.T) {
 
 	insertText(t, tx, "Habitación doble", "雙人房", "двухместный номер")
 
+	insertNVarchar(t, tx, "إيندهوفن")
 }
 
 func TestTableClob(t *testing.T) {
@@ -62,7 +65,8 @@ func prepareTable(t *testing.T) (*sql.DB, *sql.Tx) {
 			F_text_spanish VARCHAR2(100),
 			F_text_chinese VARCHAR2(100),
 			F_text_russian VARCHAR2(100),
-                        F_clob CLOB
+            F_clob CLOB,
+			F_nvarchar NVARCHAR2(100)
 		)`,
 	); err != nil {
 		t.Skipf("Skipping table test, as cannot create "+tbl+": %v", err)
@@ -77,6 +81,29 @@ func prepareTable(t *testing.T) (*sql.DB, *sql.Tx) {
 		t.FailNow()
 	}
 	return conn, tx
+}
+
+func insertNVarchar(t *testing.T, conn *sql.Tx, text string) bool {
+	unistr := "\\0" + strings.Replace(
+		fmt.Sprintf("%04x", utf16.Encode([]rune(text))), " ", "\\0", -1)[1:]
+	unistr = unistr[:len(unistr)-1]
+	qry := "INSERT INTO " + tbl + " (F_int, F_nvarchar) VALUES (-2, COMPOSE(UNISTR('" + unistr + "')))"
+	if _, err := conn.Exec(qry); err != nil {
+		t.Errorf("cannot insert into "+tbl+" (%q): %v", qry, err)
+		return false
+	}
+	row := conn.QueryRow("SELECT F_nvarchar FROM " + tbl + " WHERE F_int = -2")
+	var nvc []byte
+	if err := row.Scan(&nvc); err != nil {
+		t.Errorf("error scanning row: %v", errgo.Details(err))
+		return false
+	}
+	t.Logf("nvarchar=%q", nvc)
+	if string(nvc) != text {
+		t.Errorf("mismatch: got %q, wanted %q.", nvc, text)
+		return false
+	}
+	return true
 }
 
 func insertText(t *testing.T, conn *sql.Tx, spanish, chinese, russian string) bool {
@@ -165,7 +192,7 @@ func insertNum(t *testing.T, conn *sql.Tx,
 }
 
 func insertClob(t *testing.T, conn *sql.Tx, text string) bool {
-	qry := "INSERT INTO " + tbl + ` (F_int, F_clob) 
+	qry := "INSERT INTO " + tbl + ` (F_int, F_clob)
                   VALUES (-2, EMPTY_CLOB())`
 
 	if _, err := conn.Exec(qry); err != nil {
