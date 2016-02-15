@@ -2,8 +2,12 @@
 [![GoDoc](https://godoc.org/gopkg.in/goracle.v1?status.svg)](http://godoc.org/gopkg.in/goracle.v1)
 
 # Warning #
-This package is not as idiomatic Go, as I wanted - this is more of a translation of the Python cx_Oracle module. For use with [database/sql](http://golang.org/pkg/database/sql), it is adequate, but for calling stored procedures, I'd suggest using
-[rana/ora.v2](http://gopkg.in/rana/ora.v2).
+*goracle won't work with Go 1.6*, I'm afraid - the change would be quite hard work,
+[rana/ora](gopkg.in/rana/ora.v3) has much nicer internal structure than goracle.
+(This is understandable: goracle is the port of [cx_Oracle](http://cx-oracle.sourceforge.net/html/index.html),
+a Python module, and ora has been written from scratch in Go, for Go).
+
+_So for every new project, please use gopkg.in/rana/ora.v3 !_
 
 # goracle #
 [goracle](driver.go) is a package which is a
