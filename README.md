@@ -52,8 +52,6 @@ do
 
     db.Exec("INSERT INTO table (a, b) VALUES (:1, :2)", []int{1, 2}, []string{"a", "b"})
 
-.
-
 ## Logging
 
 Goracle uses `github.com/go-kit/kit/log`'s concept of a `Log` function.
