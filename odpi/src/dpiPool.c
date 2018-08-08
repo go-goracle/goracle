@@ -284,10 +284,8 @@ int dpiPool_acquireConnection(dpiPool *pool, const char *userName,
     DPI_CHECK_PTR_NOT_NULL(pool, conn)
 
     // use default parameters if none provided
-    if (!params || pool->env->context->dpiMinorVersion == 0) {
+    if (!params) {
         dpiContext__initConnCreateParams(&localParams);
-        if (params)
-            memcpy(&localParams, params, sizeof(dpiConnCreateParams__v20));
         params = &localParams;
     }
 
@@ -354,11 +352,8 @@ int dpiPool_create(const dpiContext *context, const char *userName,
         dpiContext__initCommonCreateParams(&localCommonParams);
         commonParams = &localCommonParams;
     }
-    if (!createParams || context->dpiMinorVersion < 4) {
+    if (!createParams) {
         dpiContext__initPoolCreateParams(&localCreateParams);
-        if (createParams)
-            memcpy(&localCreateParams, createParams,
-                    sizeof(dpiPoolCreateParams__v23));
         createParams = &localCreateParams;
     }
 
@@ -423,16 +418,14 @@ int dpiPool_getEncodingInfo(dpiPool *pool, dpiEncodingInfo *info)
 //-----------------------------------------------------------------------------
 int dpiPool_getGetMode(dpiPool *pool, dpiPoolGetMode *value)
 {
-    uint8_t ociValue;
     dpiError error;
 
     if (dpiPool__checkConnected(pool, __func__, &error) < 0)
         return dpiGen__endPublicFn(pool, DPI_FAILURE, &error);
     DPI_CHECK_PTR_NOT_NULL(pool, value)
-    if (dpiOci__attrGet(pool->handle, DPI_OCI_HTYPE_SPOOL, &ociValue, NULL,
+    if (dpiOci__attrGet(pool->handle, DPI_OCI_HTYPE_SPOOL, value, NULL,
             DPI_OCI_ATTR_SPOOL_GETMODE, "get attribute value", &error) < 0)
         return dpiGen__endPublicFn(pool, DPI_FAILURE, &error);
-    *value = (dpiPoolGetMode) ociValue;
     return dpiGen__endPublicFn(pool, DPI_SUCCESS, &error);
 }
 
