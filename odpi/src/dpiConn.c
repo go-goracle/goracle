@@ -29,7 +29,6 @@ static int dpiConn__get(dpiConn *conn, const char *userName,
         dpiConnCreateParams *createParams, dpiPool *pool, dpiError *error);
 static int dpiConn__getHandles(dpiConn *conn, dpiError *error);
 static int dpiConn__getServerCharset(dpiConn *conn, dpiError *error);
-static int dpiConn__getServerVersion(dpiConn *conn, dpiError *error);
 static int dpiConn__getSession(dpiConn *conn, uint32_t mode,
         const char *connectString, uint32_t connectStringLength,
         dpiConnCreateParams *params, void *authInfo, dpiError *error);
@@ -543,7 +542,7 @@ static int dpiConn__getServerCharset(dpiConn *conn, dpiError *error)
 //   Internal method used for ensuring that the server version has been cached
 // on the connection.
 //-----------------------------------------------------------------------------
-static int dpiConn__getServerVersion(dpiConn *conn, dpiError *error)
+int dpiConn__getServerVersion(dpiConn *conn, dpiError *error)
 {
     uint32_t serverRelease;
     char buffer[512];
@@ -563,10 +562,17 @@ static int dpiConn__getServerVersion(dpiConn *conn, dpiError *error)
         return DPI_FAILURE;
     strncpy( (char*) conn->releaseString, buffer, conn->releaseStringLength);
     conn->versionInfo.versionNum = (int)((serverRelease >> 24) & 0xFF);
-    conn->versionInfo.releaseNum = (int)((serverRelease >> 20) & 0x0F);
-    conn->versionInfo.updateNum = (int)((serverRelease >> 12) & 0xFF);
-    conn->versionInfo.portReleaseNum = (int)((serverRelease >> 8) & 0x0F);
-    conn->versionInfo.portUpdateNum = (int)((serverRelease) & 0xFF);
+    if (conn->versionInfo.versionNum >= 18) {
+        conn->versionInfo.releaseNum = (int)((serverRelease >> 16) & 0xFF);
+        conn->versionInfo.updateNum = (int)((serverRelease >> 12) & 0x0F);
+        conn->versionInfo.portReleaseNum = (int)((serverRelease >> 4) & 0xFF);
+        conn->versionInfo.portUpdateNum = (int)((serverRelease) & 0xF);
+    } else {
+        conn->versionInfo.releaseNum = (int)((serverRelease >> 20) & 0x0F);
+        conn->versionInfo.updateNum = (int)((serverRelease >> 12) & 0xFF);
+        conn->versionInfo.portReleaseNum = (int)((serverRelease >> 8) & 0x0F);
+        conn->versionInfo.portUpdateNum = (int)((serverRelease) & 0xFF);
+    }
     conn->versionInfo.fullVersionNum = (uint32_t)
             DPI_ORACLE_VERSION_TO_NUMBER(conn->versionInfo.versionNum,
                     conn->versionInfo.releaseNum,
@@ -585,9 +591,6 @@ static int dpiConn__getServerVersion(dpiConn *conn, dpiError *error)
 // before a good connection can be acquired. If the connection is brand new
 // (ping time context value has not been set) there is no need to do a ping.
 // This also ensures that the loop cannot run forever!
-//   Note as well that this is only needed for clients less than 12.2. In the
-// 12.2 release a much faster internal check is performed that makes these
-// checks unnecessary.
 //-----------------------------------------------------------------------------
 static int dpiConn__getSession(dpiConn *conn, uint32_t mode,
         const char *connectString, uint32_t connectStringLength,
@@ -609,13 +612,6 @@ static int dpiConn__getSession(dpiConn *conn, uint32_t mode,
         // get session and server handles
         if (dpiConn__getHandles(conn, error) < 0)
             return DPI_FAILURE;
-
-        // Oracle client 12.2 already has better support so do nothing in
-        // that case
-        if (conn->env->versionInfo->versionNum > 12 ||
-                (conn->env->versionInfo->versionNum == 12 &&
-                conn->env->versionInfo->releaseNum >= 2))
-            break;
 
         // get last time used from session context
         lastTimeUsed = NULL;
@@ -855,10 +851,9 @@ static int dpiConn__setShardingKey(dpiConn *conn, void **shardingKey,
     uint8_t i;
 
     // this is only supported on 12.2 and higher clients
-    if (conn->env->context->versionInfo->versionNum < 12 ||
-            (conn->env->context->versionInfo->versionNum == 12 &&
-             conn->env->context->versionInfo->releaseNum < 2))
-        return dpiError__set(error, action, DPI_ERR_NOT_SUPPORTED);
+    if (dpiUtils__checkClientVersion(conn->env->versionInfo, 12, 2,
+            error) < 0)
+        return DPI_FAILURE;
 
     // create sharding key descriptor, if necessary
     if (dpiOci__descriptorAlloc(conn->env->handle, shardingKey,
@@ -1189,11 +1184,8 @@ int dpiConn_create(const dpiContext *context, const char *userName,
         dpiContext__initCommonCreateParams(&localCommonParams);
         commonParams = &localCommonParams;
     }
-    if (!createParams || context->dpiMinorVersion == 0) {
+    if (!createParams) {
         dpiContext__initConnCreateParams(&localCreateParams);
-        if (createParams)
-            memcpy(&localCreateParams, createParams,
-                    sizeof(dpiConnCreateParams__v20));
         createParams = &localCreateParams;
     }
 
@@ -1341,6 +1333,32 @@ int dpiConn_enqObject(dpiConn *conn, const char *queueName,
             &error) < 0)
         return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
     return dpiGen__endPublicFn(conn, DPI_SUCCESS, &error);
+}
+
+
+//-----------------------------------------------------------------------------
+// dpiConn_getCallTimeout() [PUBLIC]
+//   Return the call timeout (in milliseconds) used for round-trips to the
+// database. This is only valid in Oracle Client 18c and higher.
+//-----------------------------------------------------------------------------
+int dpiConn_getCallTimeout(dpiConn *conn, uint32_t *value)
+{
+    dpiError error;
+    int status;
+
+    // validate parameters
+    if (dpiConn__checkConnected(conn, __func__, &error) < 0)
+        return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
+    DPI_CHECK_PTR_NOT_NULL(conn, value)
+    if (dpiUtils__checkClientVersion(conn->env->versionInfo, 18, 1,
+            &error) < 0)
+        return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
+
+    // get call timeout
+    status = dpiOci__attrGet(conn->handle, DPI_OCI_HTYPE_SVCCTX,
+            (void*) value, 0, DPI_OCI_ATTR_CALL_TIMEOUT, "get call timeout",
+            &error);
+    return dpiGen__endPublicFn(conn, status, &error);
 }
 
 
@@ -1662,33 +1680,6 @@ int dpiConn_newMsgProps(dpiConn *conn, dpiMsgProps **props)
 
 
 //-----------------------------------------------------------------------------
-// dpiConn_newSubscription() [PUBLIC]
-//   Create a new subscription and return it.
-//-----------------------------------------------------------------------------
-int dpiConn_newSubscription(dpiConn *conn, dpiSubscrCreateParams *params,
-        dpiSubscr **subscr, uint64_t *subscrId)
-{
-    dpiSubscr *tempSubscr;
-    dpiError error;
-
-    if (dpiConn__checkConnected(conn, __func__, &error) < 0)
-        return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
-    DPI_CHECK_PTR_NOT_NULL(conn, params)
-    DPI_CHECK_PTR_NOT_NULL(conn, subscr)
-    if (dpiGen__allocate(DPI_HTYPE_SUBSCR, conn->env, (void**) &tempSubscr,
-            &error) < 0)
-        return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
-    if (dpiSubscr__create(tempSubscr, conn, params, subscrId, &error) < 0) {
-        dpiSubscr__free(tempSubscr, &error);
-        return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
-    }
-
-    *subscr = tempSubscr;
-    return dpiGen__endPublicFn(conn, DPI_SUCCESS, &error);
-}
-
-
-//-----------------------------------------------------------------------------
 // dpiConn_newVar() [PUBLIC]
 //   Create a new variable and return it.
 //-----------------------------------------------------------------------------
@@ -1813,6 +1804,30 @@ int dpiConn_setAction(dpiConn *conn, const char *value, uint32_t valueLength)
 {
     return dpiConn__setAttributeText(conn, DPI_OCI_ATTR_ACTION, value,
             valueLength, __func__);
+}
+
+
+//-----------------------------------------------------------------------------
+// dpiConn_setCallTimeout() [PUBLIC]
+//   Set the call timeout (in milliseconds) used for round-trips to the
+// database. This is only valid in Oracle Client 18c and higher.
+//-----------------------------------------------------------------------------
+int dpiConn_setCallTimeout(dpiConn *conn, uint32_t value)
+{
+    dpiError error;
+    int status;
+
+    // validate parameters
+    if (dpiConn__checkConnected(conn, __func__, &error) < 0)
+        return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
+    if (dpiUtils__checkClientVersion(conn->env->versionInfo, 18, 1,
+            &error) < 0)
+        return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
+
+    // set call timeout
+    status = dpiOci__attrSet(conn->handle, DPI_OCI_HTYPE_SVCCTX, &value,
+            0, DPI_OCI_ATTR_CALL_TIMEOUT, "set call timeout", &error);
+    return dpiGen__endPublicFn(conn, status, &error);
 }
 
 
@@ -1969,7 +1984,7 @@ int dpiConn_subscribe(dpiConn *conn, dpiSubscrCreateParams *params,
     if (dpiGen__allocate(DPI_HTYPE_SUBSCR, conn->env, (void**) &tempSubscr,
             &error) < 0)
         return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
-    if (dpiSubscr__create(tempSubscr, conn, params, NULL, &error) < 0) {
+    if (dpiSubscr__create(tempSubscr, conn, params, &error) < 0) {
         dpiSubscr__free(tempSubscr, &error);
         return dpiGen__endPublicFn(conn, DPI_FAILURE, &error);
     }

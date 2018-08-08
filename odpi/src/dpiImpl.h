@@ -211,7 +211,6 @@ extern unsigned long dpiDebugLevel;
 #define DPI_OCI_ATTR_NUM_TYPE_ATTRS                 228
 #define DPI_OCI_ATTR_SUBSCR_CQ_QOSFLAGS             229
 #define DPI_OCI_ATTR_LIST_TYPE_ATTRS                229
-#define DPI_OCI_ATTR_SUBSCR_CQ_REGID                230
 #define DPI_OCI_ATTR_SUBSCR_NTFN_GROUPING_CLASS     231
 #define DPI_OCI_ATTR_SUBSCR_NTFN_GROUPING_VALUE     232
 #define DPI_OCI_ATTR_SUBSCR_NTFN_GROUPING_TYPE      233
@@ -269,6 +268,7 @@ extern unsigned long dpiDebugLevel;
 #define DPI_OCI_ATTR_SHARDING_KEY                   496
 #define DPI_OCI_ATTR_SUPER_SHARDING_KEY             497
 #define DPI_OCI_ATTR_SPOOL_WAIT_TIMEOUT             506
+#define DPI_OCI_ATTR_CALL_TIMEOUT                   531
 
 // define OCI object type constants
 #define DPI_OCI_OTYPE_NAME                          1
@@ -466,7 +466,7 @@ typedef enum {
     DPI_ERR_NULL_POINTER_PARAMETER,
     DPI_ERR_LOAD_LIBRARY,
     DPI_ERR_LOAD_SYMBOL,
-    DPI_ERR_LIBRARY_TOO_OLD,
+    DPI_ERR_ORACLE_CLIENT_TOO_OLD,
     DPI_ERR_NLS_ENV_VAR_GET,
     DPI_ERR_PTR_LENGTH_MISMATCH,
     DPI_ERR_NAN,
@@ -480,6 +480,7 @@ typedef enum {
     DPI_ERR_EXEC_MODE_ONLY_FOR_DML,
     DPI_ERR_ARRAY_VAR_NOT_SUPPORTED,
     DPI_ERR_EVENTS_MODE_REQUIRED,
+    DPI_ERR_ORACLE_DB_TOO_OLD,
     DPI_ERR_MAX
 } dpiErrorNum;
 
@@ -525,54 +526,6 @@ typedef enum {
 //-----------------------------------------------------------------------------
 // old type definitions (to be dropped)
 //-----------------------------------------------------------------------------
-
-typedef struct {
-    dpiAuthMode authMode;
-    const char *connectionClass;
-    uint32_t connectionClassLength;
-    dpiPurity purity;
-    const char *newPassword;
-    uint32_t newPasswordLength;
-    dpiAppContext *appContext;
-    uint32_t numAppContext;
-    int externalAuth;
-    void *externalHandle;
-    dpiPool *pool;
-    const char *tag;
-    uint32_t tagLength;
-    int matchAnyTag;
-    const char *outTag;
-    uint32_t outTagLength;
-    int outTagFound;
-} dpiConnCreateParams__v20;
-
-typedef struct {
-    dpiSubscrNamespace subscrNamespace;
-    dpiSubscrProtocol protocol;
-    dpiSubscrQOS qos;
-    dpiOpCode operations;
-    uint32_t portNumber;
-    uint32_t timeout;
-    const char *name;
-    uint32_t nameLength;
-    dpiSubscrCallback callback;
-    void *callbackContext;
-    const char *recipientName;
-    uint32_t recipientNameLength;
-} dpiSubscrCreateParams__v23;
-
-typedef struct {
-    uint32_t minSessions;
-    uint32_t maxSessions;
-    uint32_t sessionIncrement;
-    int pingInterval;
-    int pingTimeout;
-    int homogeneous;
-    int externalAuth;
-    dpiPoolGetMode getMode;
-    const char *outPoolName;
-    uint32_t outPoolNameLength;
-} dpiPoolCreateParams__v23;
 
 
 //-----------------------------------------------------------------------------
@@ -1035,6 +988,7 @@ int dpiConn__create(dpiConn *conn, const dpiContext *context,
         const dpiCommonCreateParams *commonParams,
         dpiConnCreateParams *createParams, dpiError *error);
 void dpiConn__free(dpiConn *conn, dpiError *error);
+int dpiConn__getServerVersion(dpiConn *conn, dpiError *error);
 
 
 //-----------------------------------------------------------------------------
@@ -1138,7 +1092,7 @@ void dpiRowid__free(dpiRowid *rowid, dpiError *error);
 //-----------------------------------------------------------------------------
 void dpiSubscr__free(dpiSubscr *subscr, dpiError *error);
 int dpiSubscr__create(dpiSubscr *subscr, dpiConn *conn,
-        dpiSubscrCreateParams *params, uint64_t *subscrId, dpiError *error);
+        dpiSubscrCreateParams *params, dpiError *error);
 
 
 //-----------------------------------------------------------------------------
@@ -1427,6 +1381,10 @@ void dpiHandleList__removeHandle(dpiHandleList *list, uint32_t slotNum);
 //-----------------------------------------------------------------------------
 int dpiUtils__allocateMemory(size_t numMembers, size_t memberSize,
         int clearMemory, const char *action, void **ptr, dpiError *error);
+int dpiUtils__checkClientVersion(dpiVersionInfo *versionInfo,
+        int minVersionNum, int minReleaseNum, dpiError *error);
+int dpiUtils__checkDatabaseVersion(dpiConn *conn, int minVersionNum,
+        int minReleaseNum, dpiError *error);
 void dpiUtils__clearMemory(void *ptr, size_t length);
 void dpiUtils__freeMemory(void *ptr);
 int dpiUtils__getAttrStringWithDup(const char *action, const void *ociHandle,

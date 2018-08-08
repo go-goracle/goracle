@@ -259,6 +259,9 @@ typedef int (*dpiOciFnType__serverDetach)(void *srvhp, void *errhp,
         uint32_t mode);
 typedef int (*dpiOciFnType__serverRelease)(void *hndlp, void *errhp,
         char *bufp, uint32_t bufsz, uint8_t hndltype, uint32_t *version);
+typedef int (*dpiOciFnType__serverRelease2)(void *hndlp, void *errhp,
+        char *bufp, uint32_t bufsz, uint8_t hndltype, uint32_t *version,
+        uint32_t mode);
 typedef int (*dpiOciFnType__sessionBegin)(void *svchp, void *errhp,
         void *usrhp, uint32_t credt, uint32_t mode);
 typedef int (*dpiOciFnType__sessionEnd)(void *svchp, void *errhp, void *usrhp,
@@ -354,12 +357,16 @@ static const char *dpiOciLibNames[] = {
     "oci.dll",
 #elif __APPLE__
     "libclntsh.dylib",
+    "libclntsh.dylib.18.1",
     "libclntsh.dylib.12.1",
     "libclntsh.dylib.11.1",
+    "libclntsh.dylib.19.1",
 #else
     "libclntsh.so",
+    "libclntsh.so.18.1",
     "libclntsh.so.12.1",
     "libclntsh.so.11.1",
+    "libclntsh.so.19.1",
 #endif
     NULL
 };
@@ -467,6 +474,7 @@ static struct {
     dpiOciFnType__serverAttach fnServerAttach;
     dpiOciFnType__serverDetach fnServerDetach;
     dpiOciFnType__serverRelease fnServerRelease;
+    dpiOciFnType__serverRelease2 fnServerRelease2;
     dpiOciFnType__sessionBegin fnSessionBegin;
     dpiOciFnType__sessionEnd fnSessionEnd;
     dpiOciFnType__sessionGet fnSessionGet;
@@ -1418,7 +1426,8 @@ static int dpiOci__findAndCheckDllArchitecture(const char *dllName,
         temp = strrchr(fullName, '\\');
         if (temp) {
             *(temp + 1) = '\0';
-            strncat(fullName, dllName, sizeof(fullName));
+            strncat(fullName, dllName,
+                    sizeof(fullName) - strlen(fullName) - 1);
             if (dpiOci__checkDllArchitecture(fullName) == 0)
                 found = 1;
         }
@@ -1426,8 +1435,8 @@ static int dpiOci__findAndCheckDllArchitecture(const char *dllName,
 
     // check current directory
     if (!found && GetCurrentDirectory(sizeof(fullName), fullName) != 0) {
-        strncat(fullName, "\\", sizeof(fullName));
-        strncat(fullName, dllName, sizeof(fullName));
+        temp = fullName + strlen(fullName);
+        snprintf(temp, sizeof(fullName) - strlen(fullName), "\\%s", dllName);
         if (dpiOci__checkDllArchitecture(fullName) == 0)
             found = 1;
     }
@@ -1521,6 +1530,42 @@ static void dpiOci__getLoadErrorOnWindows(const char *dllName,
     if (length == 0)
         sprintf(loadError, "DLL load failed: Windows Error %d", errorNum);
 }
+
+
+//-----------------------------------------------------------------------------
+// dpiOci__loadLibOnWindows() [INTERNAL]
+//   Load the library on the Windows platform. First an attempt is made to
+// determine the location of the module containing ODPI-C. If found, an attempt
+// is made to load oci.dll from that location; otherwise a standard Windows
+// search is made for oci.dll.
+//-----------------------------------------------------------------------------
+static void dpiOci__loadLibOnWindows(const char *dllName)
+{
+    char moduleName[MAX_PATH + 1], *temp;
+    HMODULE module = NULL;
+
+    // attempt to determine the location of the module containing ODPI-C;
+    // errors in this code are ignored and the normal loading mechanism is
+    // used instead
+    if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+            (LPCSTR) dpiOci__loadLibOnWindows, &module)) {
+        if (GetModuleFileName(module, moduleName, sizeof(moduleName)) > 0) {
+            temp = strrchr(moduleName, '\\');
+            if (temp) {
+                *(temp + 1) = '\0';
+                strncat(moduleName, dllName,
+                        sizeof(moduleName) - strlen(moduleName) - 1);
+                dpiOciLibHandle = LoadLibrary(moduleName);
+            }
+        }
+        FreeLibrary(module);
+    }
+
+    // if library was not loaded in the same location as ODPI-C, use the
+    // standard Windows search to locate oci.dll instead
+    if (!dpiOciLibHandle)
+        dpiOciLibHandle = LoadLibrary(dllName);
+}
 #endif
 
 
@@ -1544,7 +1589,7 @@ static int dpiOci__loadLib(dpiError *error)
         if (!libName)
             break;
 #ifdef _WIN32
-        dpiOciLibHandle = LoadLibrary(libName);
+        dpiOci__loadLibOnWindows(libName);
         if (!dpiOciLibHandle && i == 0)
             dpiOci__getLoadErrorOnWindows(libName, loadError,
                     sizeof(loadError));
@@ -1608,8 +1653,8 @@ static int dpiOci__loadLibValidate(dpiError *error)
     // determine the OCI client version information
     if (dpiOci__loadSymbol("OCIClientVersion",
             (void**) &dpiOciSymbols.fnClientVersion, NULL) < 0)
-        return dpiError__set(error, "get client version",
-                DPI_ERR_LIBRARY_TOO_OLD);
+        return dpiError__set(error, "check Oracle Client version",
+                DPI_ERR_ORACLE_CLIENT_TOO_OLD, 11, 2, 0, 0);
     (*dpiOciSymbols.fnClientVersion)(&dpiOciLibVersionInfo.versionNum,
             &dpiOciLibVersionInfo.releaseNum,
             &dpiOciLibVersionInfo.updateNum,
@@ -1623,11 +1668,8 @@ static int dpiOci__loadLibValidate(dpiError *error)
                     dpiOciLibVersionInfo.portUpdateNum);
 
     // OCI version must be a minimum of 11.2
-    if (dpiOciLibVersionInfo.versionNum < 11 ||
-            (dpiOciLibVersionInfo.versionNum == 11 &&
-            dpiOciLibVersionInfo.releaseNum < 2))
-        return dpiError__set(error, "check library version",
-                DPI_ERR_LIBRARY_TOO_OLD);
+    if (dpiUtils__checkClientVersion(&dpiOciLibVersionInfo, 11, 2, error) < 0)
+        return DPI_FAILURE;
 
     // initialize threading capability in the OCI library
     // this must be run prior to any other OCI threading calls
@@ -2451,9 +2493,17 @@ int dpiOci__serverRelease(dpiConn *conn, char *buffer, uint32_t bufferSize,
 {
     int status;
 
-    DPI_OCI_LOAD_SYMBOL("OCIServerRelease", dpiOciSymbols.fnServerRelease)
-    status = (*dpiOciSymbols.fnServerRelease)(conn->handle, error->handle,
-            buffer, bufferSize, DPI_OCI_HTYPE_SVCCTX, version);
+    if (conn->env->versionInfo->versionNum < 18) {
+        DPI_OCI_LOAD_SYMBOL("OCIServerRelease", dpiOciSymbols.fnServerRelease)
+        status = (*dpiOciSymbols.fnServerRelease)(conn->handle, error->handle,
+                buffer, bufferSize, DPI_OCI_HTYPE_SVCCTX, version);
+    } else {
+        DPI_OCI_LOAD_SYMBOL("OCIServerRelease2",
+                dpiOciSymbols.fnServerRelease2)
+        status = (*dpiOciSymbols.fnServerRelease2)(conn->handle, error->handle,
+                buffer, bufferSize, DPI_OCI_HTYPE_SVCCTX, version,
+                DPI_OCI_DEFAULT);
+    }
     return dpiError__check(error, status, conn, "get server version");
 }
 
