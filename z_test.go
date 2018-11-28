@@ -1915,3 +1915,21 @@ func TestImplicitResults(t *testing.T) {
 		}
 	}
 }
+
+func TestStartupShutdown(t *testing.T) {
+	if os.Getenv("GORACLE_DB_SHUTDOWN") != "1" {
+		t.Skip("GORACLE_DB_SHUTDOWN != 1, skipping shutdown/startup test")
+	}
+	conn, err := goracle.DriverConn(testDb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err = conn.Shutdown(ctx, goracle.ShutdownTransactionalLocal); err != nil {
+		t.Error(err)
+	}
+	if err = conn.Startup(ctx, goracle.StartupDefault); err != nil {
+		t.Error(err)
+	}
+}

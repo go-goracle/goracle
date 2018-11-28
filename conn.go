@@ -566,6 +566,8 @@ const (
 
 // Startup starts the startup cycle of the database.
 // A separate connection with DPI_MODE_PRELIM is created for this.
+//
+// See https://docs.oracle.com/en/database/oracle/oracle-database/18/lnoci/database-startup-and-shutdown.html#GUID-44B24F65-8C24-4DF3-8FBF-B896A4D6F3F3
 func (c *conn) Startup(ctx context.Context, mode StartupMode) error {
 	p := c.connParams
 	p.IsPrelim = true
@@ -601,6 +603,8 @@ const (
 
 // Shutdown starts the shutdown cycle of the database.
 // A separate connection with IsPrelim=1 is created for this.
+//
+// See https://docs.oracle.com/en/database/oracle/oracle-database/18/lnoci/database-startup-and-shutdown.html#GUID-44B24F65-8C24-4DF3-8FBF-B896A4D6F3F3
 func (c *conn) Shutdown(ctx context.Context, mode ShutdownMode) error {
 	p := c.connParams
 	p.IsPrelim = true
