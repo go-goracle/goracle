@@ -29,8 +29,9 @@
 //     poolIncrement=1& \
 //     connectionClass=POOLED& \
 //     standaloneConnection=0& \
-//     enableEvents=0&
-//     heterogeneousPool=0
+//     enableEvents=0& \
+//     heterogeneousPool=0& \
+//     prelim=0
 //
 // These are the defaults. Many advocate that a static session pool (min=max, incr=0)
 // is better, with 1-10 sessions per CPU thread.

@@ -564,21 +564,12 @@ const (
 	StartupRestrict = StartupMode(C.DPI_MODE_STARTUP_RESTRICT)
 )
 
-// Startup starts the startup cycle of the database.
-// A separate connection with DPI_MODE_PRELIM is created for this.
+// Startup the database, equivalent to "startup nomount" in SQL*Plus.
 //
 // See https://docs.oracle.com/en/database/oracle/oracle-database/18/lnoci/database-startup-and-shutdown.html#GUID-44B24F65-8C24-4DF3-8FBF-B896A4D6F3F3
-func (c *conn) Startup(ctx context.Context, mode StartupMode) error {
-	p := c.connParams
-	p.IsPrelim = true
-	cPerm, err := c.drv.openConn(p)
-	if err != nil {
-		return err
-	}
-	defer cPerm.Close()
-
-	if C.dpiConn_startupDatabase(cPerm.dpiConn, C.uint(mode)) == C.DPI_FAILURE {
-		return errors.Wrapf(cPerm.getError(), "startup(%v)", mode)
+func (c *conn) Startup(mode StartupMode) error {
+	if C.dpiConn_startupDatabase(c.dpiConn, C.uint(mode)) == C.DPI_FAILURE {
+		return errors.Wrapf(c.getError(), "startup(%v)", mode)
 	}
 	return nil
 }
@@ -601,21 +592,13 @@ const (
 	ShutdownFinal = ShutdownMode(C.DPI_MODE_SHUTDOWN_FINAL)
 )
 
-// Shutdown starts the shutdown cycle of the database.
-// A separate connection with IsPrelim=1 is created for this.
+// Shutdown shuts down the database.
+// Note that this must be done in two phases except in the situation where the instance is aborted.
 //
 // See https://docs.oracle.com/en/database/oracle/oracle-database/18/lnoci/database-startup-and-shutdown.html#GUID-44B24F65-8C24-4DF3-8FBF-B896A4D6F3F3
-func (c *conn) Shutdown(ctx context.Context, mode ShutdownMode) error {
-	p := c.connParams
-	p.IsPrelim = true
-	cPerm, err := c.drv.openConn(p)
-	if err != nil {
-		return err
-	}
-	defer cPerm.Close()
-
-	if C.dpiConn_shutdownDatabase(cPerm.dpiConn, C.uint(mode)) == C.DPI_FAILURE {
-		return errors.Wrapf(cPerm.getError(), "shutdown(%v)", mode)
+func (c *conn) Shutdown(mode ShutdownMode) error {
+	if C.dpiConn_shutdownDatabase(c.dpiConn, C.uint(mode)) == C.DPI_FAILURE {
+		return errors.Wrapf(c.getError(), "shutdown(%v)", mode)
 	}
 	return nil
 }
