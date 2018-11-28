@@ -551,3 +551,67 @@ func (c *conn) ensureContextUser(ctx context.Context) error {
 
 	return c.init()
 }
+
+// StartupMode for the database.
+type StartupMode C.uint
+
+const (
+	// StartupDefault is the default mode for startup which permits database access to all users.
+	StartupDefault = StartupMode(C.DPI_MODE_STARTUP_DEFAULT)
+	// StartupForce shuts down a running instance (using ABORT) before starting a new one. This mode should only be used in unusual circumstances.
+	StartupForce = StartupMode(C.DPI_MODE_STARTUP_FORCE)
+	// StartupRestrict only allows database access to users with both the CREATE SESSION and RESTRICTED SESSION privileges (normally the DBA).
+	StartupRestrict = StartupMode(C.DPI_MODE_STARTUP_RESTRICT)
+)
+
+// Startup starts the startup cycle of the database.
+// A separate connection with DPI_MODE_PRELIM is created for this.
+func (c *conn) Startup(ctx context.Context, mode StartupMode) error {
+	p := c.connParams
+	p.IsPrelim = true
+	cPerm, err := c.drv.openConn(p)
+	if err != nil {
+		return err
+	}
+	defer cPerm.Close()
+
+	if C.dpiConn_startupDatabase(cPerm.dpiConn, C.uint(mode)) == C.DPI_FAILURE {
+		return errors.Wrapf(cPerm.getError(), "startup(%v)", mode)
+	}
+	return nil
+}
+
+// ShutdownMode for the database.
+type ShutdownMode C.uint
+
+const (
+	// ShutdownDefault - further connections to the database are prohibited. Wait for users to disconnect from the database.
+	ShutdownDefault = ShutdownMode(C.DPI_MODE_SHUTDOWN_DEFAULT)
+	// ShutdownTransactional - further connections to the database are prohibited and no new transactions are allowed to be started. Wait for active transactions to complete.
+	ShutdownTransactional = ShutdownMode(C.DPI_MODE_SHUTDOWN_TRANSACTIONAL)
+	// ShutdownTransactionalLocal - behaves the same way as ShutdownTransactional but only waits for local transactions to complete.
+	ShutdownTransactionalLocal = ShutdownMode(C.DPI_MODE_SHUTDOWN_TRANSACTIONAL_LOCAL)
+	// ShutdownImmediate - all uncommitted transactions are terminated and rolled back and all connections to the database are closed immediately.
+	ShutdownImmediate = ShutdownMode(C.DPI_MODE_SHUTDOWN_IMMEDIATE)
+	// ShutdownAbort - all uncommitted transactions are terminated and are not rolled back. This is the fastest way to shut down the database but the next database startup may require instance recovery.
+	ShutdownAbort = ShutdownMode(C.DPI_MODE_SHUTDOWN_ABORT)
+	// ShutdownFinal shuts down the database. This mode should only be used in the second call to dpiConn_shutdownDatabase().
+	ShutdownFinal = ShutdownMode(C.DPI_MODE_SHUTDOWN_FINAL)
+)
+
+// Shutdown starts the shutdown cycle of the database.
+// A separate connection with IsPrelim=1 is created for this.
+func (c *conn) Shutdown(ctx context.Context, mode ShutdownMode) error {
+	p := c.connParams
+	p.IsPrelim = true
+	cPerm, err := c.drv.openConn(p)
+	if err != nil {
+		return err
+	}
+	defer cPerm.Close()
+
+	if C.dpiConn_shutdownDatabase(cPerm.dpiConn, C.uint(mode)) == C.DPI_FAILURE {
+		return errors.Wrapf(cPerm.getError(), "shutdown(%v)", mode)
+	}
+	return nil
+}
