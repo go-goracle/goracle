@@ -565,6 +565,7 @@ const (
 )
 
 // Startup the database, equivalent to "startup nomount" in SQL*Plus.
+// This should be called on PRELIM_AUTH (prelim=1) connection!
 //
 // See https://docs.oracle.com/en/database/oracle/oracle-database/18/lnoci/database-startup-and-shutdown.html#GUID-44B24F65-8C24-4DF3-8FBF-B896A4D6F3F3
 func (c *conn) Startup(mode StartupMode) error {
