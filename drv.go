@@ -381,16 +381,25 @@ func (d *drv) openConn(P ConnectionParams) (*conn, error) {
 		}
 		d.mu.Unlock()
 	}()
+
 	authMode := C.dpiAuthMode(C.DPI_MODE_AUTH_DEFAULT)
-	switch {
-	case P.IsSysDBA:
-		authMode |= C.DPI_MODE_AUTH_SYSDBA
-	case P.IsSysOper:
-		authMode |= C.DPI_MODE_AUTH_SYSOPER
-	case P.IsSysASM:
-		authMode |= C.DPI_MODE_AUTH_SYSASM
-	case P.IsPrelim:
-		authMode |= C.DPI_MODE_AUTH_PRELIM
+	// OR all the modes together
+	for _, elt := range []struct {
+		Is   bool
+		Mode C.uint
+	}{
+		{P.IsSysDBA, C.DPI_MODE_AUTH_SYSDBA},
+		{P.IsSysOper, C.DPI_MODE_AUTH_SYSOPER},
+		{P.IsSysASM, C.DPI_MODE_AUTH_SYSASM},
+		{P.IsPrelim, C.DPI_MODE_AUTH_PRELIM},
+	} {
+		if elt.Is {
+			authMode |= elt.Mode
+		}
+	}
+	if P.IsPrelim {
+		// The shared memory may not exist when Oracle is shut down.
+		P.ConnClass = ""
 	}
 
 	extAuth := C.int(b2i(P.Username == "" && P.Password == ""))
@@ -675,16 +684,25 @@ func ParseConnString(connString string) (ConnectionParams, error) {
 	if vv, ok := q["connectionClass"]; ok {
 		P.ConnClass = vv[0]
 	}
-	if P.IsSysDBA = q.Get("sysdba") == "1"; !P.IsSysDBA {
-		if P.IsSysOper = q.Get("sysoper") == "1"; !P.IsSysOper {
-			P.IsSysASM = q.Get("sysasm") == "1"
-		}
-	}
-	P.IsPrelim = q.Get("prelim") == "1"
-	P.StandaloneConnection = q.Get("standaloneConnection") == "1" || P.ConnClass == NoConnectionPoolingConnectionClass
-	P.EnableEvents = q.Get("enableEvents") == "1"
+	for _, task := range []struct {
+		Dest *bool
+		Key  string
+	}{
+		{&P.IsSysDBA, "sysdba"},
+		{&P.IsSysOper, "sysoper"},
+		{&P.IsSysASM, "sysasm"},
+		{&P.IsPrelim, "prelim"},
 
-	P.HeterogeneousPool = q.Get("heterogeneousPool") == "1"
+		{&P.StandaloneConnection, "standaloneConnection"},
+		{&P.EnableEvents, "enableEvents"},
+		{&P.HeterogeneousPool, "heterogeneousPool"},
+	} {
+		*task.Dest = q.Get(task.Key) == "1"
+	}
+	P.StandaloneConnection = P.StandaloneConnection || P.ConnClass == NoConnectionPoolingConnectionClass
+	if P.IsPrelim {
+		P.ConnClass = ""
+	}
 
 	for _, task := range []struct {
 		Dest *int
