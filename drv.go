@@ -62,7 +62,6 @@ import (
 	"io"
 	"math"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -437,7 +436,10 @@ func (d *drv) openConn(P ConnectionParams) (*conn, error) {
 	if !(P.Username == "" && P.Password == "") {
 		cUserName, cPassword = C.CString(P.Username), C.CString(P.Password)
 	}
-	cSid := C.CString(P.SID)
+	var cSid *C.char
+	if P.SID != "" {
+		cSid = C.CString(P.SID)
+	}
 	cUTF8, cConnClass := C.CString("AL32UTF8"), C.CString(P.ConnClass)
 	cDriverName := C.CString(DriverName)
 	defer func() {
@@ -445,7 +447,9 @@ func (d *drv) openConn(P ConnectionParams) (*conn, error) {
 			C.free(unsafe.Pointer(cUserName))
 			C.free(unsafe.Pointer(cPassword))
 		}
-		C.free(unsafe.Pointer(cSid))
+		if cSid != nil {
+			C.free(unsafe.Pointer(cSid))
+		}
 		C.free(unsafe.Pointer(cUTF8))
 		C.free(unsafe.Pointer(cConnClass))
 		C.free(unsafe.Pointer(cDriverName))
@@ -648,9 +652,6 @@ func ParseConnString(connString string) (ConnectionParams, error) {
 			P.Password, P.SID = connString[:i], connString[i+1:]
 		} else {
 			P.Password = connString
-			if P.SID = os.Getenv("ORACLE_SID"); P.SID == "" {
-				P.SID = os.Getenv("TWO_TASK")
-			}
 		}
 		uSid := strings.ToUpper(P.SID)
 		if P.IsSysDBA = strings.HasSuffix(uSid, " AS SYSDBA"); P.IsSysDBA {
