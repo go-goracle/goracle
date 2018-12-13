@@ -24,8 +24,48 @@ import (
 	goracle "gopkg.in/goracle.v2"
 )
 
+func ExampleStartup() {
+	if err := exampleStartup(goracle.StartupDefault); err != nil {
+		log.Fatal(err)
+	}
+}
+func exampleStartup(startupMode goracle.StartupMode) error {
+	dsn := "oracle://?sysdba=1&prelim=1"
+	db, err := sql.Open("goracle", dsn)
+	if err != nil {
+		log.Fatal(errors.Wrap(err, dsn))
+	}
+	defer db.Close()
+
+	oraDB, err := goracle.DriverConn(db)
+	if err != nil {
+		return err
+	}
+	log.Println("Starting database")
+	if err = oraDB.Startup(startupMode); err != nil {
+		return err
+	}
+	// You cannot alter database on the prelim_auth connection.
+	// So open a new connection and complete startup, as Startup starts pmon.
+	db2, err := sql.Open("goracle", "oracle://?sysdba=1")
+	if err != nil {
+		return err
+	}
+	defer db2.Close()
+
+	log.Println("Mounting database")
+	if _, err = db2.Exec("alter database mount"); err != nil {
+		return err
+	}
+	log.Println("Opening database")
+	if _, err = db2.Exec("alter database open"); err != nil {
+		return err
+	}
+	return nil
+}
+
 func ExampleShutdown() {
-	dsn := "sys/sys as sysdba"
+	dsn := "oracle://?sysdba=1" // equivalent to "/ as sysdba"
 	db, err := sql.Open("goracle", dsn)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, dsn))
