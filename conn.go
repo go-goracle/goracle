@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi
+// Copyright 2019 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +58,9 @@ type conn struct {
 	*drv
 	dpiConn       *C.dpiConn
 	inTransaction bool
+	newSession    bool
+	timeZone      *time.Location
+	tzOffSecs     int
 }
 
 func (c *conn) getError() error {
@@ -365,21 +369,69 @@ func (c *conn) ServerVersion() (VersionInfo, error) {
 }
 
 func (c *conn) init() error {
-	if c.Server.Version != 0 {
+	if c.Client.Version == 0 {
+		var err error
+		if c.Client, err = c.drv.ClientVersion(); err != nil {
+			return err
+		}
+	}
+	if c.Server.Version == 0 {
+		var v C.dpiVersionInfo
+		var release *C.char
+		var releaseLen C.uint32_t
+		if C.dpiConn_getServerVersion(c.dpiConn, &release, &releaseLen, &v) == C.DPI_FAILURE {
+			return errors.Wrap(c.getError(), "getServerVersion")
+		}
+		c.Server.set(&v)
+		c.Server.ServerRelease = C.GoStringN(release, C.int(releaseLen))
+	}
+
+	if c.timeZone != nil {
 		return nil
 	}
-	var err error
-	if c.Client, err = c.drv.ClientVersion(); err != nil {
-		return err
+	c.timeZone = time.Local
+	_, c.tzOffSecs = (time.Time{}).In(c.timeZone).Zone()
+
+	const qry = "SELECT DBTIMEZONE FROM DUAL"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	st, err := c.PrepareContext(ctx, qry)
+	if err != nil {
+		return errors.Wrap(err, qry)
 	}
-	var v C.dpiVersionInfo
-	var release *C.char
-	var releaseLen C.uint32_t
-	if C.dpiConn_getServerVersion(c.dpiConn, &release, &releaseLen, &v) == C.DPI_FAILURE {
-		return errors.Wrap(c.getError(), "getServerVersion")
+	defer st.Close()
+	rows, err := st.Query([]driver.Value{}) //nolint:staticcheck
+	if err != nil {
+		return errors.Wrap(err, qry)
 	}
-	c.Server.set(&v)
-	c.Server.ServerRelease = C.GoStringN(release, C.int(releaseLen))
+	defer rows.Close()
+	var timezone string
+	vals := []driver.Value{timezone}
+	for {
+		if err = rows.Next(vals); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return errors.Wrap(err, qry)
+		}
+		timezone = strings.TrimSpace(vals[0].(string))
+		if timezone != "" {
+			break
+		}
+	}
+	if timezone == "" {
+		return errors.New("empty DBTIMEZONE")
+	}
+	if off, err := parseTZ(timezone); err != nil {
+		return errors.Wrap(err, timezone)
+	} else {
+		// This is dangerous, but I just cannot get whether the DB time zone
+		// setting has DST or not - DBTIMEZONE returns just a fixed offset.
+		if _, localOff := time.Now().Local().Zone(); localOff != off {
+			c.tzOffSecs = off
+			c.timeZone = time.FixedZone(timezone, c.tzOffSecs)
+		}
+	}
 	return nil
 }
 

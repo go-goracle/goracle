@@ -283,7 +283,7 @@ func (r *rows) Next(dest []driver.Value) error {
 			return errors.Wrap(r.getError(), "Next")
 		}
 		if Log != nil {
-			Log("msg", "fetched", "bri", r.bufferRowIndex, "fetched", r.fetched, "moreRows", moreRows)
+			Log("msg", "fetched", "bri", r.bufferRowIndex, "fetched", r.fetched, "moreRows", moreRows, "len(data)", len(r.data), "cols", len(r.columns))
 		}
 		if r.fetched == 0 {
 			r.finished = moreRows == 0
@@ -312,10 +312,10 @@ func (r *rows) Next(dest []driver.Value) error {
 	for i, col := range r.columns {
 		typ := col.OracleType
 		d := &r.data[i][r.bufferRowIndex]
-		if Log != nil {
-			Log("msg", "Next", "i", i, "row", r.bufferRowIndex) //, "data", fmt.Sprintf("%+v", d), "typ", typ)
-		}
 		isNull := d.isNull == 1
+		if Log != nil {
+			Log("msg", "Next", "i", i, "row", r.bufferRowIndex, "typ", typ, "null", isNull) //, "data", fmt.Sprintf("%+v", d), "typ", typ)
+		}
 
 		switch typ {
 		case C.DPI_ORACLE_TYPE_VARCHAR, C.DPI_ORACLE_TYPE_NVARCHAR,
@@ -352,7 +352,12 @@ func (r *rows) Next(dest []driver.Value) error {
 				dest[i] = printFloat(float64(C.dpiData_getDouble(d)))
 			default:
 				b := C.dpiData_getBytes(d)
-				dest[i] = Number(C.GoStringN(b.ptr, C.int(b.length)))
+				s := C.GoStringN(b.ptr, C.int(b.length))
+				if r.NumberAsString() {
+					dest[i] = s
+				} else {
+					dest[i] = Number(s)
+				}
 				if Log != nil {
 					Log("msg", "b", "i", i, "ptr", b.ptr, "length", b.length, "typ", col.NativeType, "int64", C.dpiData_getInt64(d), "dest", dest[i])
 				}
@@ -406,14 +411,14 @@ func (r *rows) Next(dest []driver.Value) error {
 				continue
 			}
 			ts := C.dpiData_getTimestamp(d)
-			tz := time.Local
+			tz := r.conn.timeZone
 			if col.OracleType != C.DPI_ORACLE_TYPE_TIMESTAMP && col.OracleType != C.DPI_ORACLE_TYPE_DATE {
 				tz = timeZoneFor(ts.tzHourOffset, ts.tzMinuteOffset)
 			}
 			dest[i] = time.Date(int(ts.year), time.Month(ts.month), int(ts.day), int(ts.hour), int(ts.minute), int(ts.second), int(ts.fsecond), tz)
 		case C.DPI_ORACLE_TYPE_INTERVAL_DS, C.DPI_NATIVE_TYPE_INTERVAL_DS:
 			if isNull {
-				dest[i] = time.Time{}
+				dest[i] = nil
 				continue
 			}
 			ds := C.dpiData_getIntervalDS(d)

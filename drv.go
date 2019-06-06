@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi
+// Copyright 2019 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -303,12 +303,15 @@ func (n *Number) UnmarshalJSON(p []byte) error {
 // or analog to be race-free.
 var Log func(...interface{}) error
 
+var defaultDrv *drv
+
 func init() {
-	sql.Register("goracle", newDrv())
+	defaultDrv = newDrv()
+	sql.Register("goracle", defaultDrv)
 }
 
 func newDrv() *drv {
-	return &drv{pools: make(map[string]*C.dpiPool)}
+	return &drv{pools: make(map[string]*connPool)}
 }
 
 var _ = driver.Driver((*drv)(nil))
@@ -317,7 +320,14 @@ type drv struct {
 	clientVersion VersionInfo
 	mu            sync.Mutex
 	dpiContext    *C.dpiContext
-	pools         map[string]*C.dpiPool
+	pools         map[string]*connPool
+}
+
+type connPool struct {
+	dpiPool       *C.dpiPool
+	serverVersion VersionInfo
+	timeZone      *time.Location
+	tzOffSecs     int
 }
 
 func (d *drv) init() error {
@@ -413,16 +423,22 @@ func (d *drv) openConn(P ConnectionParams) (*conn, error) {
 		dp := d.pools[connString]
 		d.mu.Unlock()
 		if dp != nil {
-			if P.HeterogeneousPool {
-				//Proxy authenticated connections to database will be provided by methods with context
-				return &c, nil
-			}
-
+			//Proxy authenticated connections to database will be provided by methods with context
+			c.mu.Lock()
+			c.Client, c.Server = d.clientVersion, dp.serverVersion
+			c.timeZone, c.tzOffSecs = dp.timeZone, dp.tzOffSecs
+			c.mu.Unlock()
 			if err := c.acquireConn("", ""); err != nil {
 				return nil, err
 			}
-
-			return &c, c.init()
+			err := c.init()
+			if err == nil {
+				c.mu.Lock()
+				dp.serverVersion = c.Server
+				dp.timeZone, dp.tzOffSecs = c.timeZone, c.tzOffSecs
+				c.mu.Unlock()
+			}
+			return &c, err
 		}
 	}
 
@@ -464,7 +480,7 @@ func (d *drv) openConn(P ConnectionParams) (*conn, error) {
 	if P.IsSysDBA || P.IsSysOper || P.IsSysASM || P.IsPrelim || P.StandaloneConnection {
 		dc := C.malloc(C.sizeof_void)
 		if Log != nil {
-			Log("C", "dpiConn_create", "username", P.Username, "sid", P.SID, "common", commonCreateParams, "conn", connCreateParams)
+			Log("C", "dpiConn_create", "params", P.String(), "common", commonCreateParams, "conn", connCreateParams)
 		}
 		if C.dpiConn_create(
 			d.dpiContext,
@@ -479,7 +495,10 @@ func (d *drv) openConn(P ConnectionParams) (*conn, error) {
 			return nil, errors.Wrapf(d.getError(), "username=%q sid=%q params=%+v", P.Username, P.SID, connCreateParams)
 		}
 		c.dpiConn = (*C.dpiConn)(dc)
-		return &c, c.init()
+		c.currentUser = P.Username
+		c.newSession = true
+		err := c.init()
+		return &c, err
 	}
 	var poolCreateParams C.dpiPoolCreateParams
 	if C.dpiContext_initPoolCreateParams(d.dpiContext, &poolCreateParams) == C.DPI_FAILURE {
@@ -511,13 +530,11 @@ func (d *drv) openConn(P ConnectionParams) (*conn, error) {
 		&poolCreateParams,
 		(**C.dpiPool)(unsafe.Pointer(&dp)),
 	) == C.DPI_FAILURE {
-		return nil, errors.Wrapf(d.getError(), "username=%q SID=%q minSessions=%d maxSessions=%d poolIncrement=%d extAuth=%d ",
-			P.Username, P.SID,
-			P.MinSessions, P.MaxSessions, P.PoolIncrement, extAuth)
+		return nil, errors.Wrapf(d.getError(), "params=%s extAuth=%v", P.String(), extAuth)
 	}
 	C.dpiPool_setStmtCacheSize(dp, 40)
 	d.mu.Lock()
-	d.pools[connString] = dp
+	d.pools[connString] = &connPool{dpiPool: dp}
 	d.mu.Unlock()
 
 	return d.openConn(P)
@@ -553,18 +570,31 @@ func (c *conn) acquireConn(user, pass string) error {
 	pool := c.pools[c.connParams.String()]
 	c.drv.mu.Unlock()
 	if C.dpiPool_acquireConnection(
-		pool,
-		cUserName, C.uint32_t(len(user)), cPassword, C.uint32_t(len(pass)), nil,
+		pool.dpiPool,
+		cUserName, C.uint32_t(len(user)), cPassword, C.uint32_t(len(pass)),
+		&connCreateParams,
 		(**C.dpiConn)(unsafe.Pointer(&dc)),
 	) == C.DPI_FAILURE {
 		C.free(unsafe.Pointer(dc))
 		return errors.Wrapf(c.getError(), "acquirePoolConnection")
 	}
 
+	c.mu.Lock()
 	c.dpiConn = (*C.dpiConn)(dc)
 	c.currentUser = user
+	c.newSession = connCreateParams.outNewSession == 1
+	c.Client, c.Server = c.drv.clientVersion, pool.serverVersion
+	c.timeZone, c.tzOffSecs = pool.timeZone, pool.tzOffSecs
+	c.mu.Unlock()
+	err := c.init()
+	if err == nil {
+		c.mu.Lock()
+		pool.serverVersion = c.Server
+		pool.timeZone, pool.tzOffSecs = c.timeZone, c.tzOffSecs
+		c.mu.Unlock()
+	}
 
-	return nil
+	return err
 }
 
 // ConnectionParams holds the params for a connection (pool).
@@ -645,22 +675,27 @@ func ParseConnString(connString string) (ConnectionParams, error) {
 			return P, errors.Errorf("no '/' in connection string")
 		}
 		P.Username, connString = connString[:i], connString[i+1:]
+
+		uSid := strings.ToUpper(connString)
+		//fmt.Printf("connString=%q SID=%q\n", connString, uSid)
+		if strings.Contains(uSid, " AS ") {
+			if P.IsSysDBA = strings.HasSuffix(uSid, " AS SYSDBA"); P.IsSysDBA {
+				connString = connString[:len(connString)-10]
+			} else if P.IsSysOper = strings.HasSuffix(uSid, " AS SYSOPER"); P.IsSysOper {
+				connString = connString[:len(connString)-11]
+			} else if P.IsSysASM = strings.HasSuffix(uSid, " AS SYSASM"); P.IsSysASM {
+				connString = connString[:len(connString)-10]
+			}
+		}
 		if i = strings.IndexByte(connString, '@'); i >= 0 {
 			P.Password, P.SID = connString[:i], connString[i+1:]
 		} else {
 			P.Password = connString
 		}
-		uSid := strings.ToUpper(P.SID)
-		if P.IsSysDBA = strings.HasSuffix(uSid, " AS SYSDBA"); P.IsSysDBA {
-			P.SID = P.SID[:len(P.SID)-10]
-		} else if P.IsSysOper = strings.HasSuffix(uSid, " AS SYSOPER"); P.IsSysOper {
-			P.SID = P.SID[:len(P.SID)-11]
-		} else if P.IsSysASM = strings.HasSuffix(uSid, " AS SYSASM"); P.IsSysASM {
-			P.SID = P.SID[:len(P.SID)-10]
-		}
 		if strings.HasSuffix(P.SID, ":POOLED") {
 			P.ConnClass, P.SID = "POOLED", P.SID[:len(P.SID)-7]
 		}
+		//fmt.Printf("connString=%q params=%s\n", connString, P)
 		return P, nil
 	}
 	u, err := url.Parse(connString)
@@ -854,4 +889,32 @@ func ctxGetLog(ctx context.Context) logFunc {
 // ContextWithLog returns a context with the given log function.
 func ContextWithLog(ctx context.Context, logF func(...interface{}) error) context.Context {
 	return context.WithValue(ctx, logCtxKey, logF)
+}
+
+func parseTZ(s string) (int, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, io.EOF
+	}
+	if s == "Z" || s == "UTC" {
+		return 0, nil
+	}
+	var tz int
+	if i := strings.IndexByte(s, ':'); i >= 0 {
+		if i64, err := strconv.ParseInt(s[i+1:], 10, 6); err != nil {
+			return tz, errors.Wrap(err, s)
+		} else {
+			tz = int(i64)
+		}
+		s = s[:i]
+	}
+	if i64, err := strconv.ParseInt(s, 10, 5); err != nil {
+		return tz, errors.Wrap(err, s)
+	} else {
+		if i64 < 0 {
+			tz = -tz
+		}
+		tz += int(i64 * 3600)
+	}
+	return tz, nil
 }

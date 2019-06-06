@@ -294,7 +294,7 @@ END;
 		}
 	}
 
-	epoch := time.Date(2017, 11, 20, 12, 14, 21, 0, time.UTC)
+	epoch := time.Date(2017, 11, 20, 12, 14, 21, 0, time.Local)
 	for name, tC := range map[string]struct {
 		In   interface{}
 		Want string
@@ -2003,5 +2003,98 @@ CREATE OR REPLACE PROCEDURE test_CREATE_TASK_ACTIVITY (p_create_task_i IN PRJ_TA
 	qry = "BEGIN test_create_task_activity(:1, :2, :3); END;"
 	if _, err := testDb.ExecContext(ctx, qry, o1, o2, 1); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestTsTZ(t *testing.T) {
+	t.Parallel()
+	qry := "SELECT FROM_TZ(TO_TIMESTAMP('2019-05-01 09:39:12', 'YYYY-MM-DD HH24:MI:SS'), '{{.TZ}}') FROM DUAL"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	defer tl.enableLogging(t)()
+	var ts time.Time
+	{
+		qry := strings.Replace(qry, "{{.TZ}}", "01:00", 1)
+		if err := testDb.QueryRowContext(ctx, qry).Scan(&ts); err != nil {
+			t.Fatal(errors.Wrap(err, qry))
+		}
+	}
+	qry = strings.Replace(qry, "{{.TZ}}", "Europe/Berlin", 1)
+	err := testDb.QueryRowContext(ctx, qry).Scan(&ts)
+	if err != nil {
+		t.Log(errors.Wrap(err, qry))
+	}
+	t.Log(ts)
+	if !ts.IsZero() {
+		return
+	}
+
+	qry = "SELECT filename, version FROM v$timezone_file"
+	rows, err := testDb.QueryContext(ctx, qry)
+	if err != nil {
+		t.Log(qry, err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var fn, ver string
+		if err := rows.Scan(&fn, &ver); err != nil {
+			t.Log(qry, err)
+			continue
+		}
+		t.Log(fn, ver)
+	}
+	t.Skip("wanted non-zero time")
+}
+
+func TestGetDBTimeZone(t *testing.T) {
+	t.Parallel()
+	defer tl.enableLogging(t)()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	qry := "SELECT SESSIONTIMEZONE FROM DUAL"
+	var tz string
+	if err := testDb.QueryRowContext(ctx, qry).Scan(&tz); err != nil {
+		t.Fatal(errors.Wrap(err, qry))
+	}
+	t.Log("timezone:", tz)
+
+	for _, timS := range []string{"2006-07-08", "2006-01-02"} {
+		localTime, err := time.ParseInLocation("2006-01-02", timS, time.Local)
+		if err != nil {
+			t.Fatal(err)
+		}
+		qry = "SELECT TO_DATE('" + timS + " 00:00:00', 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+		var dbTime time.Time
+		t.Log("local:", localTime.Format(time.RFC3339))
+		if err := testDb.QueryRowContext(ctx, qry).Scan(&dbTime); err != nil {
+			t.Fatal(errors.Wrap(err, qry))
+		}
+		t.Log("db:", dbTime.Format(time.RFC3339))
+		if !dbTime.Equal(localTime) {
+			t.Errorf("db says %s, local is %s", dbTime.Format(time.RFC3339), localTime.Format(time.RFC3339))
+		}
+	}
+}
+
+func TestNumberBool(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	const qry = "SELECT 181 id, 1 status FROM DUAL"
+	rows, err := testDb.QueryContext(ctx, qry, goracle.NumberAsString())
+	if err != nil {
+		t.Fatal(errors.Wrap(err, qry))
+	}
+
+	for rows.Next() {
+		var id int
+		var status bool
+		if err := rows.Scan(&id, &status); err != nil {
+			t.Errorf("failed to scan data: %s\n", err)
+		}
+		t.Logf("Source id=%d, status=%t\n", id, status)
 	}
 }

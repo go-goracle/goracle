@@ -87,6 +87,25 @@ func (O *Object) SetAttribute(name string, data *Data) error {
 	return nil
 }
 
+// ResetAttributes prepare all atributes for use the object as IN parameter
+func (O *Object) ResetAttributes() error {
+	var data Data
+	for _, attr := range O.Attributes {
+		data.reset()
+		data.NativeTypeNum = attr.NativeTypeNum
+		data.ObjectType = attr.ObjectType
+		if attr.NativeTypeNum == C.DPI_NATIVE_TYPE_BYTES && attr.OracleTypeNum == C.DPI_ORACLE_TYPE_NUMBER {
+			var a [22]byte
+			C.dpiData_setBytes(data.dpiData, (*C.char)(unsafe.Pointer(&a[0])), 22)
+		}
+		if C.dpiObject_setAttributeValue(O.dpiObject, attr.dpiObjectAttr, data.NativeTypeNum, data.dpiData) == C.DPI_FAILURE {
+			return O.getError()
+		}
+	}
+
+	return nil
+}
+
 // Get scans the named attribute into dest, and returns it.
 func (O *Object) Get(name string) (interface{}, error) {
 	if err := O.GetAttribute(&O.scratch, name); err != nil {
@@ -105,6 +124,33 @@ func (O *Object) Get(name string) (interface{}, error) {
 		return &ObjectCollection{Object: sub}, nil
 	}
 	return sub, nil
+}
+
+// ObjectRef implements userType interface.
+func (O *Object) ObjectRef() *Object {
+	return O
+}
+
+// Collection returns &ObjectCollection{Object: O} iff the Object is a collection.
+// Otherwise it returns nil.
+func (O *Object) Collection() *ObjectCollection {
+	if O.ObjectType.CollectionOf == nil {
+		return nil
+	}
+	return &ObjectCollection{Object: O}
+}
+
+// Close releases a reference to the object.
+func (O *Object) Close() error {
+	if O.dpiObject == nil {
+		return nil
+	}
+	if rc := C.dpiObject_release(O.dpiObject); rc == C.DPI_FAILURE {
+		return errors.Wrapf(O.getError(), "error on close object")
+	}
+	O.dpiObject = nil
+
+	return nil
 }
 
 // ObjectCollection represents a Collection of Objects - itself an Object, too.
@@ -142,9 +188,7 @@ func (O *ObjectCollection) AsSlice(dest interface{}) (interface{}, error) {
 			}
 			dr = reflect.MakeSlice(reflect.SliceOf(vr.Type()), 0, length)
 		}
-		if dr = reflect.Append(dr, vr); err != nil {
-			return dr.Interface(), err
-		}
+		dr = reflect.Append(dr, vr)
 	}
 	return dr.Interface(), nil
 }
@@ -297,6 +341,30 @@ func (t ObjectType) NewObject() (*Object, error) {
 		return nil, t.getError()
 	}
 	return &Object{ObjectType: t, dpiObject: obj}, nil
+}
+
+// Close releases a reference to the object type.
+func (t *ObjectType) Close() error {
+
+	for _, attr := range t.Attributes {
+		err := attr.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	t.Attributes = nil
+	d := t.dpiObjectType
+	t.dpiObjectType = nil
+	if d == nil {
+		return nil
+	}
+
+	if rc := C.dpiObjectType_release(d); rc == C.DPI_FAILURE {
+		return errors.Wrapf(t.getError(), "error on close object type")
+	}
+
+	return nil
 }
 
 func wrapObject(d *drv, objectType *C.dpiObjectType, object *C.dpiObject) (*Object, error) {

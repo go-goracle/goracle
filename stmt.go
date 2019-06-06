@@ -45,6 +45,7 @@ type stmtOptions struct {
 	plSQLArrays         bool
 	lobAsReader         bool
 	magicTypeConversion bool
+	numberAsString      bool
 }
 
 func (o stmtOptions) ExecMode() C.dpiExecMode {
@@ -72,6 +73,7 @@ func (o stmtOptions) ClobAsString() bool { return !o.lobAsReader }
 func (o stmtOptions) LobAsReader() bool  { return o.lobAsReader }
 
 func (o stmtOptions) MagicTypeConversion() bool { return o.magicTypeConversion }
+func (o stmtOptions) NumberAsString() bool      { return o.numberAsString }
 
 // Option holds statement options.
 type Option func(*stmtOptions)
@@ -133,6 +135,11 @@ func LobAsReader() Option { return func(o *stmtOptions) { o.lobAsReader = true }
 // MagicTypeConversion returns an option to force converting named scalar types (e.g. "type underlying int64") to their scalar underlying type.
 func MagicTypeConversion() Option {
 	return func(o *stmtOptions) { o.magicTypeConversion = true }
+}
+
+// NumberAsString returns an option to return numbers as string, not Number.
+func NumberAsString() Option {
+	return func(o *stmtOptions) { o.numberAsString = true }
 }
 
 // CallTimeout sets the round-trip timeout (OCI_ATTR_CALL_TIMEOUT).
@@ -279,22 +286,23 @@ func (st *statement) ExecContext(ctx context.Context, args []driver.NamedValue) 
 
 	st.conn.RLock()
 	defer st.conn.RUnlock()
-	// execute
+
+	// bind variables
+	if err = st.bindVars(args, Log); err != nil {
+		return nil, closeIfBadConn(err)
+	}
+
+	mode := st.ExecMode()
+	//fmt.Printf("%p.%p: inTran? %t\n%s\n", st.conn, st, st.inTransaction, st.query)
+	if !st.inTransaction {
+		mode |= C.DPI_MODE_EXEC_COMMIT_ON_SUCCESS
+	}
+	st.setCallTimeout(ctx)
+
 	done := make(chan error, 1)
+	// execute
 	go func() {
 		defer close(done)
-		// bind variables
-		if err = st.bindVars(args, Log); err != nil {
-			done <- err
-			return
-		}
-
-		mode := st.ExecMode()
-		//fmt.Printf("%p.%p: inTran? %t\n%s\n", st.conn, st, st.inTransaction, st.query)
-		if !st.inTransaction {
-			mode |= C.DPI_MODE_EXEC_COMMIT_ON_SUCCESS
-		}
-		st.setCallTimeout(ctx)
 	Loop:
 		for i := 0; i < 3; i++ {
 			if err = ctx.Err(); err != nil {
@@ -468,6 +476,12 @@ func (st *statement) QueryContext(ctx context.Context, args []driver.NamedValue)
 		return nil, closeIfBadConn(err)
 	}
 
+	mode := st.ExecMode()
+	//fmt.Printf("%p.%p: inTran? %t\n%s\n", st.conn, st, st.inTransaction, st.query)
+	if !st.inTransaction {
+		mode |= C.DPI_MODE_EXEC_COMMIT_ON_SUCCESS
+	}
+
 	// execute
 	var colCount C.uint32_t
 	done := make(chan error, 1)
@@ -480,7 +494,7 @@ func (st *statement) QueryContext(ctx context.Context, args []driver.NamedValue)
 				return
 			}
 			st.setCallTimeout(ctx)
-			if C.dpiStmt_execute(st.dpiStmt, st.ExecMode(), &colCount) != C.DPI_FAILURE {
+			if C.dpiStmt_execute(st.dpiStmt, mode, &colCount) != C.DPI_FAILURE {
 				break
 			}
 			if err = ctx.Err(); err == nil {
@@ -653,7 +667,9 @@ func (st *statement) bindVars(args []driver.NamedValue, Log logFunc) error {
 		st.dests[i] = value
 		rv := reflect.ValueOf(value)
 		if info.isOut {
-			//fmt.Printf("%d. v=%T %#v kind=%s\n", i, value, value, reflect.ValueOf(value).Kind())
+			if rv.IsNil() {
+				fmt.Printf("%d. v=%T %#v kind=%s\n", i, value, value, reflect.ValueOf(value).Kind())
+			}
 			if rv.Kind() == reflect.Ptr {
 				rv = rv.Elem()
 				value = rv.Interface()
@@ -1056,9 +1072,9 @@ func (st *statement) bindVarTypeSwitch(info *argInfo, get *dataGetter, value int
 
 	case time.Time, []time.Time:
 		info.typ, info.natTyp = C.DPI_ORACLE_TYPE_DATE, C.DPI_NATIVE_TYPE_TIMESTAMP
-		info.set = dataSetTime
+		info.set = st.conn.dataSetTime
 		if info.isOut {
-			*get = dataGetTime
+			*get = st.conn.dataGetTime
 		}
 
 	case Object:
@@ -1071,6 +1087,14 @@ func (st *statement) bindVarTypeSwitch(info *argInfo, get *dataGetter, value int
 
 	case *Object:
 		info.objType = v.ObjectType.dpiObjectType
+		info.typ, info.natTyp = C.DPI_ORACLE_TYPE_OBJECT, C.DPI_NATIVE_TYPE_OBJECT
+		info.set = st.dataSetObject
+		if info.isOut {
+			*get = st.dataGetObject
+		}
+
+	case userType:
+		info.objType = v.ObjectRef().ObjectType.dpiObjectType
 		info.typ, info.natTyp = C.DPI_ORACLE_TYPE_OBJECT, C.DPI_NATIVE_TYPE_OBJECT
 		info.set = st.dataSetObject
 		if info.isOut {
@@ -1128,6 +1152,13 @@ func dataSetBool(dv *C.dpiVar, data []C.dpiData, vv interface{}) error {
 		return dataSetNull(dv, data, nil)
 	}
 	b := C.int(0)
+	if v, ok := vv.(bool); ok {
+		if v {
+			b = 1
+		}
+		C.dpiData_setBool(&data[0], b)
+		return nil
+	}
 	if bb, ok := vv.([]bool); ok {
 		for i, v := range bb {
 			if v {
@@ -1135,20 +1166,20 @@ func dataSetBool(dv *C.dpiVar, data []C.dpiData, vv interface{}) error {
 			}
 			C.dpiData_setBool(&data[i], b)
 		}
-	} else {
-		for i := range data {
-			data[i].isNull = 1
-		}
+		return nil
+	}
+	for i := range data {
+		data[i].isNull = 1
 	}
 	return nil
 }
-func dataGetTime(v interface{}, data []C.dpiData) error {
+func (c *conn) dataGetTime(v interface{}, data []C.dpiData) error {
 	if x, ok := v.(*time.Time); ok {
 		if len(data) == 0 || data[0].isNull == 1 {
 			*x = time.Time{}
 			return nil
 		}
-		dataGetTimeC(x, &data[0])
+		c.dataGetTimeC(x, &data[0])
 		return nil
 	}
 	slice := v.(*[]time.Time)
@@ -1159,24 +1190,29 @@ func dataGetTime(v interface{}, data []C.dpiData) error {
 		*slice = make([]time.Time, n)
 	}
 	for i := range data {
-		dataGetTimeC(&((*slice)[i]), &data[i])
+		c.dataGetTimeC(&((*slice)[i]), &data[i])
 	}
 	return nil
 }
 
-func dataGetTimeC(t *time.Time, data *C.dpiData) {
+func (c *conn) dataGetTimeC(t *time.Time, data *C.dpiData) {
 	if data.isNull == 1 {
 		*t = time.Time{}
 		return
 	}
 	ts := C.dpiData_getTimestamp(data)
+	tz := c.timeZone
+	if ts.tzHourOffset != 0 || ts.tzMinuteOffset != 0 {
+		tz = timeZoneFor(ts.tzHourOffset, ts.tzMinuteOffset)
+	}
 	*t = time.Date(
 		int(ts.year), time.Month(ts.month), int(ts.day),
 		int(ts.hour), int(ts.minute), int(ts.second), int(ts.fsecond),
-		timeZoneFor(ts.tzHourOffset, ts.tzMinuteOffset),
+		tz,
 	)
 }
-func dataSetTime(dv *C.dpiVar, data []C.dpiData, vv interface{}) error {
+
+func (c *conn) dataSetTime(dv *C.dpiVar, data []C.dpiData, vv interface{}) error {
 	if vv == nil {
 		return dataSetNull(dv, data, nil)
 	}
@@ -1192,19 +1228,20 @@ func dataSetTime(dv *C.dpiVar, data []C.dpiData, vv interface{}) error {
 			return nil
 		}
 	}
+	tzHour, tzMin := C.int8_t(c.tzOffSecs/3600), C.int8_t((c.tzOffSecs%3600)/60)
 	for i, t := range times {
 		if t.IsZero() {
 			data[i].isNull = 1
 			continue
 		}
 		data[i].isNull = 0
-		_, z := t.Zone()
+		t = t.In(c.timeZone)
 		Y, M, D := t.Date()
 		h, m, s := t.Clock()
 		C.dpiData_setTimestamp(&data[i],
 			C.int16_t(Y), C.uint8_t(M), C.uint8_t(D),
 			C.uint8_t(h), C.uint8_t(m), C.uint8_t(s), C.uint32_t(t.Nanosecond()),
-			C.int8_t(z/3600), C.int8_t((z%3600)/60),
+			tzHour, tzMin,
 		)
 	}
 	return nil
@@ -1787,6 +1824,22 @@ func (c *conn) dataSetLOB(dv *C.dpiVar, data []C.dpiData, vv interface{}) error 
 	return firstErr
 }
 
+type userType interface {
+	ObjectRef() *Object
+}
+
+// ObjectScanner assigns a value from a database object
+type ObjectScanner interface {
+	sql.Scanner
+	userType
+}
+
+// ObjectWriter update database object before binding
+type ObjectWriter interface {
+	WriteObject() error
+	userType
+}
+
 func (c *conn) dataSetObject(dv *C.dpiVar, data []C.dpiData, vv interface{}) error {
 	//fmt.Printf("\ndataSetObject(dv=%+v, data=%+v, vv=%+v)\n", dv, data, vv)
 	if len(data) == 0 {
@@ -1796,10 +1849,31 @@ func (c *conn) dataSetObject(dv *C.dpiVar, data []C.dpiData, vv interface{}) err
 		return dataSetNull(dv, data, nil)
 	}
 	objs := []Object{{}}
-	if O, ok := vv.(Object); ok {
-		objs[0] = O
-	} else {
-		objs = vv.([]Object)
+	switch o := vv.(type) {
+	case Object:
+		objs[0] = o
+	case []Object:
+		objs = o
+	case ObjectWriter:
+		err := o.WriteObject()
+		if err != nil {
+			return err
+		}
+		objs[0] = *o.ObjectRef()
+	case []ObjectWriter:
+		for _, ut := range o {
+			err := ut.WriteObject()
+			if err != nil {
+				return err
+			}
+			objs = append(objs, *ut.ObjectRef())
+		}
+	case userType:
+		objs[0] = *o.ObjectRef()
+	case []userType:
+		for _, ut := range o {
+			objs = append(objs, *ut.ObjectRef())
+		}
 	}
 	for i, obj := range objs {
 		if obj.dpiObject == nil {
@@ -1813,7 +1887,25 @@ func (c *conn) dataSetObject(dv *C.dpiVar, data []C.dpiData, vv interface{}) err
 }
 
 func (c *conn) dataGetObject(v interface{}, data []C.dpiData) error {
-	return errors.New("dataGetObject not implemented")
+	switch out := v.(type) {
+	case *Object:
+		d := Data{
+			ObjectType: out.ObjectType,
+			dpiData:    &data[0],
+		}
+		*out = *d.GetObject()
+	case ObjectScanner:
+		d := Data{
+			ObjectType: out.ObjectRef().ObjectType,
+			dpiData:    &data[0],
+		}
+		return out.Scan(d.GetObject())
+	default:
+
+		return fmt.Errorf("dataGetObject not implemented for type %T (maybe you need to implement the Scan method)", v)
+	}
+
+	return nil
 }
 
 // CheckNamedValue is called before passing arguments to the driver
