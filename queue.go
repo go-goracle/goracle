@@ -61,6 +61,7 @@ func NewQueue(execer Execer, name string, payloadObjectTypeName string) (*Queue,
 	return &Q, err
 }
 
+// Close the queue.
 func (Q *Queue) Close() error {
 	c, q := Q.conn, Q.dpiQueue
 	Q.conn, Q.dpiQueue = nil, nil
@@ -76,6 +77,7 @@ func (Q *Queue) Close() error {
 // Name of the queue.
 func (Q *Queue) Name() string { return Q.name }
 
+// EnqOptions returns the queue's enqueue options in effect.
 func (Q *Queue) EnqOptions() (EnqOptions, error) {
 	var E EnqOptions
 	var opts *C.dpiEnqOptions
@@ -85,6 +87,8 @@ func (Q *Queue) EnqOptions() (EnqOptions, error) {
 	err := E.fromOra(Q.conn.drv, opts)
 	return E, err
 }
+
+// DeqOptions returns the queue's dequeue options in effect.
 func (Q *Queue) DeqOptions() (DeqOptions, error) {
 	var D DeqOptions
 	var opts *C.dpiDeqOptions
@@ -96,6 +100,7 @@ func (Q *Queue) DeqOptions() (DeqOptions, error) {
 }
 
 // Dequeues messages into the given slice.
+// Returns the number of messages filled in the given slice.
 func (Q *Queue) Dequeue(messages []Message) (int, error) {
 	var ok C.int
 	props := make([]*C.dpiMsgProps, len(messages))
@@ -120,7 +125,9 @@ func (Q *Queue) Dequeue(messages []Message) (int, error) {
 	return int(num), firstErr
 }
 
-// Warning: calling this function in parallel on different connections acquired from the same pool may fail due to Oracle bug 29928074. Ensure that this function is not run in parallel, use standalone connections or connections from different pools, or make multiple calls to Queue.enqOne() instead. The function Queue.Dequeue() call is not affected.
+// Enqueue all the messages given.
+//
+// WARNING: calling this function in parallel on different connections acquired from the same pool may fail due to Oracle bug 29928074. Ensure that this function is not run in parallel, use standalone connections or connections from different pools, or make multiple calls to Queue.enqOne() instead. The function Queue.Dequeue() call is not affected.
 func (Q *Queue) Enqueue(messages []Message) error {
 	props := make([]*C.dpiMsgProps, len(messages))
 	defer func() {
@@ -399,6 +406,7 @@ func (D DeqOptions) fromOra(d *drv, opts *C.dpiDeqOptions) error {
 	return firstErr
 }
 
+// MessageState constants representing message's state.
 type MessageState uint32
 
 const (
@@ -412,6 +420,7 @@ const (
 	MsgStateExpired = MessageState(C.DPI_MSG_STATE_EXPIRED)
 )
 
+// DeliveryMode constants for delivery modes.
 type DeliveryMode uint32
 
 const (
@@ -423,6 +432,7 @@ const (
 	DeliverPersistentOrBuffered = DeliveryMode(C.DPI_MODE_MSG_PERSISTENT_OR_BUFFERED)
 )
 
+// Visibility constants represents visibility.
 type Visibility uint32
 
 const (
@@ -432,6 +442,7 @@ const (
 	VisibleOnCommit = Visibility(C.DPI_VISIBILITY_ON_COMMIT)
 )
 
+// DeqMode constants for dequeue modes.
 type DeqMode uint32
 
 const (
@@ -445,6 +456,7 @@ const (
 	DeqPeek = DeqMode(C.DPI_MODE_DEQ_REMOVE_NO_DATA)
 )
 
+// DeqNavigation constants for navigation.
 type DeqNavigation uint32
 
 const (
