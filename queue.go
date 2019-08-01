@@ -406,6 +406,11 @@ func (D DeqOptions) fromOra(d *drv, opts *C.dpiDeqOptions) error {
 	return firstErr
 }
 
+const (
+	NoWait      = uint32(0)
+	WaitForever = uint32(1<<31 - 1)
+)
+
 // MessageState constants representing message's state.
 type MessageState uint32
 
