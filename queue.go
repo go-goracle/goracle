@@ -34,24 +34,49 @@ type Queue struct {
 	name     string
 }
 
-func NewQueue(execer Execer, name string, payloadType *C.dpiObjectType) (Queue, error) {
+// NewQueue creates a new Queue.
+//
+// WARNING: the connection given to it must not be closed before the Queue is closed!
+// So use an sql.Conn for it.
+func NewQueue(execer Execer, name string, payloadObjectTypeName string) (*Queue, error) {
 	cx, err := DriverConn(execer)
 	if err != nil {
-		return Queue{}, err
+		return nil, err
 	}
 	Q := Queue{conn: cx.(*conn)}
+
+	var payloadType *C.dpiObjectType
+	if payloadObjectTypeName != "" {
+		if objType, err := Q.conn.GetObjectType(name); err != nil {
+			return nil, err
+		} else {
+			payloadType = objType.dpiObjectType
+		}
+	}
 	value := C.CString(name)
 	if C.dpiConn_newQueue(Q.conn.dpiConn, value, C.uint(len(name)), payloadType, &Q.dpiQueue) == C.DPI_FAILURE {
 		err = errors.WithMessage(Q.conn.drv.getError(), "newQueue "+name)
 	}
 	C.free(unsafe.Pointer(value))
-	return Q, err
+	return &Q, err
+}
+
+func (Q *Queue) Close() error {
+	c, q := Q.conn, Q.dpiQueue
+	Q.conn, Q.dpiQueue = nil, nil
+	if q == nil {
+		return nil
+	}
+	if C.dpiQueue_release(q) == C.DPI_FAILURE {
+		return errors.WithMessage(c.getError(), "release")
+	}
+	return nil
 }
 
 // Name of the queue.
-func (Q Queue) Name() string { return Q.name }
+func (Q *Queue) Name() string { return Q.name }
 
-func (Q Queue) EnqOptions() (EnqOptions, error) {
+func (Q *Queue) EnqOptions() (EnqOptions, error) {
 	var E EnqOptions
 	var opts *C.dpiEnqOptions
 	if C.dpiQueue_getEnqOptions(Q.dpiQueue, &opts) == C.DPI_FAILURE {
@@ -60,7 +85,7 @@ func (Q Queue) EnqOptions() (EnqOptions, error) {
 	err := E.fromOra(Q.conn.drv, opts)
 	return E, err
 }
-func (Q Queue) DeqOptions() (DeqOptions, error) {
+func (Q *Queue) DeqOptions() (DeqOptions, error) {
 	var D DeqOptions
 	var opts *C.dpiDeqOptions
 	if C.dpiQueue_getDeqOptions(Q.dpiQueue, &opts) == C.DPI_FAILURE {
@@ -71,7 +96,7 @@ func (Q Queue) DeqOptions() (DeqOptions, error) {
 }
 
 // Dequeues messages into the given slice.
-func (Q Queue) Dequeue(messages []Message) (int, error) {
+func (Q *Queue) Dequeue(messages []Message) (int, error) {
 	var ok C.int
 	props := make([]*C.dpiMsgProps, len(messages))
 	num := C.uint(len(props))
@@ -96,7 +121,7 @@ func (Q Queue) Dequeue(messages []Message) (int, error) {
 }
 
 // Warning: calling this function in parallel on different connections acquired from the same pool may fail due to Oracle bug 29928074. Ensure that this function is not run in parallel, use standalone connections or connections from different pools, or make multiple calls to Queue.enqOne() instead. The function Queue.Dequeue() call is not affected.
-func (Q Queue) Enqueue(messages []Message) error {
+func (Q *Queue) Enqueue(messages []Message) error {
 	props := make([]*C.dpiMsgProps, len(messages))
 	defer func() {
 		for _, p := range props {
@@ -126,6 +151,7 @@ func (Q Queue) Enqueue(messages []Message) error {
 	return nil
 }
 
+// Message is a message - either received or being sent.
 type Message struct {
 	DeliveryMode            DeliveryMode
 	Enqueued                time.Time
@@ -277,6 +303,7 @@ func (M *Message) fromOra(c *conn, props *C.dpiMsgProps) error {
 	return nil
 }
 
+// EnqOptions are the options used to enqueue a message.
 type EnqOptions struct {
 	Transformation string
 	Visibility     Visibility
@@ -308,6 +335,7 @@ func (E EnqOptions) fromOra(d *drv, opts *C.dpiEnqOptions) error {
 	return firstErr
 }
 
+// DeqOptions are the options used to dequeue a message.
 type DeqOptions struct {
 	Condition, Consumer, Correlation string
 	MsgID, Transformation            string
