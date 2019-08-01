@@ -111,7 +111,7 @@ func (Q *Queue) Dequeue(messages []Message) (int, error) {
 		ok = C.dpiQueue_deqMany(Q.dpiQueue, &num, &props[0])
 	}
 	if ok == C.DPI_FAILURE {
-		return int(num), errors.WithMessage(Q.conn.getError(), "dequeue")
+		return 0, errors.WithMessage(Q.conn.getError(), "dequeue")
 	}
 	var firstErr error
 	for i, p := range props[:int(num)] {
@@ -210,10 +210,10 @@ func (M *Message) toOra(d *drv, props *C.dpiMsgProps) error {
 	OK(C.dpiMsgProps_setPriority(props, C.int(M.Priority)), "setPriority")
 
 	if M.Object == nil {
-		OK(C.dpiMsgProps_setPayloadBytes(props, (*C.char)(unsafe.Pointer(&M.Raw[0])), C.uint(len(M.Raw))), "setPriority")
+		OK(C.dpiMsgProps_setPayloadBytes(props, (*C.char)(unsafe.Pointer(&M.Raw[0])), C.uint(len(M.Raw))), "setPayloadBytes")
+	} else {
+		OK(C.dpiMsgProps_setPayloadObject(props, M.Object.dpiObject), "setPayloadObject")
 	}
-
-	OK(C.dpiMsgProps_setPayloadObject(props, M.Object.dpiObject), "setPayload")
 
 	return firstErr
 }
