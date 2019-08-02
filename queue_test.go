@@ -32,11 +32,22 @@ func TestQueue(t *testing.T) {
 	}
 	defer conn.Close()
 	const qName = "TEST_Q"
-	if _, err = conn.ExecContext(ctx, "BEGIN DBMS_AQADM.CREATE_QUEUE_TABLE(:1, 'RAW'); END;", qName); err != nil {
-		t.Fatal(err)
+	const qTblName = qName + "_TBL"
+	if _, err = conn.ExecContext(ctx, `DECLARE
+		tbl CONSTANT VARCHAR2(61) := USER||'.'||:1;
+		q CONSTANT VARCHAR2(61) := USER||'.'||:2;
+	BEGIN
+		BEGIN DBMS_AQADM.DROP_QUEUE_TABLE(tbl); EXCEPTION WHEN OTHERS THEN NULL; END;
+		DBMS_AQADM.CREATE_QUEUE_TABLE(tbl, 'RAW');
+		DBMS_AQADM.CREATE_QUEUE(q, tbl); END;
+		DBMS_AQADM.grant_queue_privilege('ENQUEUE', q, USER);
+		DBMS_AQADM.grant_queue_privilege('DEQUEUE', q, USER);
+		DBMS_AQADM.start_queue(q);
+	END;`, qTblName, qName); err != nil {
+		t.Log(err)
 	}
 	defer func() {
-		conn.ExecContext(context.Background(), "BEGIN DBMS_AQADM.DROP_QUEUE(:1); END;", qName)
+		conn.ExecContext(context.Background(), "BEGIN DBMS_AQADM.stop_queue(:1); DBMS_AQADM.DROP_QUEUE_TABLE(:2); END;", qName, qName+"_TBL")
 	}()
 
 	q, err := goracle.NewQueue(conn, qName, "")
@@ -50,12 +61,12 @@ func TestQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("enqOpts:", enqOpts)
+	t.Logf("enqOpts: %#v", enqOpts)
 	deqOpts, err := q.DeqOptions()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("deqOpts:", deqOpts)
+	t.Logf("deqOpts: %#v", deqOpts)
 
 	if err = q.Enqueue([]goracle.Message{goracle.Message{Raw: []byte("árvíztűrő tükörfúrógép")}}); err != nil {
 		t.Fatal("enqueue:", err)
@@ -67,6 +78,6 @@ func TestQueue(t *testing.T) {
 	}
 	t.Logf("received %d messages", n)
 	for _, m := range msgs[:n] {
-		t.Log("got:", m)
+		t.Logf("got: %#v (%q)", m, string(m.Raw))
 	}
 }
