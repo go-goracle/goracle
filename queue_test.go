@@ -37,7 +37,10 @@ func TestQueue(t *testing.T) {
 		tbl CONSTANT VARCHAR2(61) := USER||'.'||:1;
 		q CONSTANT VARCHAR2(61) := USER||'.'||:2;
 	BEGIN
-		BEGIN DBMS_AQADM.DROP_QUEUE_TABLE(tbl); EXCEPTION WHEN OTHERS THEN NULL; END;
+		BEGIN DBMS_AQADM.stop_queue(q); EXCEPTION WHEN OTHERS THEN NULL; END;
+		BEGIN DBMS_AQADM.drop_queue(q); EXCEPTION WHEN OTHERS THEN NULL; END;
+		BEGIN DBMS_AQADM.drop_queue_table(tbl); EXCEPTION WHEN OTHERS THEN NULL; END;
+
 		DBMS_AQADM.CREATE_QUEUE_TABLE(tbl, 'RAW');
 		DBMS_AQADM.CREATE_QUEUE(q, tbl); END;
 		DBMS_AQADM.grant_queue_privilege('ENQUEUE', q, USER);
@@ -47,7 +50,18 @@ func TestQueue(t *testing.T) {
 		t.Log(err)
 	}
 	defer func() {
-		conn.ExecContext(context.Background(), "BEGIN DBMS_AQADM.stop_queue(:1); DBMS_AQADM.DROP_QUEUE_TABLE(:2); END;", qName, qName+"_TBL")
+		conn.ExecContext(
+			context.Background(),
+			`DECLARE
+			tbl CONSTANT VARCHAR2(61) := USER||'.'||:1;
+			q CONSTANT VARCHAR2(61) := USER||'.'||:2;
+		BEGIN
+			BEGIN DBMS_AQADM.stop_queue(q); EXCEPTION WHEN OTHERS THEN NULL; END;
+			BEGIN DBMS_AQADM.drop_queue(q); EXCEPTION WHEN OTHERS THEN NULL; END;
+			BEGIN DBMS_AQADM.drop_queue_table(tbl); EXCEPTION WHEN OTHERS THEN NULL;
+		END;`,
+			qTblName, qName,
+		)
 	}()
 
 	q, err := goracle.NewQueue(conn, qName, "")
