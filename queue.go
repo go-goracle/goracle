@@ -47,7 +47,7 @@ func NewQueue(execer Execer, name string, payloadObjectTypeName string) (*Queue,
 
 	var payloadType *C.dpiObjectType
 	if payloadObjectTypeName != "" {
-		if objType, err := Q.conn.GetObjectType(name); err != nil {
+		if objType, err := Q.conn.GetObjectType(payloadObjectTypeName); err != nil {
 			return nil, err
 		} else {
 			payloadType = objType.dpiObjectType

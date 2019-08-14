@@ -75,7 +75,7 @@ func (O *Object) GetAttribute(data *Data, name string) error {
 	return nil
 }
 
-// SetAttribute sets the i-th attribute with data.
+// SetAttribute sets the named attribute with data.
 func (O *Object) SetAttribute(name string, data *Data) error {
 	attr := O.Attributes[name]
 	if data.NativeTypeNum == 0 {
@@ -86,6 +86,15 @@ func (O *Object) SetAttribute(name string, data *Data) error {
 		return O.getError()
 	}
 	return nil
+}
+
+// Set is a convenience function to set the named attribute with the given value.
+func (O *Object) Set(name string, v interface{}) error {
+	data, err := NewData(v)
+	if err != nil {
+		return err
+	}
+	return O.SetAttribute(name, data)
 }
 
 // ResetAttributes prepare all atributes for use the object as IN parameter
