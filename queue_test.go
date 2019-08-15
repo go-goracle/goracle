@@ -34,23 +34,29 @@ func TestQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
+	var user string
+	if err = conn.QueryRowContext(ctx, "SELECT USER FROM DUAL").Scan(&user); err != nil {
+		t.Fatal(err)
+	}
+
 	const qName = "TEST_Q"
 	const qTblName = qName + "_TBL"
-	if _, err = conn.ExecContext(ctx, `DECLARE
-		tbl CONSTANT VARCHAR2(61) := USER||'.'||:1;
-		q CONSTANT VARCHAR2(61) := USER||'.'||:2;
+	qry := `DECLARE
+		tbl CONSTANT VARCHAR2(61) := '` + user + "." + qTblName + `';
+		q CONSTANT VARCHAR2(61) := '` + user + "." + qName + `';
 	BEGIN
 		BEGIN DBMS_AQADM.stop_queue(q); EXCEPTION WHEN OTHERS THEN NULL; END;
 		BEGIN DBMS_AQADM.drop_queue(q); EXCEPTION WHEN OTHERS THEN NULL; END;
 		BEGIN DBMS_AQADM.drop_queue_table(tbl); EXCEPTION WHEN OTHERS THEN NULL; END;
 
 		DBMS_AQADM.CREATE_QUEUE_TABLE(tbl, 'RAW');
-		DBMS_AQADM.CREATE_QUEUE(q, tbl); END;
-		DBMS_AQADM.grant_queue_privilege('ENQUEUE', q, USER);
-		DBMS_AQADM.grant_queue_privilege('DEQUEUE', q, USER);
+		DBMS_AQADM.CREATE_QUEUE(q, tbl);
+		DBMS_AQADM.grant_queue_privilege('ENQUEUE', q, '` + user + `');
+		DBMS_AQADM.grant_queue_privilege('DEQUEUE', q, '` + user + `');
 		DBMS_AQADM.start_queue(q);
-	END;`, qTblName, qName); err != nil {
-		t.Log(err)
+	END;`
+	if _, err = conn.ExecContext(ctx, qry); err != nil {
+		t.Log(errors.Wrap(err, qry))
 	}
 	defer func() {
 		conn.ExecContext(
