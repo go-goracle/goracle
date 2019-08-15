@@ -39,7 +39,7 @@ type Object struct {
 	dpiObject *C.dpiObject
 }
 
-func (O *Object) getError() error { return O.drv.getError() }
+func (O *Object) getError() error { return O.conn.getError() }
 
 // ErrNoSuchKey is the error for missing key in lookup.
 var ErrNoSuchKey = errors.New("no such key")
@@ -318,12 +318,13 @@ func (O *ObjectCollection) Trim(n int) error {
 
 // ObjectType holds type info of an Object.
 type ObjectType struct {
+	dpiObjectType *C.dpiObjectType
+	conn          *conn
+
 	Schema, Name                        string
 	DBSize, ClientSizeInBytes, CharSize int
 	CollectionOf                        *ObjectType
 	Attributes                          map[string]ObjectAttribute
-	dpiObjectType                       *C.dpiObjectType
-	drv                                 *drv
 	OracleTypeNum                       C.dpiOracleTypeNum
 	NativeTypeNum                       C.dpiNativeTypeNum
 	Precision                           int16
@@ -331,7 +332,7 @@ type ObjectType struct {
 	FsPrecision                         uint8
 }
 
-func (t ObjectType) getError() error { return t.drv.getError() }
+func (t ObjectType) getError() error { return t.conn.getError() }
 
 // FullName returns the object's name with the schame prepended.
 func (t ObjectType) FullName() string {
@@ -356,7 +357,7 @@ func (c *conn) GetObjectType(name string) (ObjectType, error) {
 		C.free(unsafe.Pointer(objType))
 		return ObjectType{}, errors.Wrapf(c.getError(), "getObjectType(%q) conn=%p", name, c.dpiConn)
 	}
-	t := ObjectType{drv: c.drv, dpiObjectType: objType}
+	t := ObjectType{conn: c, dpiObjectType: objType}
 	return t, t.init()
 }
 
@@ -407,20 +408,20 @@ func (t *ObjectType) Close() error {
 	return nil
 }
 
-func wrapObject(d *drv, objectType *C.dpiObjectType, object *C.dpiObject) (*Object, error) {
+func wrapObject(c *conn, objectType *C.dpiObjectType, object *C.dpiObject) (*Object, error) {
 	if objectType == nil {
 		return nil, errors.New("objectType is nil")
 	}
 	o := &Object{
-		ObjectType: ObjectType{dpiObjectType: objectType, drv: d},
+		ObjectType: ObjectType{dpiObjectType: objectType, conn: c},
 		dpiObject:  object,
 	}
 	return o, o.init()
 }
 
 func (t *ObjectType) init() error {
-	if t.drv == nil {
-		panic("drv is nil")
+	if t.conn == nil {
+		panic("conn is nil")
 	}
 	if t.Name != "" && t.Attributes != nil {
 		return nil
@@ -438,7 +439,7 @@ func (t *ObjectType) init() error {
 	numAttributes := int(info.numAttributes)
 
 	if info.isCollection == 1 {
-		t.CollectionOf = &ObjectType{drv: t.drv}
+		t.CollectionOf = &ObjectType{conn: t.conn}
 		if err := t.CollectionOf.fromDataTypeInfo(info.elementTypeInfo); err != nil {
 			return err
 		}
@@ -468,7 +469,7 @@ func (t *ObjectType) init() error {
 			Log("i", i, "attrInfo", attrInfo)
 		}
 		typ := attrInfo.typeInfo
-		sub, err := objectTypeFromDataTypeInfo(t.drv, typ)
+		sub, err := objectTypeFromDataTypeInfo(t.conn, typ)
 		if err != nil {
 			return err
 		}
@@ -496,14 +497,14 @@ func (t *ObjectType) fromDataTypeInfo(typ C.dpiDataTypeInfo) error {
 	t.FsPrecision = uint8(typ.fsPrecision)
 	return t.init()
 }
-func objectTypeFromDataTypeInfo(drv *drv, typ C.dpiDataTypeInfo) (ObjectType, error) {
-	if drv == nil {
-		panic("drv nil")
+func objectTypeFromDataTypeInfo(conn *conn, typ C.dpiDataTypeInfo) (ObjectType, error) {
+	if conn == nil {
+		panic("conn is nil")
 	}
 	if typ.oracleTypeNum == 0 {
 		panic("typ is nil")
 	}
-	t := ObjectType{drv: drv}
+	t := ObjectType{conn: conn}
 	err := t.fromDataTypeInfo(typ)
 	return t, err
 }

@@ -193,10 +193,12 @@ func TestQueueObject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer oTyp.Close()
 	obj, err := oTyp.NewObject()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer obj.Close()
 	if err = obj.Set("F_DT", time.Now()); err != nil {
 		t.Error(err)
 	}

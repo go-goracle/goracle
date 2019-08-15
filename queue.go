@@ -21,6 +21,7 @@ package goracle
 */
 import "C"
 import (
+	"sync"
 	"time"
 	"unsafe"
 
@@ -32,6 +33,9 @@ type Queue struct {
 	*conn
 	dpiQueue *C.dpiQueue
 	name     string
+
+	mu    sync.Mutex
+	props []*C.dpiMsgProps
 }
 
 // NewQueue creates a new Queue.
@@ -102,8 +106,17 @@ func (Q *Queue) DeqOptions() (DeqOptions, error) {
 // Dequeues messages into the given slice.
 // Returns the number of messages filled in the given slice.
 func (Q *Queue) Dequeue(messages []Message) (int, error) {
+	Q.mu.Lock()
+	defer Q.mu.Unlock()
+	var props []*C.dpiMsgProps
+	if cap(Q.props) >= len(messages) {
+		props = Q.props[:len(messages)]
+	} else {
+		props = make([]*C.dpiMsgProps, len(messages))
+	}
+	Q.props = props
+
 	var ok C.int
-	props := make([]*C.dpiMsgProps, len(messages))
 	num := C.uint(len(props))
 	if num == 1 {
 		ok = C.dpiQueue_deqOne(Q.dpiQueue, &props[0])
@@ -129,7 +142,15 @@ func (Q *Queue) Dequeue(messages []Message) (int, error) {
 //
 // WARNING: calling this function in parallel on different connections acquired from the same pool may fail due to Oracle bug 29928074. Ensure that this function is not run in parallel, use standalone connections or connections from different pools, or make multiple calls to Queue.enqOne() instead. The function Queue.Dequeue() call is not affected.
 func (Q *Queue) Enqueue(messages []Message) error {
-	props := make([]*C.dpiMsgProps, len(messages))
+	Q.mu.Lock()
+	defer Q.mu.Unlock()
+	var props []*C.dpiMsgProps
+	if cap(Q.props) >= len(messages) {
+		props = Q.props[:len(messages)]
+	} else {
+		props = make([]*C.dpiMsgProps, len(messages))
+	}
+	Q.props = props
 	defer func() {
 		for _, p := range props {
 			if p != nil {
@@ -137,11 +158,11 @@ func (Q *Queue) Enqueue(messages []Message) error {
 			}
 		}
 	}()
-	for i := range props {
+	for i, m := range messages {
 		if C.dpiConn_newMsgProps(Q.conn.dpiConn, &props[i]) == C.DPI_FAILURE {
 			return errors.WithMessage(Q.conn.getError(), "newMsgProps")
 		}
-		if err := messages[i].toOra(Q.drv, props[i]); err != nil {
+		if err := m.toOra(Q.drv, props[i]); err != nil {
 			return err
 		}
 	}
@@ -153,7 +174,7 @@ func (Q *Queue) Enqueue(messages []Message) error {
 		ok = C.dpiQueue_enqMany(Q.dpiQueue, C.uint(len(props)), &props[0])
 	}
 	if ok == C.DPI_FAILURE {
-		return errors.WithMessage(Q.conn.getError(), "enqueue")
+		return errors.Wrapf(Q.conn.getError(), "enqueue %#v", messages)
 	}
 	return nil
 }
