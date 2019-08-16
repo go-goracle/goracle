@@ -73,7 +73,7 @@ func TestQueue(t *testing.T) {
 		)
 	}()
 
-	q, err := goracle.NewQueue(conn, qName, "")
+	q, err := goracle.NewQueue(ctx, conn, qName, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestQueueObject(t *testing.T) {
 		)
 	}()
 
-	q, err := goracle.NewQueue(conn, qName, qTypName)
+	q, err := goracle.NewQueue(ctx, conn, qName, qTypName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestQueueObject(t *testing.T) {
 	}
 	t.Logf("deqOpts: %#v", deqOpts)
 
-	oTyp, err := goracle.GetObjectType(conn, qTypName)
+	oTyp, err := goracle.GetObjectType(ctx, conn, qTypName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestQueueObject(t *testing.T) {
 	if err = obj.Set("F_DT", time.Now()); err != nil {
 		t.Error(err)
 	}
-	if err = obj.Set("F_VC20", "árvíztűrő tükörfúrógép"); err != nil {
+	if err = obj.Set("F_VC20", "árvíztűrő"); err != nil {
 		t.Error(err)
 	}
 	if err = obj.Set("F_NUM", 3.14); err != nil {

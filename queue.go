@@ -21,12 +21,17 @@ package goracle
 */
 import "C"
 import (
+	"context"
 	"sync"
 	"time"
 	"unsafe"
 
 	"github.com/pkg/errors"
 )
+
+const MsgIDLength = 16
+
+var zeroMsgID [MsgIDLength]byte
 
 // Queue represents an Oracle Advanced Queue.
 type Queue struct {
@@ -42,8 +47,8 @@ type Queue struct {
 //
 // WARNING: the connection given to it must not be closed before the Queue is closed!
 // So use an sql.Conn for it.
-func NewQueue(execer Execer, name string, payloadObjectTypeName string) (*Queue, error) {
-	cx, err := DriverConn(execer)
+func NewQueue(ctx context.Context, execer Execer, name string, payloadObjectTypeName string) (*Queue, error) {
+	cx, err := DriverConn(ctx, execer)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +191,7 @@ type Message struct {
 	Delay, Expiration       int32
 	Priority, NumAttempts   int32
 	Correlation, ExceptionQ string
-	MsgID, OriginalMsgID    string
+	MsgID, OriginalMsgID    [16]byte
 	State                   MessageState
 	Raw                     []byte
 	Object                  *Object
@@ -222,10 +227,8 @@ func (M *Message) toOra(d *drv, props *C.dpiMsgProps) error {
 		OK(C.dpiMsgProps_setExpiration(props, C.int(M.Expiration)), "setExpiration")
 	}
 
-	if M.OriginalMsgID != "" {
-		value := C.CString(M.OriginalMsgID)
-		OK(C.dpiMsgProps_setOriginalMsgId(props, value, C.uint(len(M.OriginalMsgID))), "setMsgOriginalId")
-		C.free(unsafe.Pointer(value))
+	if M.OriginalMsgID != zeroMsgID {
+		OK(C.dpiMsgProps_setOriginalMsgId(props, (*C.char)(unsafe.Pointer(&M.OriginalMsgID[0])), MsgIDLength), "setMsgOriginalId")
 	}
 
 	OK(C.dpiMsgProps_setPriority(props, C.int(M.Priority)), "setPriority")
@@ -297,14 +300,22 @@ func (M *Message) fromOra(c *conn, props *C.dpiMsgProps) error {
 		M.Expiration = int32(cint)
 	}
 
-	M.MsgID = ""
+	M.MsgID = zeroMsgID
 	if OK(C.dpiMsgProps_getMsgId(props, &value, &length), "getMsgId") {
-		M.MsgID = C.GoStringN(value, C.int(length))
+		n := C.int(length)
+		if n > MsgIDLength {
+			n = MsgIDLength
+		}
+		copy(M.MsgID[:], (*((*[1 << 30]byte)(unsafe.Pointer(&value))))[:n:n])
 	}
 
-	M.OriginalMsgID = ""
+	M.OriginalMsgID = zeroMsgID
 	if OK(C.dpiMsgProps_getOriginalMsgId(props, &value, &length), "getMsgOriginalId") {
-		M.OriginalMsgID = C.GoStringN(value, C.int(length))
+		n := C.int(length)
+		if n > MsgIDLength {
+			n = MsgIDLength
+		}
+		copy(M.OriginalMsgID[:], (*((*[1 << 30]byte)(unsafe.Pointer(&value))))[:n:n])
 	}
 
 	M.Priority = 0
