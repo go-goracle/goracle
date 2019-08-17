@@ -186,7 +186,7 @@ func (O *ObjectCollection) AsSlice(dest interface{}) (interface{}, error) {
 		if O.CollectionOf.NativeTypeNum == C.DPI_NATIVE_TYPE_OBJECT {
 			data.ObjectType = *O.CollectionOf
 		}
-		if err = O.Get(&data, i); err != nil {
+		if err = O.GetItem(&data, i); err != nil {
 			return dest, err
 		}
 		vr := reflect.ValueOf(data.Get())
@@ -230,8 +230,8 @@ func (O *ObjectCollection) Delete(i int) error {
 	return nil
 }
 
-// Get the i-th element of the collection into data.
-func (O *ObjectCollection) Get(data *Data, i int) error {
+// GetItem gets the i-th element of the collection into data.
+func (O *ObjectCollection) GetItem(data *Data, i int) error {
 	if data == nil {
 		panic("data cannot be nil")
 	}
@@ -252,12 +252,28 @@ func (O *ObjectCollection) Get(data *Data, i int) error {
 	return nil
 }
 
-// Set the i-th element of the collection with data.
-func (O *ObjectCollection) Set(i int, data *Data) error {
+// Get the i-th element of the collection.
+func (O *ObjectCollection) Get(i int) (interface{}, error) {
+	var data Data
+	err := O.GetItem(&data, i)
+	return data.Get(), err
+}
+
+// SetItem sets the i-th element of the collection with data.
+func (O *ObjectCollection) SetItem(i int, data *Data) error {
 	if C.dpiObject_setElementValueByIndex(O.dpiObject, C.int32_t(i), data.NativeTypeNum, data.dpiData) == C.DPI_FAILURE {
 		return errors.Wrapf(O.getError(), "set(%d[%d])", i, data.NativeTypeNum)
 	}
 	return nil
+}
+
+// Set the i-th element of the collection with value.
+func (O *ObjectCollection) Set(i int, v interface{}) error {
+	data, err := NewData(v)
+	if err != nil {
+		return err
+	}
+	return O.SetItem(i, data)
 }
 
 // First returns the first element's index of the collection.
@@ -333,6 +349,13 @@ type ObjectType struct {
 }
 
 func (t ObjectType) getError() error { return t.conn.getError() }
+
+func (t ObjectType) String() string {
+	if t.Schema == "" {
+		return t.Name
+	}
+	return t.Schema + "." + t.Name
+}
 
 // FullName returns the object's name with the schame prepended.
 func (t ObjectType) FullName() string {

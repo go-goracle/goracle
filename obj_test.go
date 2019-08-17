@@ -120,21 +120,27 @@ END;`
 	defer elt.Close()
 
 	// append to the collection
-	t.Logf("elt: %#v", elt)
+	t.Logf("elt: %s", elt)
 	coll.AppendObject(elt)
 
 	const mod = "BEGIN test_pkg_obj.modify(:1); END;"
 	if err = prepExec(ctx, testCon, mod, driver.NamedValue{Ordinal: 1, Value: coll}); err != nil {
 		t.Error(err)
 	}
-	t.Logf("coll: %#v", coll)
-	t.Logf("elt : %#v", elt)
-	for attr := range cOt.CollectionOf.Attributes {
-		var data Data
-		if err = elt.GetAttribute(&data, attr); err != nil {
+	t.Logf("coll: %s", coll)
+	var data Data
+	if err = coll.GetItem(&data, 0); err != nil {
+		t.Fatal(err)
+	}
+	elt = data.GetObject()
+
+	t.Logf("elt : %s", elt)
+	for attr := range elt.Attributes {
+		val, err := elt.Get(attr)
+		if err != nil {
 			t.Error(err, attr)
 		}
-		t.Logf("elt.%s=%v", attr, data.Get())
+		t.Logf("elt.%s=%v", attr, val)
 	}
 }
 

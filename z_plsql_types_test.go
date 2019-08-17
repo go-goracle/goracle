@@ -107,7 +107,7 @@ func (t *MyTable) Scan(src interface{}) error {
 		t.Items = make([]*MyRecord, 0)
 		for i, err := collection.First(); err == nil; i, err = collection.Next(i) {
 			var data goracle.Data
-			err = collection.Get(&data, i)
+			err = collection.GetItem(&data, i)
 			if err != nil {
 				return err
 			}
@@ -552,7 +552,7 @@ func TestSelectObjectTable(t *testing.T) {
 		}
 		var objData, attrData goracle.Data
 		for {
-			if err = obj.Get(&objData, i); err != nil {
+			if err = obj.GetItem(&objData, i); err != nil {
 				t.Fatal(err)
 			}
 			if err := objData.GetObject().GetAttribute(&attrData, "MSG"); err != nil {
