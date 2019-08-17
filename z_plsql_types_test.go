@@ -19,7 +19,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -618,4 +620,139 @@ END;`
 			t.Errorf("got %v/%v wanted %v/%v", out, num, want, !in)
 		}
 	}
+}
+
+func TestPlSqlObjectDirect(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	testCon, err := goracle.DriverConn(ctx, testDb)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const crea = `CREATE OR REPLACE PACKAGE test_pkg_obj IS
+  TYPE int_tab_typ IS TABLE OF PLS_INTEGER INDEX BY PLS_INTEGER;
+  TYPE rec_typ IS RECORD (int PLS_INTEGER, num NUMBER, vc VARCHAR2(1000), c CHAR(1000), dt DATE);
+  TYPE tab_typ IS TABLE OF rec_typ INDEX BY PLS_INTEGER;
+
+  PROCEDURE modify(p_obj IN OUT NOCOPY tab_typ);
+END;`
+	const crea2 = `CREATE OR REPLACE PACKAGE BODY test_pkg_obj IS
+  PROCEDURE modify(p_obj IN OUT NOCOPY tab_typ) IS
+    v_idx PLS_INTEGER := NVL(p_obj.LAST, 0) + 1;
+  BEGIN
+    p_obj(v_idx).int := p_obj.COUNT;
+    p_obj(v_idx).num := 314/100;
+	p_obj(v_idx).vc  := 'abraka dabra';
+	p_obj(v_idx).c   := 'X';
+	p_obj(v_idx).dt  := SYSDATE;
+  END modify;
+END;`
+	if err = prepExec(ctx, testCon, crea); err != nil {
+		t.Fatal(err)
+	}
+	//defer prepExec(ctx, testCon, "DROP PACKAGE test_pkg_obj")
+	if err = prepExec(ctx, testCon, crea2); err != nil {
+		t.Fatal(err)
+	}
+
+	//defer tl.enableLogging(t)()
+	clientVersion, _ := goracle.ClientVersion(ctx, testDb)
+	serverVersion, _ := goracle.ServerVersion(ctx, testDb)
+	t.Logf("clientVersion: %#v, serverVersion: %#v", clientVersion, serverVersion)
+	cOt, err := testCon.GetObjectType(strings.ToUpper("test_pkg_obj.tab_typ"))
+	if err != nil {
+		if clientVersion.Version >= 12 && serverVersion.Version >= 12 {
+			t.Fatal(fmt.Sprintf("%+v", err))
+		}
+		t.Log(err)
+		t.Skipf("client=%d or server=%d < 12", clientVersion.Version, serverVersion.Version)
+	}
+	defer cOt.Close()
+	t.Log(cOt)
+
+	// create object from the type
+	coll, err := cOt.NewCollection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coll.Close()
+
+	// create an element object
+	elt, err := cOt.CollectionOf.NewObject()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer elt.Close()
+
+	// append to the collection
+	t.Logf("elt: %s", elt)
+	coll.AppendObject(elt)
+
+	const mod = "BEGIN test_pkg_obj.modify(:1); END;"
+	if err = prepExec(ctx, testCon, mod, driver.NamedValue{Ordinal: 1, Value: coll}); err != nil {
+		t.Error(err)
+	}
+	t.Logf("coll: %s", coll)
+	var data goracle.Data
+	if err = coll.GetItem(&data, 0); err != nil {
+		t.Fatal(err)
+	}
+	elt = data.GetObject()
+
+	t.Logf("elt : %s", elt)
+	for attr := range elt.Attributes {
+		val, err := elt.Get(attr)
+		if err != nil {
+			t.Error(err, attr)
+		}
+		t.Logf("elt.%s=%v", attr, val)
+	}
+}
+func prepExec(ctx context.Context, testCon goracle.Conn, qry string, args ...driver.NamedValue) error {
+	stmt, err := testCon.PrepareContext(ctx, qry)
+	if err != nil {
+		return errors.Wrap(err, qry)
+	}
+	_, err = stmt.(driver.StmtExecContext).ExecContext(ctx, args)
+	stmt.Close()
+	return errors.Wrap(err, qry)
+}
+
+func TestPlSqlObject(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := testDb.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	pkg := strings.ToUpper("test_pkg_obj" + tblSuffix)
+	qry := `CREATE OR REPLACE PACKAGE ` + pkg + ` IS
+  TYPE int_tab_typ IS TABLE OF PLS_INTEGER INDEX BY PLS_INTEGER;
+  TYPE rec_typ IS RECORD (int PLS_INTEGER, num NUMBER, vc VARCHAR2(1000), c CHAR(1000), dt DATE);
+  TYPE tab_typ IS TABLE OF rec_typ INDEX BY PLS_INTEGER;
+END;`
+	if _, err = conn.ExecContext(ctx, qry); err != nil {
+		t.Fatal(errors.Wrap(err, qry))
+	}
+	defer testDb.Exec("DROP PACKAGE " + pkg)
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	defer tl.enableLogging(t)()
+	ot, err := goracle.GetObjectType(ctx, tx, pkg+strings.ToUpper(".int_tab_typ"))
+	if err != nil {
+		if clientVersion.Version >= 12 && serverVersion.Version >= 12 {
+			t.Fatal(fmt.Sprintf("%+v", err))
+		}
+		t.Log(err)
+		t.Skip("client or server version < 12")
+	}
+	t.Log(ot)
 }

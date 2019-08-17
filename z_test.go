@@ -972,44 +972,6 @@ func copySlice(orig interface{}) interface{} {
 	return rc.Addr().Interface()
 }
 
-func TestObject(t *testing.T) {
-	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn, err := testDb.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	pkg := strings.ToUpper("test_pkg_obj" + tblSuffix)
-	qry := `CREATE OR REPLACE PACKAGE ` + pkg + ` IS
-  TYPE int_tab_typ IS TABLE OF PLS_INTEGER INDEX BY PLS_INTEGER;
-  TYPE rec_typ IS RECORD (int PLS_INTEGER, num NUMBER, vc VARCHAR2(1000), c CHAR(1000), dt DATE);
-  TYPE tab_typ IS TABLE OF rec_typ INDEX BY PLS_INTEGER;
-END;`
-	if _, err = conn.ExecContext(ctx, qry); err != nil {
-		t.Fatal(errors.Wrap(err, qry))
-	}
-	defer testDb.Exec("DROP PACKAGE " + pkg)
-
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback()
-
-	defer tl.enableLogging(t)()
-	ot, err := goracle.GetObjectType(ctx, tx, pkg+strings.ToUpper(".int_tab_typ"))
-	if err != nil {
-		if clientVersion.Version >= 12 && serverVersion.Version >= 12 {
-			t.Fatal(fmt.Sprintf("%+v", err))
-		}
-		t.Log(err)
-		t.Skip("client or server version < 12")
-	}
-	t.Log(ot)
-}
-
 func TestOpenClose(t *testing.T) {
 	t.Parallel()
 	cs, err := goracle.ParseConnString(testConStr)
