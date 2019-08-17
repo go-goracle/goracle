@@ -77,6 +77,9 @@ func (O *Object) GetAttribute(data *Data, name string) error {
 
 // SetAttribute sets the named attribute with data.
 func (O *Object) SetAttribute(name string, data *Data) error {
+	if !strings.Contains(name, `"`) {
+		name = strings.ToUpper(name)
+	}
 	attr := O.Attributes[name]
 	if data.NativeTypeNum == 0 {
 		data.NativeTypeNum = attr.NativeTypeNum
@@ -90,11 +93,13 @@ func (O *Object) SetAttribute(name string, data *Data) error {
 
 // Set is a convenience function to set the named attribute with the given value.
 func (O *Object) Set(name string, v interface{}) error {
-	data, err := NewData(v)
-	if err != nil {
+	if data, ok := v.(*Data); ok {
+		return O.SetAttribute(name, data)
+	}
+	if err := O.scratch.Set(v); err != nil {
 		return err
 	}
-	return O.SetAttribute(name, data)
+	return O.SetAttribute(name, &O.scratch)
 }
 
 // ResetAttributes prepare all atributes for use the object as IN parameter
@@ -176,7 +181,6 @@ var ErrNotExist = errors.New("not exist")
 
 // AsSlice retrieves the collection into a slice.
 func (O *ObjectCollection) AsSlice(dest interface{}) (interface{}, error) {
-	var data Data
 	var dr reflect.Value
 	needsInit := dest == nil
 	if !needsInit {
@@ -184,12 +188,12 @@ func (O *ObjectCollection) AsSlice(dest interface{}) (interface{}, error) {
 	}
 	for i, err := O.First(); err == nil; i, err = O.Next(i) {
 		if O.CollectionOf.NativeTypeNum == C.DPI_NATIVE_TYPE_OBJECT {
-			data.ObjectType = *O.CollectionOf
+			O.scratch.ObjectType = *O.CollectionOf
 		}
-		if err = O.GetItem(&data, i); err != nil {
+		if err = O.GetItem(&O.scratch, i); err != nil {
 			return dest, err
 		}
-		vr := reflect.ValueOf(data.Get())
+		vr := reflect.ValueOf(O.scratch.Get())
 		if needsInit {
 			needsInit = false
 			length, lengthErr := O.Len()
@@ -203,23 +207,34 @@ func (O *ObjectCollection) AsSlice(dest interface{}) (interface{}, error) {
 	return dr.Interface(), nil
 }
 
-// Append data to the collection.
-func (O *ObjectCollection) Append(data *Data) error {
+// AppendData to the collection.
+func (O *ObjectCollection) AppendData(data *Data) error {
 	if C.dpiObject_appendElement(O.dpiObject, data.NativeTypeNum, data.dpiData) == C.DPI_FAILURE {
 		return errors.Wrapf(O.getError(), "append(%d)", data.NativeTypeNum)
 	}
 	return nil
 }
 
+// Append v to the collection.
+func (O *ObjectCollection) Append(v interface{}) error {
+	if data, ok := v.(*Data); ok {
+		return O.AppendData(data)
+	}
+	if err := O.scratch.Set(v); err != nil {
+		return err
+	}
+	return O.AppendData(&O.scratch)
+}
+
 // AppendObject adds an Object to the collection.
 func (O *ObjectCollection) AppendObject(obj *Object) error {
-	data := Data{
+	O.scratch = Data{
 		ObjectType:    obj.ObjectType,
 		NativeTypeNum: C.DPI_NATIVE_TYPE_OBJECT,
 		dpiData:       &C.dpiData{isNull: 1},
 	}
-	data.SetObject(obj)
-	return O.Append(&data)
+	O.scratch.SetObject(obj)
+	return O.Append(&O.scratch)
 }
 
 // Delete i-th element of the collection.
@@ -269,11 +284,13 @@ func (O *ObjectCollection) SetItem(i int, data *Data) error {
 
 // Set the i-th element of the collection with value.
 func (O *ObjectCollection) Set(i int, v interface{}) error {
-	data, err := NewData(v)
-	if err != nil {
+	if data, ok := v.(*Data); ok {
+		return O.SetItem(i, data)
+	}
+	if err := O.scratch.Set(v); err != nil {
 		return err
 	}
-	return O.SetItem(i, data)
+	return O.SetItem(i, &O.scratch)
 }
 
 // First returns the first element's index of the collection.

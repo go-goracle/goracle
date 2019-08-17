@@ -756,3 +756,119 @@ END;`
 	}
 	t.Log(ot)
 }
+
+func TestCallWithObject(t *testing.T) {
+	t.Parallel()
+	cleanup := func() {
+		for _, drop := range []string{
+			"DROP PROCEDURE test_cwo_getSum",
+			"DROP TYPE test_cwo_tbl_t",
+			"DROP TYPE test_cwo_rec_t",
+		} {
+			testDb.Exec(drop)
+		}
+	}
+
+	const crea = `CREATE OR REPLACE TYPE test_cwo_rec_t FORCE AS OBJECT (
+  numberpart1 VARCHAR2(6),
+  numberpart2 VARCHAR2(10),
+  code VARCHAR(7),
+  CONSTRUCTOR FUNCTION test_cwo_rec_t RETURN SELF AS RESULT
+);
+
+CREATE OR REPLACE TYPE test_cwo_tbl_t FORCE AS TABLE OF test_cwo_rec_t;
+
+CREATE OR REPLACE PROCEDURE test_cwo_getSum(
+  p_operation_id IN OUT VARCHAR2,
+  a_languagecode_i IN VARCHAR2,
+  a_username_i IN VARCHAR2,
+  a_channelcode_i IN VARCHAR2,
+  a_mcalist_i IN test_cwo_tbl_t,
+  a_validfrom_i IN DATE,
+  a_validto_i IN DATE,
+  a_statuscode_list_i IN VARCHAR2 ,
+  a_type_list_o OUT SYS_REFCURSOR
+) IS
+  cnt PLS_INTEGER;
+BEGIN
+  cnt := a_mcalist_i.COUNT;
+  OPEN a_type_list_o FOR
+    SELECT cnt FROM DUAL;
+END;
+`
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	cleanup()
+	for _, qry := range strings.Split(crea, "CREATE OR") {
+		if qry == "" {
+			continue
+		}
+		qry = "CREATE OR" + qry
+		if _, err := testDb.ExecContext(ctx, qry); err != nil {
+			t.Fatal(errors.Wrap(err, qry))
+		}
+	}
+
+	var p_operation_id string
+	var a_languagecode_i string
+	var a_username_i string
+	var a_channelcode_i string
+	var a_mcalist_i *goracle.Object
+	var a_validfrom_i string
+	var a_validto_i string
+	var a_statuscode_list_i string
+	var a_type_list_o driver.Rows
+
+	typ, err := goracle.GetObjectType(ctx, testDb, "test_cwo_tbl_t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a_mcalist_i, err = typ.NewObject(); err != nil {
+		t.Fatal(err)
+	}
+	if typ, err = goracle.GetObjectType(ctx, testDb, "test_cwo_rec_t"); err != nil {
+		t.Fatal(err)
+	}
+	elt, err := typ.NewObject()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = elt.Set("NUMBERPART1", "np1"); err != nil {
+		t.Fatal(err)
+	}
+	if err = a_mcalist_i.Collection().Append(elt); err != nil {
+		t.Fatal(err)
+	}
+
+	const qry = `BEGIN test_cwo_getSum(:v1,:v2,:v3,:v4,:v5,:v6,:v7,:v8,:v9); END;`
+	if _, err := testDb.ExecContext(ctx, qry,
+		sql.Named("v1", sql.Out{Dest: &p_operation_id, In: true}),
+		sql.Named("v2", &a_languagecode_i),
+		sql.Named("v3", &a_username_i),
+		sql.Named("v4", &a_channelcode_i),
+		sql.Named("v5", &a_mcalist_i),
+		sql.Named("v6", &a_validfrom_i),
+		sql.Named("v7", &a_validto_i),
+		sql.Named("v8", &a_statuscode_list_i),
+		sql.Named("v9", sql.Out{Dest: &a_type_list_o}),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := goracle.WrapRows(ctx, testDb, a_type_list_o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var i int
+	for rows.Next() {
+		var n int
+		if err = rows.Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		i++
+		t.Logf("%d. %d", i, n)
+	}
+}
