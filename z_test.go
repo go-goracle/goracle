@@ -2123,3 +2123,88 @@ func TestCancel(t *testing.T) {
 	}
 	t.Error("cancelation timed out")
 }
+
+func TestObject(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	testCon, err := goracle.DriverConn(ctx, testDb)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cleanup := func() {
+		testDb.Exec("DROP PROCEDURE test_obj_modify")
+		testDb.Exec("DROP TYPE test_obj_tab_t")
+		testDb.Exec("DROP TYPE test_obj_rec_t")
+	}
+	cleanup()
+	const crea = `
+CREATE OR REPLACE TYPE test_obj_rec_t AS OBJECT (num NUMBER, vc VARCHAR2(1000), dt DATE);
+CREATE OR REPLACE TYPE test_obj_tab_t AS TABLE OF test_obj_rec_t;
+CREATE OR REPLACE PROCEDURE test_obj_modify(p_obj IN OUT NOCOPY test_obj_tab_t) IS
+BEGIN
+  p_obj.EXTEND;
+  p_obj(p_obj.LAST) := test_obj_rec_t(
+    num => 314/100 + p_obj.COUNT,
+    vc  => 'abraka dabra',
+    dt  => SYSDATE);
+END;`
+	for _, qry := range strings.Split(crea, "\nCREATE OR") {
+		if qry == "" {
+			continue
+		}
+		qry = "CREATE OR" + qry
+		if _, err = testDb.ExecContext(ctx, qry); err != nil {
+			t.Fatal(errors.Wrap(err, qry))
+		}
+	}
+
+	defer cleanup()
+
+	cOt, err := testCon.GetObjectType(strings.ToUpper("test_obj_tab_t"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cOt.Close()
+	t.Log(cOt)
+
+	// create object from the type
+	coll, err := cOt.NewCollection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coll.Close()
+
+	// create an element object
+	elt, err := cOt.CollectionOf.NewObject()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer elt.Close()
+
+	// append to the collection
+	t.Logf("append an empty %s", elt)
+	coll.AppendObject(elt)
+
+	const mod = "BEGIN test_obj_modify(:1); END;"
+	if err = prepExec(ctx, testCon, mod, driver.NamedValue{Ordinal: 1, Value: coll}); err != nil {
+		t.Error(err)
+	}
+	t.Logf("coll: %s", coll)
+	var data goracle.Data
+	for i, err := coll.First(); err == nil; i, err = coll.Next(i) {
+		if err = coll.GetItem(&data, i); err != nil {
+			t.Fatal(err)
+		}
+		elt = data.GetObject()
+
+		t.Logf("elt[%d] : %s", i, elt)
+		for attr := range elt.Attributes {
+			val, err := elt.Get(attr)
+			if err != nil {
+				t.Error(err, attr)
+			}
+			t.Logf("elt[%d].%s=%s", i, attr, val)
+		}
+	}
+}
