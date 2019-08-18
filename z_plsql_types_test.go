@@ -684,6 +684,9 @@ END;`
 		t.Fatal(err)
 	}
 	defer elt.Close()
+	if err = elt.Set("C", "Z"); err != nil {
+		t.Fatal(err)
+	}
 
 	// append to the collection
 	t.Logf("elt: %s", elt)
@@ -695,18 +698,20 @@ END;`
 	}
 	t.Logf("coll: %s", coll)
 	var data goracle.Data
-	if err = coll.GetItem(&data, 0); err != nil {
-		t.Fatal(err)
-	}
-	elt = data.GetObject()
-
-	t.Logf("elt : %s", elt)
-	for attr := range elt.Attributes {
-		val, err := elt.Get(attr)
-		if err != nil {
-			t.Error(err, attr)
+	for i, err := coll.First(); err == nil; i, err = coll.Next(i) {
+		if err = coll.GetItem(&data, i); err != nil {
+			t.Fatal(err)
 		}
-		t.Logf("elt.%s=%v", attr, val)
+		elt = data.GetObject()
+
+		t.Logf("elt[%d]: %s", i, elt)
+		for attr := range elt.Attributes {
+			val, err := elt.Get(attr)
+			if err != nil {
+				t.Error(err, attr)
+			}
+			t.Logf("elt[%d].%s=%v", i, attr, val)
+		}
 	}
 }
 func prepExec(ctx context.Context, testCon goracle.Conn, qry string, args ...driver.NamedValue) error {
