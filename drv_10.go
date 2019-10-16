@@ -30,19 +30,19 @@ var _ = driver.Connector((*connector)(nil))
 
 type connector struct {
 	ConnectionParams
-	*drv
+	*Drv
 	onInit func(driver.Conn) error
 }
 
 // OpenConnector must parse the name in the same format that Driver.Open
 // parses the name parameter.
-func (d *drv) OpenConnector(name string) (driver.Connector, error) {
+func (d *Drv) OpenConnector(name string) (driver.Connector, error) {
 	P, err := ParseConnString(name)
 	if err != nil {
 		return nil, err
 	}
 
-	return connector{ConnectionParams: P, drv: d}, nil
+	return connector{ConnectionParams: P, Drv: d}, nil
 }
 
 // Connect returns a connection to the database.

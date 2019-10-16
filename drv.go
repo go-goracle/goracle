@@ -348,7 +348,7 @@ type connPool struct {
 	tzOffSecs     int
 }
 
-func (d *drv) init() error {
+func (d *Drv) init() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.dpiContext != nil {
@@ -373,7 +373,7 @@ func (d *drv) init() error {
 
 // Open returns a new connection to the database.
 // The name is a string in a driver-specific format.
-func (d *drv) Open(connString string) (driver.Conn, error) {
+func (d *Drv) Open(connString string) (driver.Conn, error) {
 	P, err := ParseConnString(connString)
 	if err != nil {
 		return nil, err
@@ -383,16 +383,16 @@ func (d *drv) Open(connString string) (driver.Conn, error) {
 	return conn, maybeBadConn(err, conn)
 }
 
-func (d *drv) ClientVersion() (VersionInfo, error) {
+func (d *Drv) ClientVersion() (VersionInfo, error) {
 	return d.clientVersion, nil
 }
 
-func (d *drv) openConn(P ConnectionParams) (*conn, error) {
+func (d *Drv) openConn(P ConnectionParams) (*conn, error) {
 	if err := d.init(); err != nil {
 		return nil, err
 	}
 
-	c := conn{drv: d, connParams: P, timeZone: time.Local}
+	c := conn{Drv: d, connParams: P, timeZone: time.Local}
 	connString := P.String()
 
 	defer func() {
@@ -907,7 +907,7 @@ func newErrorInfo(code int, message string) C.dpiErrorInfo {
 // against deadcode
 var _ = newErrorInfo
 
-func (d *drv) getError() *OraErr {
+func (d *Drv) getError() *OraErr {
 	if d == nil || d.dpiContext == nil {
 		return &OraErr{code: -12153, message: driver.ErrBadConn.Error()}
 	}
