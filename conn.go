@@ -59,7 +59,7 @@ type conn struct {
 	tranParams     tranParams
 	sync.RWMutex
 	currentUser string
-	*drv
+	*Drv
 	dpiConn       *C.dpiConn
 	inTransaction bool
 	newSession    bool
@@ -69,10 +69,10 @@ type conn struct {
 }
 
 func (c *conn) getError() error {
-	if c == nil || c.drv == nil {
+	if c == nil || c.Drv == nil {
 		return driver.ErrBadConn
 	}
-	return c.drv.getError()
+	return c.Drv.getError()
 }
 
 func (c *conn) Break() error {
@@ -395,7 +395,7 @@ func (c *conn) ServerVersion() (VersionInfo, error) {
 func (c *conn) init() error {
 	if c.Client.Version == 0 {
 		var err error
-		if c.Client, err = c.drv.ClientVersion(); err != nil {
+		if c.Client, err = c.Drv.ClientVersion(); err != nil {
 			return err
 		}
 	}

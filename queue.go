@@ -80,7 +80,7 @@ func NewQueue(ctx context.Context, execer Execer, name string, payloadObjectType
 	}
 	value := C.CString(name)
 	if C.dpiConn_newQueue(Q.conn.dpiConn, value, C.uint(len(name)), payloadType, &Q.dpiQueue) == C.DPI_FAILURE {
-		err = errors.Errorf("newQueue %q: %w", name, Q.conn.drv.getError())
+		err = errors.Errorf("newQueue %q: %w", name, Q.conn.Drv.getError())
 	}
 	C.free(unsafe.Pointer(value))
 	if err != nil {
@@ -118,9 +118,9 @@ func (Q *Queue) EnqOptions() (EnqOptions, error) {
 	var E EnqOptions
 	var opts *C.dpiEnqOptions
 	if C.dpiQueue_getEnqOptions(Q.dpiQueue, &opts) == C.DPI_FAILURE {
-		return E, errors.Errorf("getEnqOptions: %w", Q.conn.drv.getError())
+		return E, errors.Errorf("getEnqOptions: %w", Q.conn.Drv.getError())
 	}
-	err := E.fromOra(Q.conn.drv, opts)
+	err := E.fromOra(Q.conn.Drv, opts)
 	return E, err
 }
 
@@ -129,9 +129,9 @@ func (Q *Queue) DeqOptions() (DeqOptions, error) {
 	var D DeqOptions
 	var opts *C.dpiDeqOptions
 	if C.dpiQueue_getDeqOptions(Q.dpiQueue, &opts) == C.DPI_FAILURE {
-		return D, errors.Errorf("getDeqOptions: %w", Q.conn.drv.getError())
+		return D, errors.Errorf("getDeqOptions: %w", Q.conn.Drv.getError())
 	}
-	err := D.fromOra(Q.conn.drv, opts)
+	err := D.fromOra(Q.conn.Drv, opts)
 	return D, err
 }
 
@@ -198,7 +198,7 @@ func (Q *Queue) Enqueue(messages []Message) error {
 		if C.dpiConn_newMsgProps(Q.conn.dpiConn, &props[i]) == C.DPI_FAILURE {
 			return errors.Errorf("newMsgProps: %w", Q.conn.getError())
 		}
-		if err := m.toOra(Q.conn.drv, props[i]); err != nil {
+		if err := m.toOra(Q.conn.Drv, props[i]); err != nil {
 			return err
 		}
 	}
@@ -439,9 +439,9 @@ func (E EnqOptions) toOra(d *drv, opts *C.dpiEnqOptions) error {
 func (Q *Queue) SetEnqOptions(E EnqOptions) error {
 	var opts *C.dpiEnqOptions
 	if C.dpiQueue_getEnqOptions(Q.dpiQueue, &opts) == C.DPI_FAILURE {
-		return errors.Errorf("getEnqOptions: %w", Q.conn.drv.getError())
+		return errors.Errorf("getEnqOptions: %w", Q.conn.Drv.getError())
 	}
-	return E.toOra(Q.conn.drv, opts)
+	return E.toOra(Q.conn.Drv, opts)
 }
 
 // DeqOptions are the options used to dequeue a message.
@@ -558,22 +558,22 @@ func (D DeqOptions) toOra(d *drv, opts *C.dpiDeqOptions) error {
 func (Q *Queue) SetDeqOptions(D DeqOptions) error {
 	var opts *C.dpiDeqOptions
 	if C.dpiQueue_getDeqOptions(Q.dpiQueue, &opts) == C.DPI_FAILURE {
-		return errors.Errorf("getDeqOptions: %w", Q.conn.drv.getError())
+		return errors.Errorf("getDeqOptions: %w", Q.conn.Drv.getError())
 	}
-	return D.toOra(Q.conn.drv, opts)
+	return D.toOra(Q.conn.Drv, opts)
 }
 
 // SetDeqCorrelation is a convenience function setting the Correlation DeqOption
 func (Q *Queue) SetDeqCorrelation(correlation string) error {
 	var opts *C.dpiDeqOptions
 	if C.dpiQueue_getDeqOptions(Q.dpiQueue, &opts) == C.DPI_FAILURE {
-		return errors.Errorf("getDeqOptions: %w", Q.conn.drv.getError())
+		return errors.Errorf("getDeqOptions: %w", Q.conn.Drv.getError())
 	}
 	cs := C.CString(correlation)
 	ok := C.dpiDeqOptions_setCorrelation(opts, cs, C.uint(len(correlation))) == C.DPI_FAILURE
 	C.free(unsafe.Pointer(cs))
 	if !ok {
-		return errors.Errorf("setCorrelation: %w", Q.conn.drv.getError())
+		return errors.Errorf("setCorrelation: %w", Q.conn.Drv.getError())
 	}
 	return nil
 }

@@ -319,20 +319,22 @@ func (n *Number) UnmarshalJSON(p []byte) error {
 // or analog to be race-free.
 var Log func(...interface{}) error
 
-var defaultDrv *drv
+var defaultDrv *Drv
 
 func init() {
-	defaultDrv = newDrv()
+	defaultDrv = NewDrv()
 	sql.Register("goracle", defaultDrv)
 }
 
-func newDrv() *drv {
-	return &drv{pools: make(map[string]*connPool)}
+// NewDrv returns a new Drv instance
+func NewDrv() *Drv {
+	return &Drv{pools: make(map[string]*connPool)}
 }
 
-var _ = driver.Driver((*drv)(nil))
+var _ = driver.Driver((*Drv)(nil))
 
-type drv struct {
+// Drv is the oracle database driver
+type Drv struct {
 	clientVersion VersionInfo
 	mu            sync.Mutex
 	dpiContext    *C.dpiContext
@@ -599,9 +601,9 @@ func (c *conn) acquireConn(user, pass string) error {
 		cPassword = C.CString(pass)
 	}
 
-	c.drv.mu.Lock()
+	c.Drv.mu.Lock()
 	pool := c.pools[c.connParams.String()]
-	c.drv.mu.Unlock()
+	c.Drv.mu.Unlock()
 	if C.dpiPool_acquireConnection(
 		pool.dpiPool,
 		cUserName, C.uint32_t(len(user)), cPassword, C.uint32_t(len(pass)),
@@ -616,7 +618,7 @@ func (c *conn) acquireConn(user, pass string) error {
 	c.dpiConn = (*C.dpiConn)(dc)
 	c.currentUser = user
 	c.newSession = connCreateParams.outNewSession == 1
-	c.Client, c.Server = c.drv.clientVersion, pool.serverVersion
+	c.Client, c.Server = c.Drv.clientVersion, pool.serverVersion
 	c.timeZone, c.tzOffSecs = pool.timeZone, pool.tzOffSecs
 	c.mu.Unlock()
 	err := c.init()

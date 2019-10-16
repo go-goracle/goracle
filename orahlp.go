@@ -262,7 +262,7 @@ func ClientVersion(ctx context.Context, ex Execer) (VersionInfo, error) {
 	if err != nil {
 		return VersionInfo{}, err
 	}
-	return c.drv.ClientVersion()
+	return c.Drv.ClientVersion()
 }
 
 // ServerVersion returns the VersionInfo of the client.

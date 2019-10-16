@@ -57,7 +57,7 @@ func (d *drv) OpenConnector(name string) (driver.Connector, error) {
 // The returned connection is only used by one goroutine at a
 // time.
 func (c connector) Connect(context.Context) (driver.Conn, error) {
-	conn, err := c.drv.openConn(c.ConnectionParams)
+	conn, err := c.Drv.openConn(c.ConnectionParams)
 	if err != nil || c.onInit == nil || !conn.newSession {
 		return conn, err
 	}
@@ -71,7 +71,7 @@ func (c connector) Connect(context.Context) (driver.Conn, error) {
 // Driver returns the underlying Driver of the Connector,
 // mainly to maintain compatibility with the Driver method
 // on sql.DB.
-func (c connector) Driver() driver.Driver { return c.drv }
+func (c connector) Driver() driver.Driver { return c.Drv }
 
 // NewConnector returns a driver.Connector to be used with sql.OpenDB,
 // which calls the given onInit if the connection is new.
