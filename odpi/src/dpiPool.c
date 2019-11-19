@@ -573,3 +573,16 @@ int dpiPool_setWaitTimeout(dpiPool *pool, uint32_t value)
     return dpiPool__setAttributeUint(pool, DPI_OCI_ATTR_SPOOL_WAIT_TIMEOUT,
             value, __func__);
 }
+
+//-----------------------------------------------------------------------------
+// dpiPool_getHeapAlloc() [PUBLIC]
+//   Get the OCI allocated memory.
+//-----------------------------------------------------------------------------
+int dpiPool_getHeapAlloc(dpiPool *pool, uint32_t *allocatedBytes) {
+    dpiError error;
+    int status;
+
+    DPI_CHECK_PTR_NOT_NULL(pool, allocatedBytes)
+    status = dpiEnv__getHeapAlloc(pool->env, allocatedBytes, &error);
+    return dpiGen__endPublicFn(pool, status, &error);
+}

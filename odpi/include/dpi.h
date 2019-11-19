@@ -740,6 +740,8 @@ int dpiContext_initSodaOperOptions(const dpiContext *context,
 int dpiContext_initSubscrCreateParams(const dpiContext *context,
         dpiSubscrCreateParams *params);
 
+// get OCI allocated memory suze
+int dpiContext_getHeapAlloc(const dpiContext *context, uint32_t *allocatedBytes);
 
 //-----------------------------------------------------------------------------
 // Connection Methods (dpiConn)
@@ -915,6 +917,8 @@ int dpiConn_subscribe(dpiConn *conn, dpiSubscrCreateParams *params,
 // unsubscribe from events in the database
 int dpiConn_unsubscribe(dpiConn *conn, dpiSubscr *subscr);
 
+// get the OCI allocated memory size
+int dpiConn_getHeapAlloc(dpiConn *conn, uint32_t *allocatedBytes);
 
 //-----------------------------------------------------------------------------
 // Data Methods (dpiData)
@@ -1417,6 +1421,8 @@ int dpiPool_setTimeout(dpiPool *pool, uint32_t value);
 // set the pool's wait timeout value
 int dpiPool_setWaitTimeout(dpiPool *pool, uint32_t value);
 
+// get the OCI allocated memory size
+int dpiPool_getHeapAlloc(dpiPool *pool, uint32_t *allocatedBytes);
 
 //-----------------------------------------------------------------------------
 // AQ Queue Methods (dpiQueue)

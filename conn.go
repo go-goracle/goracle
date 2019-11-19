@@ -783,3 +783,17 @@ func (c *conn) Shutdown(mode ShutdownMode) error {
 func (c *conn) Timezone() *time.Location {
 	return c.timeZone
 }
+
+// HeapAlloc returns the OCI allocated heap size for the connection
+func (c *conn) HeapAlloc() (uint32, error) {
+	if c == nil || c.dpiConn == nil {
+		return 0, nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var size C.uint32_t
+	if C.dpiConn_getHeapAlloc(c.dpiConn, &size) == C.DPI_FAILURE {
+		return 0, errors.Errorf("getHeapAlloc: %w", c.getError())
+	}
+	return uint32(size), nil
+}

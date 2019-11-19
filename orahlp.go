@@ -325,3 +325,12 @@ func Timezone(ctx context.Context, ex Execer) (*time.Location, error) {
 	}
 	return c.Timezone(), nil
 }
+
+// HeapAlloc returns the given connection's OCI allocation.
+func HeapAlloc(ctx context.Context, ex Execer) (uint32, error) {
+	c, err := getConn(ctx, ex)
+	if err != nil {
+		return 0, err
+	}
+	return c.HeapAlloc()
+}

@@ -1015,3 +1015,52 @@ func ctxGetLog(ctx context.Context) logFunc {
 func ContextWithLog(ctx context.Context, logF func(...interface{}) error) context.Context {
 	return context.WithValue(ctx, logCtxKey, logF)
 }
+
+// HeapAlloc returns the OCI allocated heap size for the pool
+func (p *connPool) heapAlloc() (uint32, bool) {
+	if p == nil || p.dpiPool == nil {
+		return 0, true
+	}
+	var size C.uint32_t
+	if C.dpiPool_getHeapAlloc(p.dpiPool, &size) == C.DPI_FAILURE {
+		return 0, false
+	}
+	return uint32(size), true
+}
+
+// HeapAllocs returns the OCI allocated heap size for each pool under this driver.
+func (d *drv) HeapAllocs() (map[string]uint32, error) {
+	if d == nil {
+		return nil, nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	m := make(map[string]uint32, len(d.pools))
+	var firstErr error
+	for k, p := range d.pools {
+		size, ok := p.heapAlloc()
+		if !ok {
+			if firstErr == nil {
+				firstErr = d.getError()
+			}
+			continue
+		}
+		m[k] = size
+	}
+	return m, firstErr
+}
+
+// HeapAllocs returns the OCI allocated heap size for each pool under the given driver.
+// If nil is given, the global (default) driver is used.
+func HeapAllocs(v interface{}) (map[string]uint32, error) {
+	d := defaultDrv
+	if v != nil {
+		if x, ok := v.(*drv); ok && x != nil {
+			d = x
+		}
+	}
+	if Log != nil {
+		Log("msg", "HeapAllocs", "v", v, "d", d)
+	}
+	return d.HeapAllocs()
+}

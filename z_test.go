@@ -170,6 +170,10 @@ func init() {
 	testDb.SetMaxIdleConns(maxSessions >> 1)
 	testDb.SetMaxOpenConns(maxSessions)
 	testDb.SetConnMaxLifetime(10 * time.Minute)
+
+	if err = testDb.PingContext(ctx); err != nil {
+		panic(err)
+	}
 }
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
@@ -2383,4 +2387,24 @@ END;`
 			t.Logf("elt[%d].%s=%s", i, attr, val)
 		}
 	}
+}
+
+func TestHeapAllocs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	m, err := goracle.HeapAllocs(nil)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(m)
+	m, err = goracle.HeapAllocs(testDb.Driver())
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(m)
+	u, err := goracle.HeapAlloc(ctx, testDb)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("%v: %d", testDb, u)
 }

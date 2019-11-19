@@ -161,3 +161,19 @@ int dpiEnv__init(dpiEnv *env, const dpiContext *context,
 
     return DPI_SUCCESS;
 }
+
+
+//-----------------------------------------------------------------------------
+// dpiEnv__getHeapAlloc() [INTERNAL]
+//   Return the OCI allocated bytes count.
+//-----------------------------------------------------------------------------
+int dpiEnv__getHeapAlloc(dpiEnv *env, uint32_t *allocatedBytes, dpiError *error) {
+	if (error->handle == NULL) {
+		if (error->env == NULL)
+			error->env = env;
+		dpiError__initHandle(error);
+	}
+	dpiOci__attrGet(env->handle, DPI_OCI_HTYPE_ENV,
+			allocatedBytes, NULL, DPI_OCI_ATTR_HEAPALLOC,
+			"get heap alloc", error);
+}

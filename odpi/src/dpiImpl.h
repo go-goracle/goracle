@@ -171,6 +171,7 @@ extern unsigned long dpiDebugLevel;
 #define DPI_OCI_ATTR_INTERNAL_NAME                  25
 #define DPI_OCI_ATTR_EXTERNAL_NAME                  26
 #define DPI_OCI_ATTR_XID                            27
+#define DPI_OCI_ATTR_HEAPALLOC                      30
 #define DPI_OCI_ATTR_CHARSET_ID                     31
 #define DPI_OCI_ATTR_CHARSET_FORM                   32
 #define DPI_OCI_ATTR_MAXDATA_SIZE                   33
@@ -1255,7 +1256,7 @@ void dpiEnv__free(dpiEnv *env, dpiError *error);
 int dpiEnv__init(dpiEnv *env, const dpiContext *context,
         const dpiCommonCreateParams *params, dpiError *error);
 int dpiEnv__getEncodingInfo(dpiEnv *env, dpiEncodingInfo *info);
-
+int dpiEnv__getHeapAlloc(dpiEnv *env, uint32_t *allocatedBytes, dpiError *error);
 
 //-----------------------------------------------------------------------------
 // definition of internal dpiError methods

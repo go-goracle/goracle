@@ -2183,3 +2183,16 @@ int dpiConn_unsubscribe(dpiConn *conn, dpiSubscr *subscr)
     dpiGen__setRefCount(subscr, &error, -1);
     return dpiGen__endPublicFn(subscr, DPI_SUCCESS, &error);
 }
+//
+//-----------------------------------------------------------------------------
+// dpiConn_getHeapAlloc() [PUBLIC]
+//   Get the OCI allocated memory.
+//-----------------------------------------------------------------------------
+int dpiConn_getHeapAlloc(dpiConn *conn, uint32_t *allocatedBytes) {
+    dpiError error;
+    int status;
+
+    DPI_CHECK_PTR_NOT_NULL(conn, allocatedBytes)
+    status = dpiEnv__getHeapAlloc(conn->env, allocatedBytes, &error);
+    return dpiGen__endPublicFn(conn, status, &error);
+}
