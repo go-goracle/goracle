@@ -1018,6 +1018,8 @@ func ContextWithLog(ctx context.Context, logF func(...interface{}) error) contex
 
 // HeapAlloc returns the OCI allocated heap size for the pool
 func (p *connPool) heapAlloc() (uint32, bool) {
+	// doesn't work
+	return 0, true
 	if p == nil || p.dpiPool == nil {
 		return 0, true
 	}
