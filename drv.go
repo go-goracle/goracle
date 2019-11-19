@@ -1059,8 +1059,5 @@ func HeapAllocs(v interface{}) (map[string]uint32, error) {
 			d = x
 		}
 	}
-	if Log != nil {
-		Log("msg", "HeapAllocs", "v", v, "d", d)
-	}
 	return d.HeapAllocs()
 }
