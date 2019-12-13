@@ -1,3 +1,14 @@
 Goracle is deprecated because of naming (trademark) issues.
 
 Please use github.com/godror/godror instead!
+
+You can use "sed" to change everything:
+
+sed -i -e 's,goracle "gopkg.in/goracle.v2",godror "github.com/godror/godror",g; s,gopkg.in/goracle.v2,github.com/godror/godror,g; s/"goracle"/"godror"/g; s/goracle[.]/godror./g' $(find . -type f -name '*.go')
+sed -i -e '/goracle.v2/d' go.mod
+
+To change everything using modules:
+
+for dn in $(fgrep -l goracle.v2 $(find . -type f -name 'go.mod') | sed -e 's,/go.mod$,,'); do 
+  (cd "$dn" && git pull && sed -i -e 's,goracle "gopkg.in/goracle.v2",godror "github.com/godror/godror",g; s,gopkg.in/goracle.v2,github.com/godror/godror,g; s/"goracle"/"godror"/g; s/goracle[.]/godror./g' $(find . -type f -name '*.go') && sed -i -e '/goracle.v2/d' go.mod  && git commit -am 'goracle -> godror' && git push)
+done 
